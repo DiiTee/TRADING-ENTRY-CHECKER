@@ -1250,6 +1250,31 @@ function processRaw(raw) {
   return out.join('\n').replace(/\n{5,}/g, '\n\n\n\n').trim();
 }
 
+function autoFillCAFromPaste(rawText) {
+  var caField = el('fCA');
+  if (!caField || caField.value.trim()) return; /* don't overwrite existing CA */
+  /* Search the RAW text for a Solana CA (base-58, 32-44 chars).
+     We do NOT strip URLs first — the CA often appears inside solscan/birdeye
+     links and would be lost by processRaw's URL removal.
+     Prefer a standalone CA (on its own line). */
+  var CA_RX = /\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/g;
+  var caMatches = rawText.match(CA_RX);
+  if (caMatches && caMatches.length) {
+    var ownLineM = rawText.match(/^([1-9A-HJ-NP-Za-km-z]{32,44})$/m);
+    var ca = ownLineM ? ownLineM[1] : caMatches[caMatches.length - 1];
+    caField.value = ca;
+    updateRickbotLinks();
+    return;
+  }
+  /* Fallback: processRaw → parseTelegramText (handles non-standard formats) */
+  var processed = processRaw(rawText);
+  var parsed    = parseTelegramText(processed);
+  if (parsed.ca) {
+    caField.value = parsed.ca;
+    updateRickbotLinks();
+  }
+}
+
 pasteArea.addEventListener('paste', function(e) {
   var clipData = e.clipboardData || window.clipboardData;
   var raw = clipData ? clipData.getData('text') : '';
@@ -1261,12 +1286,25 @@ pasteArea.addEventListener('paste', function(e) {
     var end   = pasteArea.selectionEnd;
     var processed = processRaw(raw);
     pasteArea.value = pasteArea.value.slice(0, start) + processed + pasteArea.value.slice(end);
+    autoFillCAFromPaste(raw);
   } else {
-    /* Mobile fallback: let the browser paste, then clean up the whole value */
+    /* Mobile / sandboxed-iframe fallback: let the browser paste, then clean up */
     setTimeout(function() {
-      pasteArea.value = processRaw(pasteArea.value);
+      var rawVal = pasteArea.value;
+      pasteArea.value = processRaw(rawVal);
+      autoFillCAFromPaste(rawVal);
     }, 50);
   }
+});
+
+/* Belt-and-suspenders fallback: if the paste event was blocked or clipboardData
+   was unavailable (common inside sandboxed iframes), the `input` event still
+   fires after the browser performs its default paste. Run CA detection here
+   too so the CA always auto-fills as soon as text appears in the textarea. */
+pasteArea.addEventListener('input', function() {
+  var caField = el('fCA');
+  if (!caField || caField.value.trim()) return;
+  autoFillCAFromPaste(pasteArea.value);
 });
 
 var checklistCard = el('checklistCard');
@@ -3345,10 +3383,15 @@ function parseTelegramText(text) {
   if (t10) data.top10 = parseFloat(t10);
 
   /* ── Bundles ─────────────────────────────────────────────────────────── */
-  /* "📦 /Bundles: 12", "Bundles: 12", "Total Stats: 📦 Bundles: 12" */
-  var bdlStr = rxf('/Bundles?\\s*:?\\s*(\\d+)') ||
-               rxf('Bundles?\\s*:\\s*(\\d+)');
-  if (bdlStr) data.bundle = parseInt(bdlStr, 10);
+  /* Soul Scanner format distinguishes:
+       📦 Bundles: 4   → number of bundle GROUPS (not what we want)
+       💼 Wallets: 44  → sum of individual wallets across all bundles (Bundle Wallets field)
+     "Wallets" always means individual wallet count; use it first.
+     Fall back to "Bundles" count only for other bot formats that don't report Wallets. */
+  var walletDirectM = t.match(/wallets\s*[:\s]\s*(\d+)/i);
+  var groupDirectM  = t.match(/\/bundles?\s*:?\s*(\d+)/i) || t.match(/bundles?\s*:\s*(\d+)/i);
+  if (walletDirectM && walletDirectM[1]) data.bundle = parseInt(walletDirectM[1], 10);
+  else if (groupDirectM && groupDirectM[1]) data.bundle = parseInt(groupDirectM[1], 10);
 
   /* Bundle cluster % = what bundles currently HOLD (Total Stats → Holding:)
      Soul format:
@@ -4028,16 +4071,28 @@ el('parseBtn').addEventListener('click', function() {
   if (!raw) { showToast('Paste some scanner bot text first', 'error'); return; }
   var data = parseTelegramText(raw);
   fillFormFromData(data, true); /* mergeOnly — never overwrite API-fetched data */
+  /* Bundle fields: always force-apply bot-parsed values — if old code wrote "10"
+     and new code reads "44", mergeOnly would silently skip the correction. */
+  if (!isNaN(data.bundle) && data.bundle !== undefined) {
+    var bf = el('fBundle'); if (bf) bf.value = data.bundle;
+  }
+  if (!isNaN(data.bundleClusterPct) && data.bundleClusterPct !== undefined) {
+    var bcf = el('fBundleCluster'); if (bcf) bcf.value = data.bundleClusterPct;
+  }
+  if (!isNaN(data.singleBundlePct) && data.singleBundlePct !== undefined) {
+    var sbf = el('fSingleBundle'); if (sbf) sbf.value = data.singleBundlePct;
+  }
   detectAndFillPattern(data);
   updateRickbotLinks();
   var filled = Object.keys(data).filter(function(k) {
     var v = data[k];
     return v !== undefined && v !== null && v !== '' && !isNaN(v === '' ? NaN : v) || typeof v === 'string' && v !== '';
   }).length;
+  var bundleDbg = data.bundle !== undefined ? ' | Bundle Wallets parsed: ' + data.bundle : '';
   if (filled === 0) {
     showToast('No recognisable fields found — is this scanner bot text?', 'error');
   } else {
-    showToast('Parsed ' + filled + ' field' + (filled === 1 ? '' : 's') + ' from bot text', 'success');
+    showToast('Parsed ' + filled + ' field' + (filled === 1 ? '' : 's') + ' from bot text' + bundleDbg, 'success');
   }
 });
 
