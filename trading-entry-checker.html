@@ -2388,12 +2388,15 @@ async function fetchFromCA(ca) {
       }
 
       /* ── Store results ── */
-      if (gt15mClose > 0 && (gtMacroFloor > 0 || gtLocalFloor > 0)) {
+      if (gt15mClose > 0) {
+        /* Always store candle data + structural analysis when we have a valid close price.
+           Floor/ceiling levels may be 0 for very new / low-activity tokens — that is fine;
+           buildEntryBriefingHTML handles null floors gracefully. */
         window._tecCandles = {
           current:            gt15mClose,
           macroFloor:         gtMacroFloor,
           localFloor:         gtLocalFloor || gtMacroFloor,
-          floor15mLow:        gtLocalFloor || gtMacroFloor,   /* backward compat */
+          floor15mLow:        gtLocalFloor || gtMacroFloor,
           ceiling1hHigh:      ceiling1hHigh,
           high:               ceiling1hHigh,
           low:                gtLocalFloor || gtMacroFloor,
@@ -2403,12 +2406,20 @@ async function fetchFromCA(ca) {
           source:             'GeckoTerminal',
           structuralAnalysis: gtStructuralAnalysis
         };
-        addBadge('GeckoTerminal', 'ok');
-        addDiag('ok', 'GeckoTerminal',
-          'Macro Floor: $' + fmtP(gtMacroFloor) +
-          ' | Local Floor (15m Shelf): $' + fmtP(gtLocalFloor || gtMacroFloor) +
-          ' | 1h Ceiling: $' + fmtP(ceiling1hHigh) +
-          ' | Vol Velocity inputs — M5: $' + gtVolM5.toFixed(0) + ', H1: $' + gtVolH1.toFixed(0) + '.');
+        if (gtMacroFloor > 0 || gtLocalFloor > 0) {
+          addBadge('GeckoTerminal', 'ok');
+          addDiag('ok', 'GeckoTerminal',
+            'Macro Floor: $' + fmtP(gtMacroFloor) +
+            ' | Local Floor (15m Shelf): $' + fmtP(gtLocalFloor || gtMacroFloor) +
+            ' | 1h Ceiling: $' + fmtP(ceiling1hHigh) +
+            (gtStructuralAnalysis ? ' | Structural Analysis: Tier ' + gtStructuralAnalysis.confidenceTier : '') +
+            ' | Vol M5: $' + gtVolM5.toFixed(0) + ', H1: $' + gtVolH1.toFixed(0) + '.');
+        } else {
+          addBadge('GeckoTerminal', 'partial');
+          addDiag('partial', 'GeckoTerminal',
+            'Candle data loaded' + (gtStructuralAnalysis ? ' (Structural Analysis: Tier ' + gtStructuralAnalysis.confidenceTier + ')' : '') +
+            ' but floor/ceiling levels unclear — may be a very new or illiquid token.');
+        }
       } else {
         window._tecCandles = null;
         addBadge('GeckoTerminal', 'partial');
@@ -2486,7 +2497,7 @@ async function fetchFromCA(ca) {
 
   /* ── Populate form + auto-detect pattern ─────────────────────────────── */
   fillFormFromData(fetched);
-  detectAndFillPattern(fetched);
+  detectAndFillPattern(fetched, true); /* force=true — Fetch Data always wins over stale parse */
 
   /* ── Render badges ───────────────────────────────────────────────────── */
   apiStatusRow.innerHTML = apiResults.join('');
@@ -4070,9 +4081,13 @@ function buildEntryBriefingHTML(d, analysis) {
 }
 
 /* ── Auto-detect Entry Pattern from Dexscreener price change data ────── */
-function detectAndFillPattern(fetched) {
+/* force=true: called after Fetch Data — overrides any prior value.
+   force=false/undefined: called after Parse & Fill — only fills if blank. */
+function detectAndFillPattern(fetched, force) {
   var patEl = el('fPattern');
-  if (!patEl || patEl.value) return;
+  if (!patEl) return;
+  /* Only skip if already set AND this is a non-forced (parse-time) call */
+  if (!force && patEl.value && patEl.value !== 'none') return;
   var m5  = fetched.perf5m  !== undefined && !isNaN(fetched.perf5m)  ? fetched.perf5m  : null;
   var h1  = fetched.perf1h  !== undefined && !isNaN(fetched.perf1h)  ? fetched.perf1h  : null;
   var h6  = fetched.perf6h  !== undefined && !isNaN(fetched.perf6h)  ? fetched.perf6h  : null;
@@ -4093,6 +4108,8 @@ function detectAndFillPattern(fetched) {
   /* Consolidation Breakout: medium-term flat then breakout */
   if (long_ > 20 && medium < 15 && short > 25) { patEl.value = 'consolidation'; return; }
   if (medium < 10 && short > 20) { patEl.value = 'consolidation'; return; }
+  /* Fallback: price data is available but no specific pattern matched — mark explicitly */
+  if (short !== null) patEl.value = 'none';
 }
 
 function parseTelegramText(text) {
@@ -4350,13 +4367,40 @@ function parseTelegramText(text) {
   if (rickCreatorM) {
     data.devAddress = rickCreatorM[1];
   } else {
-    /* TokenScan/generic: "✅ DEV • <full address>" */
-    var devAddrFull = rxf('(?:✅\\s*DEV|👷|🧑‍💻)[^\\n]*?([1-9A-HJ-NP-Za-km-z]{32,44})');
+    /* Try a broad set of bot formats in priority order */
+    var devAddrFull =
+      /* "✅ DEV • <address>"  /  emoji dev prefixes */
+      rxf('(?:✅\\s*DEV|👷|🧑‍💻)[^\\n]*?([1-9A-HJ-NP-Za-km-z]{32,44})') ||
+      /* "Creator: <address>"  (RugCheck, Phanes, Soul) */
+      rxf('Creator\\s*:?\\s*([1-9A-HJ-NP-Za-km-z]{32,44})') ||
+      /* "Dev Address: <address>"  /  "Dev Wallet: <address>"  /  "Dev: <address>" */
+      rxf('Dev(?:eloper)?(?:\\s+(?:Address|Wallet|Addr))?\\s*:?\\s*([1-9A-HJ-NP-Za-km-z]{32,44})') ||
+      /* "Deployer: <address>" */
+      rxf('Deployer\\s*:?\\s*([1-9A-HJ-NP-Za-km-z]{32,44})') ||
+      /* Line that is ONLY a base-58 address, preceded by a line containing "dev" or "creator" */
+      (function() {
+        var lines = t.split(/\r?\n/);
+        for (var li = 1; li < lines.length; li++) {
+          var prevLine = lines[li - 1].trim().toLowerCase();
+          var currLine = lines[li].trim();
+          if (/\b(?:dev|creator|deployer|developer)\b/.test(prevLine)) {
+            var m = currLine.match(/^([1-9A-HJ-NP-Za-km-z]{32,44})$/);
+            if (m) return m[1];
+          }
+        }
+        return null;
+      })();
     if (devAddrFull) data.devAddress = devAddrFull;
   }
-  /* Dev deployment stats (Rick/TokenScan/Phanes) — store for display */
-  var devDeployed = rxf('Deployed\\s*:\\s*(\\d+)') || rxf('\\bDeployed:\\s*(\\d+)');
-  var devBonded   = rxf('Bonded\\s*:\\s*(\\d+)(?:\\s*\\([\\d.]+%\\))?');
+
+  /* ── Dev deployment stats (Rick / TokenScan / Phanes / Soul) ──────── */
+  /* "Deployed: 12"  /  "12 tokens deployed"  /  "Launched: 4" */
+  var devDeployed = rxf('(?:Deployed|Launched|Created)\\s*:\\s*(\\d+)') ||
+                    rxf('(\\d+)\\s+tokens?\\s+(?:deployed|launched|created)') ||
+                    rxf('\\bDeployed:\\s*(\\d+)');
+  /* "Bonded: 3 (25%)"  /  "3 bonded" */
+  var devBonded   = rxf('Bonded?\\s*:\\s*(\\d+)(?:\\s*\\(?[\\d.]+%\\)?)?') ||
+                    rxf('(\\d+)\\s+bonded');
   if (devDeployed) data.devDeployed = parseInt(devDeployed, 10);
   if (devBonded)   data.devBonded   = parseInt(devBonded, 10);
 
