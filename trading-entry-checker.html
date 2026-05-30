@@ -4454,6 +4454,85 @@ function parseTelegramText(text) {
     }
   }
 
+  /* ── Dev launch history & reputation data ─────────────────────────── */
+  (function() {
+    /* Local K/M suffix parser — e.g. "405K" → 405000, "1.2M" → 1200000 */
+    function km(s) {
+      if (!s) return 0;
+      var n = parseFloat(String(s).replace(/,/g, ''));
+      if (isNaN(n)) return 0;
+      var sfx = String(s).trim().slice(-1).toUpperCase();
+      if (sfx === 'K') return n * 1e3;
+      if (sfx === 'M') return n * 1e6;
+      return n;
+    }
+
+    /* Dev rewards: "Rewards: 717 SOL" (Rick) */
+    var rewM = t.match(/Rewards\s*:\s*([\d,.]+)\s*SOL/i);
+    if (rewM) data.devRewards = parseFloat(rewM[1].replace(/,/g, ''));
+
+    /* Bond rate % — "Bonded: 47 (13%)" (Phanes) or computed from counts */
+    var brM = t.match(/Bonded?\s*:\s*\d+\s*\(([\d.]+)%\)/i);
+    if (brM) data.devBondRate = parseFloat(brM[1]);
+    else if (data.devDeployed > 0 && data.devBonded > 0)
+      data.devBondRate = (data.devBonded / data.devDeployed) * 100;
+
+    /* Last launch time: "Last: 1h, 12m ago" (Phanes) */
+    var lastM = t.match(/Last\s*:\s*([^\n]{2,25})/i);
+    if (lastM) data.devLastLaunchTime = lastM[1].trim().replace(/[├└│]/g, '').trim();
+
+    /* Recent launch count: "Recent Launches [50+]" (Rick) */
+    var rlcM = t.match(/Recent\s+Launches?\s*\[(\d+)\+?\]/i);
+    if (rlcM) data.devRecentLaunchCount = parseInt(rlcM[1], 10);
+
+    /* ── Parse individual launch lines ── */
+    var history = [];
+    var seen    = {};
+
+    /* Rick: "48m  PENISH @ 17K ⇨ 48K [36m]" */
+    var rickRe = /(\d+[mhd])\s+([\w$]{1,14})\s*@\s*([\d.]+[KMkm]?)\s*[\u21E8\u2192>\-]+\s*([\d.]+[KMkm]?)/g;
+    var rm;
+    while ((rm = rickRe.exec(t)) !== null) {
+      var sym = rm[2].toUpperCase();
+      if (seen[sym]) continue; seen[sym] = true;
+      history.push({ symbol: sym, entryMC: km(rm[3]), athMC: km(rm[4]), ageStr: rm[1] });
+    }
+
+    /* Phanes: "• UFU MC: $89.9K | ATH: $399.5K" */
+    var phRe = /[•·]\s*([\w$]{1,14})\s+MC:\s*\$?([\d.]+[KMkm]?)\s*[|│]\s*ATH:\s*\$?([\d.]+[KMkm]?)/g;
+    var pm;
+    while ((pm = phRe.exec(t)) !== null) {
+      var sym2 = pm[1].toUpperCase();
+      if (seen[sym2]) continue; seen[sym2] = true;
+      history.push({ symbol: sym2, entryMC: km(pm[2]), athMC: km(pm[3]) });
+    }
+
+    /* TokenScan best launch: "🏆 Best Launch ➰ $G • ATH: $528.02K" */
+    var tsBestM = t.match(/Best\s+Launch[\s\S]{0,100}?ATH:\s*\$?([\d.]+[KMkm]?)/i);
+    if (tsBestM) {
+      var bAth = km(tsBestM[1]);
+      if (bAth > 0 && !history.some(function(l) { return l.athMC >= bAth * 0.95; }))
+        history.push({ symbol: '(best)', entryMC: 0, athMC: bAth });
+    }
+
+    /* TokenScan other launches: "➰ $PFU • MC: $3.55K 💊" */
+    var tsRe = /➰\s*\$([\w]{1,14})\s*[•·]\s*MC:\s*\$?([\d.]+[KMkm]?)/g;
+    var tlm;
+    while ((tlm = tsRe.exec(t)) !== null) {
+      var sym3 = tlm[1].toUpperCase();
+      if (seen[sym3]) continue; seen[sym3] = true;
+      history.push({ symbol: '$' + sym3, entryMC: 0, athMC: km(tlm[2]) });
+    }
+
+    if (history.length > 0) {
+      data.devBestATH = Math.max.apply(null, history.map(function(l) { return l.athMC || 0; }));
+      var withBoth = history.filter(function(l) { return l.entryMC > 0 && l.athMC > 0; });
+      if (withBoth.length > 0)
+        data.devAvgMultiple = withBoth.reduce(function(s, l) { return s + (l.athMC / l.entryMC); }, 0) / withBoth.length;
+      data.devLaunchHistory = history.slice(0, 12);
+    }
+  })();
+
   return data;
 }
 
@@ -4526,6 +4605,19 @@ function fillFormFromData(data, mergeOnly) {
   if (data.devAddress) {
     var rlDev = el('rlDevInput');
     if (rlDev && !rlDev.value) rlDev.value = data.devAddress;
+    /* Stash parsed launch data so qecSetDevAddress can build the reputation score */
+    if (data.devRewards !== undefined || data.devBestATH !== undefined ||
+        (data.devLaunchHistory && data.devLaunchHistory.length > 0)) {
+      window._devInfo = {
+        rewards:            data.devRewards           || 0,
+        bondRate:           data.devBondRate           != null ? data.devBondRate : null,
+        bestATH:            data.devBestATH            || 0,
+        avgMultiple:        data.devAvgMultiple        || 0,
+        launchHistory:      data.devLaunchHistory      || [],
+        lastLaunchTime:     data.devLastLaunchTime     || '',
+        recentLaunchCount:  data.devRecentLaunchCount  || 0
+      };
+    }
     if (typeof qecSetDevAddress === 'function') {
       qecSetDevAddress(data.devAddress, data.devDeployed, data.devBonded);
     }
@@ -6306,21 +6398,142 @@ function qecSetDevAddress(address, devDeployed, devBonded) {
   el('devRepAddrShort').title = address;
   var link = el('devRepSolscanLink');
   if (link) link.href = 'https://solscan.io/account/' + address;
-  var deployInfo = '';
-  if (devDeployed !== undefined && devDeployed !== null) {
-    var bondRate = (devBonded && devDeployed) ? ' (' + ((devBonded/devDeployed)*100).toFixed(1) + '% bonded)' : '';
-    deployInfo = '<div style="font-size:0.65rem;color:var(--text-muted);margin-bottom:5px;">' +
-      '<span style="color:var(--accent-cyan);font-weight:700;">' + devDeployed + '</span> tokens deployed' +
-      (devBonded ? ' · <span style="color:var(--safe);font-weight:700;">' + devBonded + '</span> bonded' + bondRate : '') +
-    '</div>';
+  /* ── Pull together all known data ── */
+  var info    = window._devInfo || {};
+  var dep     = (devDeployed !== undefined && devDeployed !== null) ? devDeployed : (info.deployed || 0);
+  var bon     = (devBonded   !== undefined && devBonded   !== null) ? devBonded   : (info.bonded   || 0);
+  var bondRt  = info.bondRate != null ? info.bondRate : (dep > 0 && bon > 0 ? (bon / dep) * 100 : null);
+  var rewards = info.rewards      || 0;
+  var bestATH = info.bestATH      || 0;
+  var avgMult = info.avgMultiple  || 0;
+  var history = info.launchHistory || [];
+  var lastLt  = info.lastLaunchTime || '';
+
+  /* ── Reputation scoring (0 – 100) ── */
+  var score = 0;
+  var bonusLines = [], warnLines = [];
+
+  /* Bond rate (0 – 30 pts) — most important signal */
+  if (bondRt !== null) {
+    if      (bondRt >= 20) { score += 30; bonusLines.push('Strong bond rate (' + bondRt.toFixed(1) + '%)'); }
+    else if (bondRt >= 12) { score += 20; bonusLines.push('Good bond rate ('   + bondRt.toFixed(1) + '%)'); }
+    else if (bondRt >= 6)  { score += 12; }
+    else if (bondRt >= 2)  { score += 6;  warnLines.push('Low bond rate ('     + bondRt.toFixed(1) + '%) — mostly rugs'); }
+    else                   { score += 0;  warnLines.push('Very low bond rate (' + bondRt.toFixed(1) + '%) — serial rugger pattern'); }
   }
-  /* Check if this address is flagged */
+
+  /* ATH quality (0 – 25 pts) — avg multiple if available, else best ATH */
+  if      (avgMult >= 20)   { score += 25; bonusLines.push('Avg ATH ' + avgMult.toFixed(1) + 'x per launch'); }
+  else if (avgMult >= 10)   { score += 18; }
+  else if (avgMult >= 5)    { score += 12; }
+  else if (avgMult >= 2)    { score += 7; }
+  else if (bestATH >= 400000) { score += 25; bonusLines.push('Best ATH $' + (bestATH/1000).toFixed(0) + 'K'); }
+  else if (bestATH >= 200000) { score += 20; }
+  else if (bestATH >= 100000) { score += 15; }
+  else if (bestATH >= 50000)  { score += 10; }
+  else if (bestATH >= 20000)  { score += 5; }
+
+  /* Deployment volume / churn risk (0 – 20 pts) */
+  if      (!dep || dep < 10)  { score += 20; /* new / unknown — no serial history */ }
+  else if (dep < 30)           { score += 15; }
+  else if (dep < 100)          { score += 10; }
+  else if (dep < 200)          { score += 5;  warnLines.push(dep + ' total deployments — high serial churn'); }
+  else                         { score += 2;  warnLines.push(dep + ' total deployments — very high serial rug risk'); }
+
+  /* SOL rewards earned (0 – 15 pts) — proxy for track record */
+  if      (rewards >= 500) { score += 15; bonusLines.push(rewards.toFixed(0) + ' SOL rewards earned'); }
+  else if (rewards >= 200) { score += 12; }
+  else if (rewards >= 50)  { score += 8; }
+  else if (rewards >= 10)  { score += 4; }
+
+  /* Consistency: launches with ATH ≥ 5× entry MC (0 – 10 pts) */
+  var strong = history.filter(function(l) { return l.entryMC > 0 && l.athMC >= l.entryMC * 5; });
+  if      (strong.length >= 3) { score += 10; bonusLines.push(strong.length + ' launches with 5×+ ATH'); }
+  else if (strong.length >= 2) { score += 7; }
+  else if (strong.length >= 1) { score += 4; }
+
+  score = Math.min(100, score);
+
+  var tier, tierColor;
+  if      (score >= 70) { tier = 'TRUSTED';  tierColor = '#00e676'; }
+  else if (score >= 50) { tier = 'MODERATE'; tierColor = '#ffeb3b'; }
+  else if (score >= 30) { tier = 'RISKY';    tierColor = '#ff9800'; }
+  else                  { tier = 'DANGER';   tierColor = '#ff4757'; }
+
+  var hasData = dep > 0 || bon > 0 || rewards > 0 || bestATH > 0 || history.length > 0;
+
+  /* ── Flagged wallet warning ── */
   var flagged = checkFlaggedWallet(address);
   var flaggedInfo = flagged
     ? '<div class="qec-flagged-warning" style="font-size:0.68rem;margin-bottom:6px;"><i class="fa-solid fa-triangle-exclamation"></i>FLAGGED: ' + flagged.label + '</div>'
     : '';
-  el('devRepBody').innerHTML = flaggedInfo + deployInfo +
-    '<div style="font-size:0.68rem;color:var(--text-muted);padding:2px 0;">Click <strong>Check History</strong> to look up this dev\'s past tokens via RugCheck.</div>';
+
+  /* ── Deploy stats line ── */
+  var deployInfo = '';
+  if (dep > 0) {
+    var brCol  = bondRt === null ? 'var(--text-muted)' : bondRt >= 12 ? 'var(--safe)' : bondRt >= 6 ? 'var(--caution)' : '#ff4757';
+    var brTxt  = bondRt !== null ? ' · <span style="color:' + brCol + ';">' + bondRt.toFixed(1) + '% bonded</span>' : '';
+    deployInfo = '<div style="font-size:0.65rem;color:var(--text-muted);margin-bottom:5px;">' +
+      '<span style="color:var(--accent-cyan);font-weight:700;">' + dep + '</span> deployed' +
+      (bon     ? ' · <span style="color:var(--safe);font-weight:700;">' + bon + '</span> bonded' + brTxt : '') +
+      (rewards > 0 ? ' · <span style="color:#ffd700;font-weight:700;">' + rewards.toFixed(0) + ' SOL</span> rewards' : '') +
+      (lastLt  ? ' · Last: <span style="color:var(--text-muted);">' + lastLt + '</span>' : '') +
+    '</div>';
+  }
+
+  /* ── Score bar + commentary ── */
+  var scoreHTML = '';
+  if (hasData) {
+    scoreHTML =
+      '<div style="margin-bottom:6px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+          '<span style="font-size:0.65rem;color:var(--text-muted);">Dev Reputation Score</span>' +
+          '<span style="font-size:0.8rem;font-weight:800;color:' + tierColor + ';">' + tier + ' &nbsp;<span style="font-weight:400;font-size:0.72rem;color:var(--text-muted);">(' + score + '/100)</span></span>' +
+        '</div>' +
+        '<div style="height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + score + '%;background:' + tierColor + ';border-radius:3px;"></div>' +
+        '</div>' +
+      '</div>';
+
+    if (bonusLines.length > 0)
+      scoreHTML += '<div style="font-size:0.62rem;color:var(--safe);margin-bottom:3px;">' +
+        bonusLines.map(function(b) { return '✓ ' + b; }).join(' &nbsp;·&nbsp; ') + '</div>';
+
+    if (warnLines.length > 0)
+      scoreHTML += '<div style="font-size:0.62rem;color:#ff9800;margin-bottom:4px;">' +
+        warnLines.map(function(w) { return '⚠ ' + w; }).join(' &nbsp;·&nbsp; ') + '</div>';
+
+    /* Launch history preview (top 8) */
+    if (history.length > 0) {
+      var rows = history.slice(0, 8).map(function(l) {
+        var mult    = (l.entryMC > 0 && l.athMC > 0) ? (l.athMC / l.entryMC).toFixed(1) + 'x' : '';
+        var mVal    = mult ? parseFloat(mult) : 0;
+        var mColor  = mVal >= 10 ? 'var(--safe)' : mVal >= 3 ? 'var(--caution)' : mVal > 0 ? '#ff9800' : 'var(--text-muted)';
+        function fmtMC(v) {
+          if (!v) return '—';
+          if (v >= 1e6) return '$' + (v/1e6).toFixed(1) + 'M';
+          if (v >= 1e3) return '$' + (v/1e3).toFixed(0) + 'K';
+          return '$' + v.toFixed(0);
+        }
+        return '<div style="display:flex;gap:5px;align-items:center;font-size:0.61rem;padding:1px 0;white-space:nowrap;">' +
+          '<span style="color:var(--text-secondary);font-weight:600;min-width:52px;overflow:hidden;text-overflow:ellipsis;">' + l.symbol + '</span>' +
+          (l.entryMC ? '<span style="color:var(--text-muted);">' + fmtMC(l.entryMC) + '</span><span style="color:var(--text-muted);">→</span>' : '') +
+          '<span style="color:var(--accent-cyan);">' + fmtMC(l.athMC) + '</span>' +
+          (mult ? '<span style="color:' + mColor + ';font-weight:700;">' + mult + '</span>' : '') +
+          (l.ageStr ? '<span style="color:var(--text-muted);margin-left:2px;">' + l.ageStr + '</span>' : '') +
+        '</div>';
+      }).join('');
+      scoreHTML +=
+        '<div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07);">' +
+          '<div style="font-size:0.59rem;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.04em;">Launches from paste' + (history.length > 8 ? ' (top 8 of ' + history.length + ')' : '') + '</div>' +
+          rows +
+        '</div>';
+    }
+  } else {
+    scoreHTML = '<div style="font-size:0.67rem;color:var(--text-muted);padding:2px 0;">No launch history in paste — click <strong>Check History</strong> to query RugCheck.</div>';
+  }
+
+  el('devRepBody').innerHTML = flaggedInfo + deployInfo + scoreHTML;
 }
 
 async function qecCheckDevHistory() {
