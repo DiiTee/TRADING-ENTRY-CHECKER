@@ -1,0 +1,1375 @@
+
+We need to completely refactor the current Floor, Shelf, Safe Entry, and Air Entry logic in the Trading Entry Checker app.
+
+The current system incorrectly mixes:
+
+- LP Floor
+- Macro Floor
+- Local Floor/Shelf
+
+into one averaged floor value, which creates misleading “safe entries” and causes many Air entries.
+
+We should stop averaging unrelated floor types and instead switch to a structure-based support model focused on price acceptance and consolidation behavior.
+
+========================
+GOALS OF THE NEW SYSTEM
+
+The new system should:
+
+1. Detect real structural support instead of wick lows.
+2. Detect active shelves/consolidation zones.
+3. Measure how far current price is from accepted structure.
+4. Detect volatility compression before breakouts.
+5. Reject Air entries automatically.
+
+========================
+IMPORTANT DEFINITIONS
+
+SD = Standard Deviation
+
+Standard Deviation measures how spread out prices are from the average.
+Low SD = price is flat and compressed.
+High SD = price is volatile and unstable.
+
+ATR = Average True Range
+
+ATR measures average candle volatility/range.
+Low ATR = calm price action / consolidation.
+High ATR = explosive or unstable movement.
+
+Both SD and ATR should be used together to detect shelves and volatility compression.
+
+
+VWAP = Volume Weighted Average Price
+It answers:
+"At what average price did most money actually trade?"
+Formula:
+VWAP = Σ(Price × Volume) / Σ(Volume)
+Meaning:
+Price above VWAP
+Buyers are winning.
+Most money is underwater below current price.
+Bullish.
+Price at VWAP
+Neutral.
+Fair value.
+Price below VWAP
+Most money bought higher.
+Potential overhead sellers.
+Bearish.
+For meme coins:
+Price holding above VWAP after a shelf is often one of the strongest continuation signals.
+
+
+========================
+REMOVE CURRENT LOGIC
+
+REMOVE OR DEPRECATE:
+
+- avgFloor calculation
+- floor averaging logic
+- LP Floor influence on Safe Entry
+- current Air Entry formula comparing Local Floor to Macro Floor
+
+The following logic is structurally flawed and should no longer be used:
+
+avgFloor = average(lpFloor, macroFloorMC, localFloorMC)
+
+and:
+
+airEntry = localFloor > macroFloor * 1.175
+
+These formulas mix unrelated support concepts and produce inaccurate entries.
+
+========================
+NEW SUPPORT HIERARCHY
+
+Treat each support type separately:
+
+1. Active Shelf / Structural Floor
+   
+   - Main trading support
+   - Most important for entries
+
+2. Macro Floor
+   
+   - Major historical support
+   - Longer timeframe context only
+
+3. LP Floor
+   
+   - Catastrophic collapse floor
+   - Rug/death floor only
+   - NOT for entry calculation
+
+The app should prioritize:
+ACTIVE SHELF > MACRO FLOOR > LP FLOOR
+
+========================
+NEW ACTIVE SHELF DETECTION
+
+DO NOT use:
+
+- lowest wick
+- lowest candle low
+- recent minimum price
+
+Instead, calculate:
+PRICE ACCEPTANCE CLUSTERS
+
+Algorithm:
+
+1. Take the last 30–60 one-minute candles.
+Use fixed multi-timeframe lookback windows for consistency and stability.
+
+Suggested defaults:
+
+- 1m timeframe:
+  last 30 candles
+  for micro shelf detection and entry timing
+
+- 5m timeframe:
+  last 12 candles
+  for structural validation and support confirmation
+
+- 15m timeframe:
+  last 8 candles
+  for macro floor and trend context
+
+This creates stable and predictable structure analysis while still capturing:
+
+- short-term consolidation
+- medium-term acceptance
+- broader market context
+
+
+2. Divide the price range into small buckets/zones.
+
+Example:
+120k–123k
+123k–126k
+126k–129k
+
+3. For each bucket, calculate:
+
+- candle close count
+- wick overlap count
+- total time spent
+- optional volume traded
+
+4. The bucket with:
+
+- highest density
+- highest touch count
+- highest sustained duration
+
+becomes:
+ACTIVE STRUCTURAL SHELF
+
+This shelf is the real support zone.
+
+The shelf should represent:
+“where price was accepted”
+NOT:
+“the lowest wick”.
+
+
+Bucket sizing should be dynamic rather than fixed.
+
+Calculate bucket size relative to the recent lookback range.
+
+Example:
+
+lookbackRange =
+lookbackHigh - lookbackLow
+
+Suggested approach:
+
+bucketSize =
+lookbackRange / desiredBucketCount
+
+Recommended:
+8–15 buckets across the active range.
+
+This keeps shelf detection proportional across:
+
+- low-cap slow movers
+- high-volatility expansions
+- large market cap transitions
+
+The goal is to avoid:
+
+- overly fragmented shelves
+- overly broad support zones
+- distorted touch-count analysis
+
+========================
+ACTIVE SHELF CONDITION:
+
+A shelf is valid ONLY IF:
+1m:
+low SD
+low ATR
+compression
+tight clustering
+AND
+5m:
+price acceptance exists
+multiple closes inside same zone
+no aggressive rejection
+This removes many fake setups.
+
+A shelf is only “confirmed” if:
+1m shelf score is strong AND
+5m shelf score is moderate or strong
+
+If:
+1m shelf strong BUT
+5m structure weak
+then classify as: Potential Fake Shelf / Air Risk
+
+A shelf should only be considered valid if the consolidation/acceptance zone persists for a minimum duration.
+
+Suggested minimums:
+
+- 1m shelf: at least 8–12 candles
+- 5m shelf: at least 3–5 candles
+
+Very short pauses should not qualify as true shelves.
+
+
+Multi-timeframe shelf analysis should account for timeframe lag and freshness differences.
+
+Because:
+
+- 1m reacts immediately
+- 5m and 15m structures update more slowly
+
+the system should weight recent price interaction heavily when evaluating higher-timeframe shelves.
+
+Recent 1m behavior should influence:
+
+- shelf freshness
+- shelf decay
+- active support validity
+
+This prevents stale higher-timeframe shelves from remaining falsely “strong” during rapid market shifts or explosive breakouts.
+
+
+================
+ALSO: 
+
+Shelf quality should include volume participation checks.
+
+A valid shelf should maintain:
+
+- stable or gradually declining volume
+  NOT:
+- near-zero dead volume
+
+Dead-volume flatlines should be classified as weak shelves or inactivity zones rather than true support.
+
+
+========================
+DEFENSE COUNT SYSTEM
+
+Add Shelf Defense Count.
+
+Count:
+
+- successful bounces
+- failed breakdowns
+- reclaim after wick below shelf
+- repeated holds
+
+Classification:
+1 defense = weak shelf
+2–3 defenses = moderate shelf
+4+ defenses = strong shelf
+
+This defense count should increase shelf confidence score.
+
+========================
+VOLATILITY COMPRESSION DETECTION
+
+Add true Shelf Compression detection using both:
+
+1. Standard Deviation (SD)
+2. Average True Range (ATR)
+
+Calculate:
+
+- SD of last 10 closes
+- ATR of last 10 candles
+
+Shelf/Compression Conditions:
+
+- SD decreasing
+- ATR decreasing
+- closes flattening
+- candle ranges shrinking
+
+If all conditions are true:
+Tag as:
+“Shelf Forming”
+or
+“Compression Detected”
+
+This is a high-quality entry signal.
+
+========================
+
+REJECTION STRENGTH DETECTION
+
+Measure rejection strength around the shelf.
+
+Track:
+
+- wick rejection size
+- speed of reclaim after breakdown
+- number of failed attempts below shelf
+
+Strong reclaim behavior should increase shelf confidence.
+Aggressive breakdown candles should reduce shelf confidence.
+
+========================
+SHELF FRESHNESS
+
+Add Shelf Freshness weighting.
+
+Recently defended shelves should carry more importance than older inactive shelves.
+
+Shelf confidence should gradually decay if:
+
+- price has moved far away for extended periods
+- no recent interactions occurred
+- newer acceptance zones formed above or below
+
+The system should prioritize the most recently active accepted structure.
+
+========================
+TREND-STATE AWARENESS
+
+Add Trend-State Classification before evaluating shelves.
+
+Classify the market structure into:
+
+- Uptrend
+- Sideways
+- Downtrend
+
+using:
+
+- higher highs / higher lows
+- moving averages
+- VWAP positioning
+- momentum slope
+
+Shelf quality should be adjusted based on trend state.
+
+Examples:
+
+- Shelf inside healthy uptrend
+  = high-quality continuation setup
+
+- Shelf inside aggressive downtrend
+  = weak bounce risk / dead-cat risk
+
+- Shelf after parabolic expansion
+  = elevated Air risk even if temporary compression exists
+
+
+========================
+PARABOLIC EXHAUSTION DETECTION
+
+Add Parabolic Expansion / Exhaustion Detection.
+
+The app should detect:
+
+- extremely rapid vertical expansion
+- consecutive large-bodied candles
+- unusually high distance from VWAP
+- momentum acceleration spikes
+
+If a shelf forms immediately after parabolic expansion, classify it as:
+
+“High Risk Shelf”
+or
+“Potential Blowoff Consolidation”
+
+rather than treating it as normal accumulation.
+
+Not all shelves after explosive pumps are healthy continuation structures.
+
+========================
+NEW AIR ENTRY LOGIC
+
+Replace current Air Entry formula with:
+
+distanceFromShelf =
+(currentMC - activeShelfMC) / currentMC
+
+If classified as Air:
+
+- reject BUY recommendation
+- display warning
+- reduce confidence score heavily
+
+NOTE: 
+Distance-from-shelf thresholds should be volatility-adjusted.
+
+Use ATR-relative scaling so highly volatile coins are not incorrectly classified as Air solely because of wider normal price swings.
+
+The app should support both:
+
+- static thresholds
+- volatility-adjusted thresholds
+
+
+Distance-from-shelf classification should use both:
+
+- fixed/static thresholds
+- ATR-relative dynamic thresholds
+
+First calculate:
+distanceFromShelf =
+(currentMC - activeShelfMC) / currentMC
+
+Apply STATIC classification
+
+Then, calculate: 
+ATR % = ATR / Current Price
+
+Then calculate dynamic thresholds:
+
+Shelf Threshold =
+ATR % × 0.5
+
+Near Support Threshold =
+ATR % × 1.0
+
+Air Threshold =
+ATR % × 1.75
+
+Then compare:
+
+- static thresholds
+- ATR-adjusted thresholds
+
+Then Apply Adaptive Logic: 
+In calm/normal volatility regimes: prioritize static thresholds.
+In high/extreme volatility regimes: allow ATR-adjusted thresholds to widen classifications moderately.
+
+Static baseline thresholds:
+
+Classification:
+
+0–5%
+= Shelf Entry
+
+5–12%
+= Near Support
+
+12–20%
+= Extended
+
+20%+
+= Air Entry
+
+Adjusted classification IF volatility is unusually high.
+Example:
+ATR %
+Regime
+<5%
+Calm
+5–10%
+Normal
+10–15%
+High Volatility
+15%+
+Extreme Volatility
+
+This allows the app to adapt to different volatility regimes while still maintaining structural discipline.
+
+ATR should:
+soften or tighten classifications
+NOT replace the structure model itself.
+Static baseline thresholds remains the foundation.
+The ATR logic is just contextual intelligence.
+
+
+========================
+NEW SAFE ENTRY LOGIC
+
+REMOVE:
+safeEntryLow = avgFloor * 1.05
+safeEntryHigh = localFloorMC
+
+Replace with:
+
+Shelf Entry:
+Current MC within 3–5% above Active Shelf
+
+Near Support:
+Current MC within 5–10% above Active Shelf
+
+Extended:
+10–15% above shelf
+
+Air:
+15–20%+ above shelf
+
+The app should strongly prefer:
+Shelf
+or
+Near Support entries only.
+
+========================
+NEW ACCEPTANCE SCORE SYSTEM
+
+Create a new:
+Acceptance Score
+
+Weighted by:
+
+35%
+Time-at-price density
+
+25%
+Shelf defense count
+
+20%
+Volatility compression
+(SD + ATR contraction)
+
+10%
+Volume concentration around shelf
+
+10%
+Distance from shelf
+
+Acceptance Score Classification:
+
+80–100
+= Strong Shelf
+
+65–79
+= Near Support
+
+50–64
+= Neutral
+
+Below 50
+= Air / Weak Structure
+
+========================
+IMPORTANT CONCEPTUAL CHANGE
+
+The app should prioritize:
+PRICE ACCEPTANCE
+before
+MOMENTUM
+
+Current momentum metrics:
+
+- buy %
+- buy volume %
+- short-term performance
+- velocity
+
+should only enhance entries AFTER structure is confirmed.
+
+Momentum without structure creates Air entries.
+
+The app should ask:
+“Has price earned this level through acceptance and consolidation?”
+
+NOT:
+“Is price moving upward quickly?”
+
+========================
+MACRO FLOOR IMPROVEMENT
+
+Macro Floor should also use:
+time-at-price density
+instead of simple wick lows.
+
+Macro Floor should represent:
+the largest accepted support zone over a longer lookback window.
+
+========================
+LP FLOOR ROLE
+
+LP Floor should NOT influence:
+
+- Safe Entry
+- Shelf Detection
+- Air Detection
+
+LP Floor should only be used for:
+
+- catastrophic downside estimation
+- liquidity collapse risk
+- rug risk awareness
+
+
+========================
+DEMAND RETURN SCORE
+
+The system should measure whether buyers are returning to the market after structure has formed.
+
+Support alone is insufficient.
+
+A shelf becomes significantly more valuable when demand begins increasing near the shelf.
+
+Create a separate Demand Return Score.
+
+Components
+
+Higher-Low Strength (35%)
+
+Detect swing lows.
+
+Measure whether recent lows are:
+
+Higher Lows
+
+Equal Lows
+
+Lower Lows
+
+
+Classification:
+
+5 consecutive Higher Lows = Strong Demand
+
+3–4 Higher Lows = Healthy Demand
+
+Mixed Structure = Neutral
+
+Mostly Lower Lows = Weak Demand
+
+
+---
+
+Bounce Velocity (30%)
+
+Measure the speed and magnitude of moves away from the shelf.
+
+Calculate:
+
+distanceFromShelfAfterBounce
+
+and
+
+timeRequired
+
+Strong bounces indicate aggressive buyer participation.
+
+Classification:
+
+Fast + Large Bounce = Strong
+
+Moderate Bounce = Medium
+
+Weak Bounce = Low
+
+
+---
+
+Buy Volume Acceleration (20%)
+
+Compare recent buy volume against previous periods.
+
+Example:
+
+Recent Buy Volume (15m)
+
+vs
+
+Previous Buy Volume (15m)
+
+Calculate growth rate.
+
+Classification:
+
+> 30% increase = Strong
+
+
+
+10–30% = Moderate
+
+<10% = Weak
+
+Negative = Declining Demand
+
+
+---
+
+VWAP Position (15%)
+
+VWAP = Volume Weighted Average Price.
+
+Measure:
+
+Current Price vs VWAP
+
+Classification:
+
+Above VWAP = Bullish
+
+Near VWAP = Neutral
+
+Below VWAP = Bearish
+
+---
+
+Demand Return Score Classification:
+
+80–100 = Strong Demand Return
+
+65–79 = Moderate Demand Return
+
+50–64 = Weak Demand Return
+
+Below 50 = No Meaningful Demand
+
+
+========================
+HIGHER-LOW LADDER DETECTION
+
+Detect the last 5–10 significant swing lows.
+
+Ignore micro-noise.
+
+Count:
+
+Higher Lows (HL)
+
+Equal Lows (EL)
+
+Lower Lows (LL)
+
+
+Classification:
+
+5+ consecutive HL = Strong Uptrend
+
+3–4 HL = Healthy Trend
+
+Mixed HL/LL = Neutral
+
+Majority LL = Weak Trend
+
+5+ consecutive LL = Downtrend
+
+This score should directly increase or reduce shelf confidence.
+
+Shelves supported by Higher-Low ladders should receive significant confidence boosts.
+
+
+========================
+SHELF LOCATION TYPE CLASSIFICATION
+
+Analyze price action before shelf formation.
+
+Classify shelves into:
+
+Accumulation Shelf
+
+Characteristics:
+
+Uptrend or early trend
+
+Higher lows
+
+Stable volume
+
+Strong acceptance
+
+
+Meaning:
+
+Healthy continuation probability.
+
+Confidence Boost.
+
+
+---
+
+Re-Accumulation Shelf
+
+Characteristics:
+
+Strong move upward
+
+Controlled pullback
+
+Shelf forms above previous support
+
+Higher lows maintained
+
+
+Meaning:
+
+Potential second leg.
+
+Strong Confidence Boost.
+
+
+---
+
+Distribution Shelf
+
+Characteristics:
+
+Parabolic expansion
+
+Momentum slowing
+
+Heavy volume near highs
+
+Failure to make higher highs
+
+
+Meaning:
+
+Potential top formation.
+
+Confidence Reduction.
+
+
+---
+
+Dead-Cat Shelf
+
+Characteristics:
+
+Major downtrend
+
+Shelf forms after crash
+
+Lower highs
+
+Weak demand return
+
+
+Meaning:
+
+High Failure Risk.
+
+Heavy Confidence Reduction.
+
+
+---
+
+Display Shelf Type clearly.
+
+
+========================
+STRUCTURE SEQUENCE ANALYSIS
+
+This is to determine whether a shelf is healthy or dangerous.
+
+
+Analyze the sequence leading into the shelf.
+
+Classify:
+
+Trend → Shelf
+
+Healthy continuation structure.
+
+Strong confidence boost.
+
+
+---
+
+Pullback → Shelf
+
+Potential re-accumulation.
+
+Moderate confidence boost.
+
+
+---
+
+Parabolic Expansion → Shelf
+
+Potential blowoff consolidation.
+
+Elevated risk.
+
+Reduce confidence.
+
+
+---
+
+Crash → Shelf
+
+Potential dead-cat bounce.
+
+High caution.
+
+Reduce confidence heavily.
+
+
+---
+
+Sideways → Shelf
+
+Neutral.
+
+Require stronger Demand Return Score.
+
+
+---
+
+Structure Sequence should influence:
+
+Acceptance Score
+
+Shelf Confidence
+
+Buy Recommendation
+
+
+
+========================
+OVERHEAD SUPPLY RISK
+
+Add Overhead Supply Risk Detection.
+
+Purpose:
+
+Estimate potential selling pressure above current price.
+
+Many coins fail because large amounts of price acceptance exist above current market cap.
+
+This creates trapped participants who may sell into rebounds.
+
+The system should estimate overhead resistance using structure data rather than wallet-level holder analysis.
+
+DO NOT require holder tracking.
+
+Use historical price acceptance instead.
+
+---
+
+OVERHEAD ACCEPTANCE ANALYSIS
+
+Measure:
+
+- Total candle closes above current price
+- Total time spent above current price
+- Number of accepted shelf zones above current price
+- Density of price acceptance above current price
+
+Large acceptance zones above current price indicate stronger overhead resistance.
+
+---
+
+OVERHEAD DENSITY SCORE
+
+Calculate:
+
+Acceptance Above Current Price
+÷
+Total Acceptance Across Lookback Window
+
+Classification:
+
+0–20%
+= Low Overhead Supply
+
+20–40%
+= Moderate Overhead Supply
+
+40–60%
+= High Overhead Supply
+
+60%+
+= Extreme Overhead Supply
+
+---
+
+OVERHEAD SHELF COUNT
+
+Count active and historical shelf zones above current price.
+
+Classification:
+
+0–1 shelves
+= Low Resistance
+
+2–3 shelves
+= Moderate Resistance
+
+4+
+= Heavy Resistance
+
+---
+
+OVERHEAD SUPPLY RISK SCORE
+
+Combine:
+
+- Overhead Density
+- Shelf Count Above Price
+- Time-at-Price Above Current Price
+
+Classification:
+
+80–100
+= Minimal Overhead Risk
+
+65–79
+= Manageable Overhead Risk
+
+50–64
+= Elevated Overhead Risk
+
+Below 50
+= Significant Overhead Risk
+
+---
+
+EFFECT ON DECISION ENGINE
+
+High Overhead Supply Risk should reduce:
+
+- Acceptance Score
+- Demand Return Score
+- Buy Confidence
+
+The purpose is to identify coins that may face significant selling pressure before meaningful upside continuation.
+
+========================
+BREAKOUT EFFICIENCY
+
+Add Breakout Efficiency Detection.
+
+Purpose:
+
+Measure how effectively price converts breakout attempts into actual continuation.
+
+Healthy runners tend to break resistance efficiently.
+
+Weak or exhausted coins repeatedly fail at the same resistance level.
+
+---
+
+BREAKOUT ATTEMPT DETECTION
+
+Identify:
+
+- Local resistance zones
+- Historical shelf highs
+- Recent swing highs
+
+Track every attempt to break above resistance.
+
+A breakout attempt occurs when price enters the resistance zone or briefly exceeds it.
+
+---
+
+BREAKOUT RESULT ANALYSIS
+
+For each breakout attempt classify:
+
+SUCCESSFUL:
+
+- Resistance broken
+- Acceptance forms above resistance
+- Price holds above breakout level
+
+FAILED:
+
+- Quick rejection
+- Return below resistance
+- Breakdown into previous shelf
+
+---
+
+BREAKOUT EFFICIENCY RATIO
+
+Calculate:
+
+Successful Breakouts
+÷
+Total Breakout Attempts
+
+Classification:
+
+80–100%
+= Excellent
+
+60–79%
+= Strong
+
+40–59%
+= Moderate
+
+20–39%
+= Weak
+
+Below 20%
+= Poor
+
+---
+
+FAILED BREAKOUT COUNT
+
+Count consecutive failed breakout attempts.
+
+Classification:
+
+0 Failed Attempts
+= Excellent
+
+1–2 Failed Attempts
+= Healthy
+
+3–4 Failed Attempts
+= Weakening
+
+5+
+= Exhaustion Risk
+
+---
+
+BREAKOUT ENERGY DECAY
+
+Measure:
+
+- Declining breakout volume
+- Smaller breakout candles
+- Reduced distance traveled after breakout attempts
+
+Repeated failures with declining energy should increase exhaustion risk.
+
+---
+
+EFFECT ON DECISION ENGINE
+
+Strong Breakout Efficiency should increase:
+
+- Demand Return Score
+- Buy Confidence
+- Shelf Quality
+
+Poor Breakout Efficiency should reduce:
+
+- Demand Return Score
+- Buy Confidence
+
+Repeated failed breakout attempts should trigger:
+
+"Exhaustion Risk"
+or
+"Weak Continuation Probability"
+warnings.
+
+========================
+CONFIDENCE TIER SYSTEM
+
+The app should combine all structural analysis into a final Confidence Tier.
+
+The purpose is to translate complex analysis into an actionable quality rating.
+
+The app should still expose all underlying metrics and scores.
+
+The tier system is a summary layer, not a replacement.
+
+---
+
+INPUTS
+
+The Confidence Tier should consider:
+
+- Acceptance Score
+- Demand Return Score
+- Higher-Low Ladder Strength
+- Shelf Type Classification
+- Structure Sequence Analysis
+- Overhead Supply Risk
+- Breakout Efficiency
+- Trend-State Classification
+- Distance From Shelf
+
+---
+
+TIER S
+
+90–100
+
+Requirements:
+
+- Strong Shelf
+- Strong Demand Return
+- Healthy Higher-Low Structure
+- Low Overhead Supply Risk
+- Strong Breakout Efficiency
+
+Classification:
+
+Exceptional Setup
+
+Meaning:
+
+Highest quality continuation probability.
+
+Rare.
+
+---
+
+TIER A
+
+80–89
+
+Requirements:
+
+- Strong Structure
+- Moderate to Strong Demand Return
+- Healthy Trend
+- Acceptable Overhead Risk
+
+Classification:
+
+High Quality Setup
+
+Meaning:
+
+Preferred entry candidates.
+
+---
+
+TIER B
+
+65–79
+
+Requirements:
+
+- Acceptable Structure
+- Mixed Demand Signals
+- Moderate Risk Factors
+
+Classification:
+
+Tradable Setup
+
+Meaning:
+
+Requires discretion.
+
+Position sizing may be reduced.
+
+---
+
+TIER C
+
+50–64
+
+Requirements:
+
+- Weak Structure
+  OR
+- Weak Demand Return
+  OR
+- Elevated Overhead Risk
+
+Classification:
+
+Speculative Setup
+
+Meaning:
+
+Higher failure probability.
+
+Use caution.
+
+---
+
+TIER D
+
+Below 50
+
+Requirements:
+
+- Air Entry
+  OR
+- Dead-Cat Shelf
+  OR
+- Extremely Weak Demand Return
+  OR
+- Extreme Overhead Supply
+  OR
+- Poor Breakout Efficiency
+
+Classification:
+
+Avoid
+
+Meaning:
+
+Reject Buy Recommendation.
+
+---
+
+DISPLAY OUTPUT
+
+Show:
+
+Acceptance Score
+
+Demand Return Score
+
+Shelf Type
+
+Structure Sequence
+
+Overhead Supply Risk
+
+Breakout Efficiency
+
+Confidence Tier
+
+Final Buy Confidence
+
+The app should never rely on a single metric.
+
+The final recommendation should be based on the combination of structure, demand, trend quality, resistance overhead, and breakout behavior.
+
+===========
+Don't make Tier S automatically buyable.
+A freshly graduated meme coin with only 30–60 minutes of history can look perfect statistically and still implode. I'd make Tier S and Tier A mean:
+"Best setup quality among available opportunities"
+not
+"Guaranteed winner."
+That distinction will keep the scoring system honest and prevent overconfidence
+
+========================
+FINAL OBJECTIVE
+
+The final system should:
+
+- identify real shelves
+- avoid Air entries
+- detect support based on acceptance
+- help improve Stop Loss placement
+- align with historical winning trades
+- reduce stop-outs caused by entering above structure
+
+The new model should behave more like:
+market structure analysis
+
+and less like:
+simple floor averaging or wick-low detection.
+
+
+Do not just show BUY/REJECT:
+expose the scores
+expose classifications
+expose shelf quality
+So I can make a well-informed decision.
+
