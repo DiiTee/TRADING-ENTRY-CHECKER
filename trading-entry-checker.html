@@ -2359,15 +2359,24 @@ async function fetchFromCA(ca) {
       }
       /* [timestamp, open, high, low, close, volume] */
       var gtMacroFloor = 0, gtLocalFloor = 0, gt15mClose = 0;
+      var gtStructuralAnalysis = null;
       if (gt15mList) {
-        var allLows = gt15mList.map(function(c) { return c[3]; }).filter(function(v) { return v > 0; });
-        if (allLows.length > 0) gtMacroFloor = Math.min.apply(null, allLows);
-
-        var recentSlice = gt15mList.slice(-4);
-        var recentLows  = recentSlice.map(function(c) { return c[3]; }).filter(function(v) { return v > 0; });
-        if (recentLows.length > 0) gtLocalFloor = Math.min.apply(null, recentLows);
-
         gt15mClose = gt15mList[gt15mList.length - 1][4] || 0;
+        if (gt15mClose > 0) {
+          gtStructuralAnalysis = computeStructuralAnalysis(gt15mList);
+          if (gtStructuralAnalysis) {
+            gtMacroFloor = gtStructuralAnalysis.macroFloorPrice || 0;
+            gtLocalFloor = gtStructuralAnalysis.activeShelfPrice || 0;
+          }
+        }
+        /* fallback to wick-low method if cluster analysis had insufficient data */
+        if (!gtMacroFloor) {
+          var allLows = gt15mList.map(function(c) { return c[3]; }).filter(function(v) { return v > 0; });
+          if (allLows.length > 0) gtMacroFloor = Math.min.apply(null, allLows);
+          var recentSlice = gt15mList.slice(-4);
+          var recentLows  = recentSlice.map(function(c) { return c[3]; }).filter(function(v) { return v > 0; });
+          if (recentLows.length > 0) gtLocalFloor = Math.min.apply(null, recentLows);
+        }
       }
 
       /* ── 1h candle → Ceiling ── */
@@ -2381,17 +2390,18 @@ async function fetchFromCA(ca) {
       /* ── Store results ── */
       if (gt15mClose > 0 && (gtMacroFloor > 0 || gtLocalFloor > 0)) {
         window._tecCandles = {
-          current:       gt15mClose,
-          macroFloor:    gtMacroFloor,
-          localFloor:    gtLocalFloor || gtMacroFloor,
-          floor15mLow:   gtLocalFloor || gtMacroFloor,   /* backward compat */
-          ceiling1hHigh: ceiling1hHigh,
-          high:          ceiling1hHigh,
-          low:           gtLocalFloor || gtMacroFloor,
-          volM5:         gtVolM5,
-          volH1:         gtVolH1,
-          priceChangeM5: gtPriceM5,
-          source:        'GeckoTerminal'
+          current:            gt15mClose,
+          macroFloor:         gtMacroFloor,
+          localFloor:         gtLocalFloor || gtMacroFloor,
+          floor15mLow:        gtLocalFloor || gtMacroFloor,   /* backward compat */
+          ceiling1hHigh:      ceiling1hHigh,
+          high:               ceiling1hHigh,
+          low:                gtLocalFloor || gtMacroFloor,
+          volM5:              gtVolM5,
+          volH1:              gtVolH1,
+          priceChangeM5:      gtPriceM5,
+          source:             'GeckoTerminal',
+          structuralAnalysis: gtStructuralAnalysis
         };
         addBadge('GeckoTerminal', 'ok');
         addDiag('ok', 'GeckoTerminal',
@@ -3448,6 +3458,337 @@ function buildSecurityBriefingHTML(d) {
     '</div>';
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   STRUCTURAL ANALYSIS ENGINE — Price Acceptance Clustering
+   Replaces the old avgFloor / wick-low / airEntry model.
+   Input:  candles15m — array of [timestamp, open, high, low, close, volume]
+   Output: rich analysis object used by buildEntryBriefingHTML + text export
+   ═══════════════════════════════════════════════════════════════════════════ */
+function computeStructuralAnalysis(candles15m) {
+  if (!candles15m || candles15m.length < 3) return null;
+
+  var n        = candles15m.length;
+  var closes   = candles15m.map(function(c) { return c[4]; });
+  var highs    = candles15m.map(function(c) { return c[2]; });
+  var lows     = candles15m.map(function(c) { return c[3]; });
+  var opens    = candles15m.map(function(c) { return c[1]; });
+  var volumes  = candles15m.map(function(c) { return c[5] || 0; });
+  var currentPrice = closes[n - 1];
+  if (!currentPrice || currentPrice <= 0) return null;
+
+  /* ── 1. ATR and Standard Deviation (last 10 candles) ── */
+  var lookN        = Math.min(10, n);
+  var recentCloses = closes.slice(-lookN);
+  var recentHighs  = highs.slice(-lookN);
+  var recentLows   = lows.slice(-lookN);
+
+  var meanClose = recentCloses.reduce(function(a, b) { return a + b; }, 0) / recentCloses.length;
+  var sd = Math.sqrt(recentCloses.reduce(function(a, c) { return a + Math.pow(c - meanClose, 2); }, 0) / recentCloses.length);
+  var sdPct = (sd / currentPrice) * 100;
+
+  var atr = 0;
+  for (var ai = 0; ai < recentHighs.length; ai++) atr += (recentHighs[ai] - recentLows[ai]);
+  atr /= recentHighs.length;
+  var atrPct = (atr / currentPrice) * 100;
+
+  var volRegime;
+  if (atrPct < 5)       volRegime = 'Calm';
+  else if (atrPct < 10) volRegime = 'Normal';
+  else if (atrPct < 15) volRegime = 'High';
+  else                  volRegime = 'Extreme';
+
+  /* ── 2. Price Acceptance Clustering (Active Shelf Detection) ── */
+  var rangeHigh = Math.max.apply(null, highs);
+  var rangeLow  = Math.min.apply(null, lows);
+  var priceRange = rangeHigh - rangeLow;
+  if (priceRange <= 0) priceRange = currentPrice * 0.05;
+
+  var NUM_BUCKETS = 12;
+  var bucketSize  = priceRange / NUM_BUCKETS;
+
+  var buckets = [];
+  for (var b = 0; b < NUM_BUCKETS; b++) {
+    buckets.push({ low: rangeLow + b * bucketSize, high: rangeLow + (b + 1) * bucketSize,
+                   closes: 0, wickOverlaps: 0, volume: 0, timeCount: 0, score: 0 });
+  }
+
+  candles15m.forEach(function(c, idx) {
+    var cOpen = c[1], cHigh = c[2], cLow = c[3], cClose = c[4], cVol = c[5] || 0;
+    var recencyWeight = 0.5 + 0.5 * (idx / (n - 1)); /* 0.5 → 1.0, recent candles matter more */
+    buckets.forEach(function(bkt) {
+      if (cClose >= bkt.low && cClose <= bkt.high) bkt.closes += recencyWeight;
+      if (cLow <= bkt.high && cHigh >= bkt.low) {
+        bkt.wickOverlaps += recencyWeight;
+        bkt.timeCount    += 1;
+        var candleRange   = (cHigh - cLow) > 0 ? (cHigh - cLow) : bucketSize;
+        var overlapFrac   = Math.min(cHigh, bkt.high) - Math.max(cLow, bkt.low);
+        if (overlapFrac < 0) overlapFrac = 0;
+        bkt.volume += cVol * (overlapFrac / candleRange);
+      }
+    });
+  });
+
+  var maxCloses    = Math.max.apply(null, buckets.map(function(b) { return b.closes; }))    || 1;
+  var maxTouches   = Math.max.apply(null, buckets.map(function(b) { return b.timeCount; })) || 1;
+  var maxVolume    = Math.max.apply(null, buckets.map(function(b) { return b.volume; }))    || 1;
+  buckets.forEach(function(bkt) {
+    bkt.score = (bkt.closes / maxCloses)  * 0.40
+              + (bkt.timeCount / maxTouches) * 0.35
+              + (bkt.volume / maxVolume)   * 0.15
+              + (bkt.wickOverlaps / (maxTouches * 2 || 1)) * 0.10;
+  });
+
+  var sortedBuckets = buckets.slice().sort(function(a, b) { return b.score - a.score; });
+  var bestBucket    = sortedBuckets[0];
+  var activeShelfPrice = (bestBucket.low + bestBucket.high) / 2;
+  var shelfMinCandles  = 6; /* minimum timeCount for a valid shelf */
+  var shelfIsValid     = bestBucket.timeCount >= shelfMinCandles;
+
+  /* ── 3. Macro Floor — highest-scoring bucket in the lower 50% of range ── */
+  var macroZoneTop    = rangeLow + priceRange * 0.50;
+  var macroCandidates = buckets.filter(function(b) { return b.high <= macroZoneTop; });
+  var macroShelfBkt   = macroCandidates.length > 0
+    ? macroCandidates.reduce(function(best, b) { return b.score > best.score ? b : best; }, macroCandidates[0])
+    : bestBucket;
+  var macroFloorPrice = (macroShelfBkt.low + macroShelfBkt.high) / 2;
+
+  /* ── 4. Shelf Defense Count ── */
+  var shelfDefenses = 0;
+  candles15m.forEach(function(c) {
+    var cLow = c[3], cClose = c[4];
+    if (cLow >= bestBucket.low * 0.98 && cLow <= bestBucket.high * 1.02) {
+      if (cClose > bestBucket.low) shelfDefenses++;
+    }
+  });
+  var defenseClassification;
+  if (shelfDefenses >= 4)      defenseClassification = 'Strong';
+  else if (shelfDefenses >= 2) defenseClassification = 'Moderate';
+  else if (shelfDefenses >= 1) defenseClassification = 'Weak';
+  else                         defenseClassification = 'Unproven';
+
+  /* ── 5. Volatility Compression ── */
+  var compressionDetected = false;
+  if (n >= 6) {
+    var half = Math.floor(n / 2);
+    var earlyC = closes.slice(0, half);
+    var lateC  = closes.slice(half);
+    var eMean  = earlyC.reduce(function(a,b){return a+b;},0) / earlyC.length;
+    var lMean  = lateC.reduce(function(a,b){return a+b;},0)  / lateC.length;
+    var eSD    = Math.sqrt(earlyC.reduce(function(a,c){return a+Math.pow(c-eMean,2);},0)/earlyC.length);
+    var lSD    = Math.sqrt(lateC.reduce(function(a,c){return a+Math.pow(c-lMean,2);},0)/lateC.length);
+    var eATR   = highs.slice(0,half).reduce(function(a,h,i){return a+(h-lows[i]);},0)/half;
+    var lATRarr= highs.slice(half);
+    var lATR   = lATRarr.reduce(function(a,h,i){return a+(h-lows[half+i]);},0)/(n-half);
+    compressionDetected = (lSD < eSD * 0.8) && (lATR < eATR * 0.8);
+  }
+
+  /* ── 6. Trend State — swing high/low analysis ── */
+  var swingHighs = [], swingLows = [];
+  for (var si = 1; si < n - 1; si++) {
+    if (highs[si] > highs[si-1] && highs[si] > highs[si+1]) swingHighs.push(highs[si]);
+    if (lows[si]  < lows[si-1]  && lows[si]  < lows[si+1])  swingLows.push(lows[si]);
+  }
+  var higherHighs = 0, higherLows = 0, lowerLows = 0;
+  for (var sj = 1; sj < swingHighs.length; sj++) if (swingHighs[sj] > swingHighs[sj-1]) higherHighs++;
+  for (var sk = 1; sk < swingLows.length;  sk++) {
+    if (swingLows[sk] > swingLows[sk-1]) higherLows++;
+    else                                 lowerLows++;
+  }
+  var trendState = 'Sideways';
+  if (higherHighs > lowerLows && higherLows >= 1) trendState = 'Uptrend';
+  else if (lowerLows > higherHighs)               trendState = 'Downtrend';
+
+  /* ── 7. Parabolic Exhaustion ── */
+  var parabolicRisk = false;
+  if (n >= 4) {
+    var recentBodies = [];
+    for (var ri = Math.max(0, n - 4); ri < n; ri++) {
+      recentBodies.push({ body: Math.abs(closes[ri] - opens[ri]), bullish: closes[ri] > opens[ri] });
+    }
+    var avgRecentBody = recentBodies.reduce(function(a,b){return a+b.body;},0) / recentBodies.length;
+    var avgAllBody    = closes.reduce(function(a,c,i){return a+Math.abs(c-opens[i]);},0) / n;
+    var bullCnt       = recentBodies.filter(function(b){return b.bullish;}).length;
+    parabolicRisk = bullCnt >= 3 && avgRecentBody > avgAllBody * 2.0;
+  }
+
+  /* ── 8. VWAP ── */
+  var vwapNum = 0, vwapDen = 0;
+  candles15m.forEach(function(c) {
+    var tp = (c[2] + c[3] + c[4]) / 3;
+    var v  = c[5] || 0;
+    vwapNum += tp * v; vwapDen += v;
+  });
+  var vwap = vwapDen > 0 ? vwapNum / vwapDen : currentPrice;
+  var vwapPosition = currentPrice > vwap * 1.02 ? 'Above VWAP' : currentPrice < vwap * 0.98 ? 'Below VWAP' : 'At VWAP';
+
+  /* ── 9. Distance from Active Shelf & classification ── */
+  var distFromShelf    = ((currentPrice - activeShelfPrice) / currentPrice) * 100;
+  var isHighVolAtr     = volRegime === 'High' || volRegime === 'Extreme';
+  var vb               = volRegime === 'Extreme' ? 0.5 : 0.3;
+  var sThresh = isHighVolAtr ? 5*(1-vb)+(atrPct*0.5)*vb  : 5;
+  var nThresh = isHighVolAtr ? 12*(1-vb)+(atrPct*1.0)*vb : 12;
+  var eThresh = isHighVolAtr ? 20*(1-vb)+(atrPct*1.75)*vb: 20;
+  var distClassification;
+  var isAirEntry;
+  if      (distFromShelf <= sThresh) { distClassification = 'Shelf Entry';  isAirEntry = false; }
+  else if (distFromShelf <= nThresh) { distClassification = 'Near Support'; isAirEntry = false; }
+  else if (distFromShelf <= eThresh) { distClassification = 'Extended';     isAirEntry = false; }
+  else                               { distClassification = 'Air Entry';    isAirEntry = true;  }
+
+  /* ── 10. Overhead Supply Risk ── */
+  var closesAbove      = closes.filter(function(c) { return c > currentPrice; }).length;
+  var overheadDensity  = (closesAbove / closes.length) * 100;
+  var bucketsAbove     = sortedBuckets.filter(function(b) { return b.low > currentPrice; }).length;
+  var overheadScore, overheadRisk;
+  if      (overheadDensity <= 20 && bucketsAbove <= 1) { overheadRisk = 'Low Overhead';      overheadScore = 85; }
+  else if (overheadDensity <= 40 && bucketsAbove <= 3) { overheadRisk = 'Moderate Overhead'; overheadScore = 68; }
+  else if (overheadDensity <= 60)                      { overheadRisk = 'Elevated Overhead'; overheadScore = 50; }
+  else                                                 { overheadRisk = 'High Overhead';     overheadScore = 30; }
+
+  /* ── 11. Breakout Efficiency ── */
+  var breakoutAttempts = 0, successfulBreakouts = 0;
+  var resistLevel = highs.slice(0, Math.max(1, n - 3)).reduce(function(a,b){return Math.max(a,b);}, 0);
+  for (var bi = Math.max(0, n - 8); bi < n; bi++) {
+    if (highs[bi] >= resistLevel * 0.97) {
+      breakoutAttempts++;
+      if (closes[bi] > resistLevel) successfulBreakouts++;
+    }
+  }
+  var breakoutEfficiency = breakoutAttempts > 0 ? Math.round((successfulBreakouts / breakoutAttempts) * 100) : 50;
+  var breakoutLabel;
+  if      (breakoutEfficiency >= 80) breakoutLabel = 'Excellent';
+  else if (breakoutEfficiency >= 60) breakoutLabel = 'Strong';
+  else if (breakoutEfficiency >= 40) breakoutLabel = 'Moderate';
+  else if (breakoutEfficiency >= 20) breakoutLabel = 'Weak';
+  else                               breakoutLabel = 'Poor';
+
+  /* ── 12. Higher-Low Ladder ── */
+  var hlLadderScore;
+  if      (higherLows >= 5) hlLadderScore = 100;
+  else if (higherLows >= 3) hlLadderScore = 80;
+  else if (higherLows >= 1) hlLadderScore = 60;
+  else                      hlLadderScore = lowerLows > 0 ? 20 : 40;
+
+  /* ── 13. Shelf Type Classification ── */
+  var shelfType, shelfTypeDesc;
+  if (parabolicRisk) {
+    shelfType = 'Distribution / Blowoff'; shelfTypeDesc = 'Parabolic expansion detected — elevated top-formation risk';
+  } else if (trendState === 'Uptrend' && higherLows >= 3) {
+    shelfType = 'Re-Accumulation';        shelfTypeDesc = 'Strong move up + controlled pullback forming higher lows';
+  } else if (trendState === 'Uptrend') {
+    shelfType = 'Accumulation';           shelfTypeDesc = 'Uptrend with stable volume and strong acceptance';
+  } else if (trendState === 'Downtrend') {
+    shelfType = 'Dead-Cat Risk';          shelfTypeDesc = 'Shelf forming after major downtrend — high failure risk';
+  } else {
+    shelfType = 'Neutral Consolidation'; shelfTypeDesc = 'Sideways structure — requires stronger demand confirmation';
+  }
+
+  /* ── 14. Structure Sequence ── */
+  var structureSequence;
+  if (parabolicRisk)                          structureSequence = 'Parabolic → Shelf (elevated risk)';
+  else if (trendState === 'Uptrend' && higherLows >= 2) structureSequence = 'Trend → Shelf (healthy continuation)';
+  else if (trendState === 'Downtrend')        structureSequence = 'Crash → Shelf (dead-cat risk)';
+  else if (higherHighs > 0 && higherLows === 0) structureSequence = 'Pullback → Shelf (potential re-accumulation)';
+  else                                        structureSequence = 'Sideways → Shelf (needs demand confirmation)';
+
+  /* ── 15. Acceptance Score (weighted) ── */
+  var densityPart = Math.min(100, (bestBucket.timeCount / Math.max(n * 0.5, 1)) * 100) * 0.35;
+  var defensePart = Math.min(100, shelfDefenses * 25) * 0.25;
+  var compPart    = compressionDetected ? 100 * 0.20 : (sdPct < 5 ? 70 * 0.20 : 30 * 0.20);
+  var totalVol    = volumes.reduce(function(a,b){return a+b;},0) || 1;
+  var volPart     = Math.min(100, (bestBucket.volume / totalVol) * 100) * 0.10;
+  var distPart    = Math.max(0, 100 - distFromShelf * 3) * 0.10;
+  var acceptanceScore = Math.round(Math.min(100, densityPart + defensePart + compPart + volPart + distPart));
+  var acceptanceClass;
+  if      (acceptanceScore >= 80) acceptanceClass = 'Strong Shelf';
+  else if (acceptanceScore >= 65) acceptanceClass = 'Near Support';
+  else if (acceptanceScore >= 50) acceptanceClass = 'Neutral';
+  else                            acceptanceClass = 'Weak Structure';
+
+  /* ── 16. Demand Return Score ── */
+  var hlStrength = higherLows >= 5 ? 100 : higherLows >= 3 ? 80 : higherLows >= 1 ? 55 : (lowerLows > 0 ? 20 : 40);
+  var bouncePct  = 50;
+  if (n >= 4) {
+    var recentLow4  = Math.min.apply(null, lows.slice(-4));
+    var recentHigh4 = Math.max.apply(null, highs.slice(-4));
+    var bounceAmt   = recentLow4 > 0 ? ((recentHigh4 - recentLow4) / recentLow4) * 100 : 0;
+    if      (bounceAmt > 10) bouncePct = 90;
+    else if (bounceAmt > 5)  bouncePct = 70;
+    else if (bounceAmt > 2)  bouncePct = 50;
+    else                     bouncePct = 25;
+  }
+  var vwapScore   = vwapPosition === 'Above VWAP' ? 90 : vwapPosition === 'At VWAP' ? 60 : 25;
+  var buyVolAcc   = 50; /* neutral — per-candle buy vol not available */
+  var demandReturnScore = Math.round(hlStrength * 0.35 + bouncePct * 0.30 + buyVolAcc * 0.20 + vwapScore * 0.15);
+  var demandClass;
+  if      (demandReturnScore >= 80) demandClass = 'Strong Demand Return';
+  else if (demandReturnScore >= 65) demandClass = 'Moderate Demand Return';
+  else if (demandReturnScore >= 50) demandClass = 'Weak Demand Return';
+  else                              demandClass = 'No Meaningful Demand';
+
+  /* ── 17. Confidence Tier ── */
+  var tierScore = acceptanceScore    * 0.30
+               + demandReturnScore  * 0.20
+               + hlLadderScore      * 0.15
+               + overheadScore      * 0.15
+               + breakoutEfficiency * 0.10
+               + Math.max(0, 100 - distFromShelf * 3) * 0.10;
+
+  if (shelfType.indexOf('Dead-Cat') !== -1 || shelfType.indexOf('Distribution') !== -1) tierScore *= 0.75;
+  if (parabolicRisk)            tierScore *= 0.85;
+  if (isAirEntry)               tierScore *= 0.70;
+  if (trendState === 'Downtrend') tierScore *= 0.80;
+  if (!shelfIsValid)            tierScore *= 0.90;
+
+  tierScore = Math.round(Math.min(100, tierScore));
+  var confidenceTier, tierLabel, tierColor;
+  if      (tierScore >= 90) { confidenceTier = 'S'; tierLabel = 'Exceptional Setup'; tierColor = '#00ffcc'; }
+  else if (tierScore >= 80) { confidenceTier = 'A'; tierLabel = 'High Quality Setup'; tierColor = '#00e676'; }
+  else if (tierScore >= 65) { confidenceTier = 'B'; tierLabel = 'Tradable Setup';     tierColor = '#ffeb3b'; }
+  else if (tierScore >= 50) { confidenceTier = 'C'; tierLabel = 'Speculative';        tierColor = '#ff9800'; }
+  else                      { confidenceTier = 'D'; tierLabel = 'Avoid';              tierColor = '#ff4757'; }
+
+  return {
+    activeShelfPrice:       activeShelfPrice,
+    activeShelfValid:       shelfIsValid,
+    macroFloorPrice:        macroFloorPrice,
+    defenseCount:           shelfDefenses,
+    defenseClassification:  defenseClassification,
+    compressionDetected:    compressionDetected,
+    sdPct:                  sdPct.toFixed(2),
+    atrPct:                 atrPct.toFixed(2),
+    volRegime:              volRegime,
+    trendState:             trendState,
+    parabolicRisk:          parabolicRisk,
+    higherHighs:            higherHighs,
+    higherLows:             higherLows,
+    lowerLows:              lowerLows,
+    vwap:                   vwap,
+    vwapPosition:           vwapPosition,
+    distFromShelf:          distFromShelf.toFixed(1),
+    distClassification:     distClassification,
+    isAirEntry:             isAirEntry,
+    overheadRisk:           overheadRisk,
+    overheadScore:          overheadScore,
+    overheadDensityPct:     overheadDensity.toFixed(0),
+    breakoutEfficiency:     breakoutEfficiency,
+    breakoutLabel:          breakoutLabel,
+    consecutiveHL:          higherLows,
+    hlLadderScore:          hlLadderScore,
+    shelfType:              shelfType,
+    shelfTypeDesc:          shelfTypeDesc,
+    structureSequence:      structureSequence,
+    acceptanceScore:        acceptanceScore,
+    acceptanceClass:        acceptanceClass,
+    demandReturnScore:      demandReturnScore,
+    demandClass:            demandClass,
+    tierScore:              tierScore,
+    confidenceTier:         confidenceTier,
+    tierLabel:              tierLabel,
+    tierColor:              tierColor
+  };
+}
+
 function buildEntryBriefingHTML(d, analysis) {
   var ageMin = analysis.ageMinutes;
   var sClass = analysis.status.toLowerCase();
@@ -3483,51 +3824,68 @@ function buildEntryBriefingHTML(d, analysis) {
   else triggers = 'Entry: Confirmed green 5-min close with volume expansion and buy% above 65%. Do not FOMO in — wait for the candle to close.';
 
   var currentMC = d.marketCap || 0;
-  /* ── Floor: LP-depth estimate (always available) */
+  var sa = d.structuralAnalysis || null; /* structural analysis shorthand */
+
+  /* ── LP Floor: catastrophic collapse only — NOT used for entry calculation ── */
   var lpFloor = (d.liquidity > 0 && lmcR > 0) ? (d.liquidity / (lmcR / 100)) * 0.75 : currentMC * 0.65;
-  /* ── Candle-based levels: Macro Floor, Local Floor (15m Shelf), Ceiling ── */
-  var hasMacro    = (d.defCurrent > 0 && d.macroFloor > 0);
-  var hasLocal    = (d.defCurrent > 0 && d.localFloor > 0);
-  var hasCandles  = (d.defCurrent > 0 && d.floor15mLow > 0 && d.ceiling1hHigh > 0);
+
+  /* ── Candle-based levels ── */
+  var hasMacro     = (d.defCurrent > 0 && d.macroFloor > 0);
+  var hasLocal     = (d.defCurrent > 0 && d.localFloor > 0);
   var macroFloorMC = hasMacro ? currentMC * (d.macroFloor / d.defCurrent) : null;
   var localFloorMC = hasLocal ? currentMC * (d.localFloor / d.defCurrent) : null;
-  var floor15mMC   = localFloorMC; /* local floor is the 15m shelf */
   var ceiling1hMC  = (d.defCurrent > 0 && d.ceiling1hHigh > 0) ? currentMC * (d.ceiling1hHigh / d.defCurrent) : null;
-  /* Air Entry warning: local floor > 17.5% above macro floor */
-  var airEntry = (macroFloorMC !== null && localFloorMC !== null && macroFloorMC > 0 &&
-                  localFloorMC > macroFloorMC * 1.175);
-  /* Average floor for distance calculation */
-  var floorValues = [lpFloor];
-  if (macroFloorMC !== null && macroFloorMC > 0) floorValues.push(macroFloorMC);
-  if (localFloorMC !== null && localFloorMC > 0) floorValues.push(localFloorMC);
-  var avgFloor = floorValues.reduce(function(s, v) { return s + v; }, 0) / floorValues.length;
-  /* ── Ceiling ── */
-  var momentumCeilMC = currentMC * ((d.buyPercent || 50) > 65 ? 3.8 : (d.buyPercent || 50) > 55 ? 2.6 : 1.9);
-  var ceilMC  = (ceiling1hMC !== null && ceiling1hMC > currentMC) ? Math.max(ceiling1hMC, momentumCeilMC) : momentumCeilMC;
-  var ceilNote = (ceiling1hMC !== null && ceiling1hMC > currentMC) ? '1h candle high' : 'momentum projection — not a guarantee';
-  var ceilStr  = formatUSD(ceilMC);
-  /* ── Safe Entry Range: Lower = avgFloor +5% | Upper = Local Floor ── */
-  var safeEntryLow  = avgFloor * 1.05;
-  var safeEntryHigh = (localFloorMC !== null) ? localFloorMC : currentMC * 0.97;
+
+  /* ── Active Shelf MC — primary support from acceptance clustering ── */
+  var activeShelfMC = localFloorMC; /* default: candle-derived shelf */
+  if (sa && sa.activeShelfPrice > 0 && d.defCurrent > 0) {
+    activeShelfMC = currentMC * (sa.activeShelfPrice / d.defCurrent);
+  }
+
+  /* ── Distance from Shelf (structure-based, ATR-adaptive) ── */
+  var distFromShelfPct = 0, distLabel = '—', distColor = 'var(--text-muted)', isAirEntry = false;
+  if (activeShelfMC !== null && activeShelfMC > 0 && currentMC > 0) {
+    distFromShelfPct = ((currentMC - activeShelfMC) / currentMC) * 100;
+
+    var atrPctNum = sa ? parseFloat(sa.atrPct || 0) : 0;
+    var isHighVol = sa && (sa.volRegime === 'High' || sa.volRegime === 'Extreme');
+    var shelfThresh, nearThresh, extThresh;
+    if (isHighVol) {
+      var vBlend = sa.volRegime === 'Extreme' ? 0.5 : 0.3;
+      shelfThresh = 5  * (1 - vBlend) + (atrPctNum * 0.50) * vBlend;
+      nearThresh  = 12 * (1 - vBlend) + (atrPctNum * 1.00) * vBlend;
+      extThresh   = 20 * (1 - vBlend) + (atrPctNum * 1.75) * vBlend;
+    } else {
+      shelfThresh = 5; nearThresh = 12; extThresh = 20;
+    }
+
+    if      (distFromShelfPct <= shelfThresh) { distLabel = 'Shelf Entry';  distColor = 'var(--safe)';    isAirEntry = false; }
+    else if (distFromShelfPct <= nearThresh)  { distLabel = 'Near Support'; distColor = 'var(--safe)';    isAirEntry = false; }
+    else if (distFromShelfPct <= extThresh)   { distLabel = 'Extended';     distColor = 'var(--caution)'; isAirEntry = false; }
+    else                                      { distLabel = 'Air Entry';    distColor = '#ff4757';         isAirEntry = true;  }
+  }
+  var distToFloor = distFromShelfPct; /* alias — used by R/R calc below */
+
+  /* ── Safe Entry Range (shelf-anchored) ── */
+  var safeEntryLow  = activeShelfMC !== null ? activeShelfMC * 1.03 : lpFloor * 1.05;
+  var safeEntryHigh = activeShelfMC !== null ? activeShelfMC * 1.10 : (localFloorMC || currentMC * 0.97);
   var safeEntryStr  = formatUSD(safeEntryLow) + ' \u2013 ' + formatUSD(safeEntryHigh);
+
   /* ── Action Signal ── */
   var actionSignal, actionColor;
-  if (airEntry) {
-    actionSignal = 'WAIT FOR DIP';
-    actionColor  = '#ff4757';
-  } else if (currentMC > safeEntryHigh) {
-    actionSignal = 'WAIT FOR DIP';
-    actionColor  = 'var(--caution)';
+  if (isAirEntry) {
+    actionSignal = 'WAIT FOR DIP';  actionColor = '#ff4757';
+  } else if (currentMC > safeEntryHigh * 1.05) {
+    actionSignal = 'WAIT FOR DIP';  actionColor = 'var(--caution)';
   } else {
-    actionSignal = 'BUY';
-    actionColor  = 'var(--safe)';
+    actionSignal = 'BUY';           actionColor = 'var(--safe)';
   }
-  /* ── Distance to Floor (uses averaged floor) ── */
-  var distToFloor = currentMC > 0 ? ((currentMC - avgFloor) / currentMC) * 100 : 0;
-  var distLabel, distColor;
-  if (distToFloor <= 10)      { distLabel = 'SAFE ENTRY ZONE';          distColor = 'var(--safe)'; }
-  else if (distToFloor <= 20) { distLabel = 'CAUTION: MODERATE RISK';   distColor = 'var(--caution)'; }
-  else                        { distLabel = 'DANGER: OVEREXTENDED';      distColor = '#ff4757'; }
+
+  /* ── Ceiling ── */
+  var momentumCeilMC = currentMC * ((d.buyPercent || 50) > 65 ? 3.8 : (d.buyPercent || 50) > 55 ? 2.6 : 1.9);
+  var ceilMC   = (ceiling1hMC !== null && ceiling1hMC > currentMC) ? Math.max(ceiling1hMC, momentumCeilMC) : momentumCeilMC;
+  var ceilNote = (ceiling1hMC !== null && ceiling1hMC > currentMC) ? '1h candle high' : 'momentum projection — not a guarantee';
+  var ceilStr  = formatUSD(ceilMC);
   /* ── Volume Velocity ── */
   var volVelocity = null, volVerdictText = '', volVerdictColor = 'var(--text-muted)';
   if (d.volM5 > 0 && d.volH1 > 0) {
@@ -3604,19 +3962,26 @@ function buildEntryBriefingHTML(d, analysis) {
     { num: '01', label: 'The Big Picture', text: bigPicture },
     { num: '02', label: 'Pattern — ' + patName, text: patDesc },
     { num: '03', label: 'Entry / Exit Triggers', text: triggers + '<br><span style="color:var(--text-muted);font-size:0.72rem;">' + exitTrig + '</span>' },
-    { num: '04', label: 'Identified Floor / Ceiling', text: (function() {
+    { num: '04', label: 'Support Structure', text: (function() {
         var line = 'Ceiling: <strong style="color:var(--caution);">' + ceilStr + '</strong> MC';
         line += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + ceilNote + ')</span><br>';
-        line += 'LP Floor: <strong style="color:var(--safe);">' + formatUSD(lpFloor) + '</strong> MC';
+        if (activeShelfMC !== null) {
+          line += 'Active Shelf <span style="color:var(--text-muted);font-size:0.72rem;">(acceptance cluster)</span>: <strong style="color:var(--safe);">' + formatUSD(activeShelfMC) + '</strong> MC';
+        }
         if (macroFloorMC !== null) {
-          line += ' &nbsp;|&nbsp; Macro Floor: <strong style="color:var(--safe);">' + formatUSD(macroFloorMC) + '</strong> MC';
+          line += ' &nbsp;|&nbsp; Macro Floor <span style="color:var(--text-muted);font-size:0.72rem;">(context only)</span>: <strong style="color:var(--safe);">' + formatUSD(macroFloorMC) + '</strong> MC';
         }
-        if (localFloorMC !== null) {
-          line += ' &nbsp;|&nbsp; Local Floor <span style="color:var(--text-muted);font-size:0.72rem;">(15m Shelf)</span>: <strong style="color:var(--safe);">' + formatUSD(localFloorMC) + '</strong> MC';
+        line += '<br>LP Floor <span style="color:var(--text-muted);font-size:0.72rem;">(rug/collapse reference only)</span>: <strong style="color:var(--text-muted);">' + formatUSD(lpFloor) + '</strong> MC';
+        if (sa) {
+          line += '<br><span style="color:var(--text-muted);font-size:0.72rem;">Trend: <strong style="color:var(--accent-cyan);">' + (sa.trendState || '—') + '</strong>';
+          line += ' &nbsp;|&nbsp; VWAP Position: <strong style="color:var(--accent-cyan);">' + (sa.vwapPosition || '—') + '</strong>';
+          line += ' &nbsp;|&nbsp; Volatility Regime: <strong style="color:var(--accent-cyan);">' + (sa.volRegime || '—') + '</strong>';
+          if (sa.compressionDetected) line += ' &nbsp;|&nbsp; <strong style="color:var(--safe);">📉 Compression Detected</strong>';
+          if (sa.parabolicRisk) line += ' &nbsp;|&nbsp; <strong style="color:#ff4757;">⚡ Parabolic Risk</strong>';
+          line += '</span>';
         }
-        if (airEntry) {
-          line += '<br><strong style="color:#ff4757;font-size:1.05em;letter-spacing:1px;">⚠ AIR ENTRY WARNING</strong>'
-                + ' <span style="color:var(--text-muted);font-size:0.72rem;">— Local Floor is >17.5% above Macro Floor. Price is floating in mid-air; wait for a dip to the Macro Floor.</span>';
+        if (isAirEntry) {
+          line += '<br><strong style="color:#ff4757;font-size:1.05em;letter-spacing:1px;">⚠ AIR ENTRY — Price ' + distFromShelfPct.toFixed(1) + '% above Active Shelf. Wait for a dip back to structure.</strong>';
         }
         return line;
       })() },
@@ -3631,20 +3996,47 @@ function buildEntryBriefingHTML(d, analysis) {
         t += '<br><strong style="color:' + volVerdictColor + ';font-size:1.05em;">' + volVerdictText + '</strong>';
         return t;
       })() },
-    { num: '05', label: 'Recommended Safe Entry MC Range', text: (function() {
+    { num: '05', label: 'Safe Entry Range &amp; Action Signal', text: (function() {
         var t = '<strong style="color:var(--accent-cyan);">' + safeEntryStr + '</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(Avg Floor +5% → Local Floor)</span>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(Active Shelf +3% → +10%)</span>';
         t += '<br>Action Signal: <strong style="color:' + actionColor + ';font-size:1.05em;letter-spacing:1px;">' + actionSignal + '</strong>';
+        t += ' &nbsp;<strong style="color:' + distColor + ';">[' + distLabel + ']</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">— ' + distFromShelfPct.toFixed(1) + '% from Active Shelf</span>';
         return t;
       })() },
-    { num: '06', label: 'Distance to Floor', text: (function() {
-        var t = '<strong style="color:' + distColor + ';">' + distToFloor.toFixed(1) + '%</strong>';
-        t += ' &nbsp;<span style="color:' + distColor + ';font-weight:600;">' + distLabel + '</span>';
-        t += '<span style="color:var(--text-muted);font-size:0.72rem;"> — how far current MC is above the avg of LP + Macro + Local floors';
-        if (macroFloorMC !== null && localFloorMC !== null) {
-          t += ' (avg: ' + formatUSD(avgFloor) + ')';
-        }
-        t += '</span>';
+    { num: '06', label: 'Structural Analysis Scores', text: (function() {
+        if (!sa) return '<span style="color:var(--text-muted);">Structural analysis requires GeckoTerminal candle data — use Fetch Data to populate.</span>';
+        var t = '';
+        /* Acceptance Score */
+        var asColor = sa.acceptanceScore >= 80 ? 'var(--safe)' : sa.acceptanceScore >= 65 ? 'var(--caution)' : '#ff4757';
+        t += 'Acceptance Score: <strong style="color:' + asColor + ';">' + sa.acceptanceScore + '/100</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.acceptanceClass + ')</span><br>';
+        /* Demand Return Score */
+        var drColor = sa.demandReturnScore >= 80 ? 'var(--safe)' : sa.demandReturnScore >= 65 ? 'var(--caution)' : '#ff4757';
+        t += 'Demand Return Score: <strong style="color:' + drColor + ';">' + sa.demandReturnScore + '/100</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.demandClass + ')</span><br>';
+        /* Shelf type + sequence */
+        t += 'Shelf Type: <strong style="color:var(--accent-cyan);">' + sa.shelfType + '</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">— ' + sa.shelfTypeDesc + '</span><br>';
+        t += 'Structure Sequence: <span style="color:var(--accent-cyan);">' + sa.structureSequence + '</span><br>';
+        /* Defense + compression */
+        t += 'Shelf Defenses: <strong>' + sa.defenseCount + '</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.defenseClassification + ')</span>';
+        t += ' &nbsp;|&nbsp; ATR: <strong>' + sa.atrPct + '%</strong> &nbsp;|&nbsp; SD: <strong>' + sa.sdPct + '%</strong><br>';
+        /* Overhead + breakout */
+        var ohColor = sa.overheadScore >= 80 ? 'var(--safe)' : sa.overheadScore >= 65 ? 'var(--caution)' : '#ff4757';
+        t += 'Overhead Supply: <strong style="color:' + ohColor + ';">' + sa.overheadRisk + '</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.overheadDensityPct + '% of closes above)</span>';
+        var boColor = sa.breakoutEfficiency >= 60 ? 'var(--safe)' : sa.breakoutEfficiency >= 40 ? 'var(--caution)' : '#ff4757';
+        t += ' &nbsp;|&nbsp; Breakout Efficiency: <strong style="color:' + boColor + ';">' + sa.breakoutEfficiency + '%</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.breakoutLabel + ')</span><br>';
+        /* Confidence Tier */
+        t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + sa.tierColor + ';background:rgba(0,0,0,0.2);">';
+        t += 'Confidence Tier: <strong style="color:' + sa.tierColor + ';font-size:1.15em;letter-spacing:2px;">' + sa.confidenceTier + '</strong>';
+        t += ' &nbsp;<strong style="color:' + sa.tierColor + ';">' + sa.tierLabel + '</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(Score: ' + sa.tierScore + '/100)</span>';
+        t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">Tier reflects setup quality, not guaranteed outcome. S/A = best available — not a certainty.</span>';
+        t += '</div>';
         return t;
       })() },
     { num: '07', label: 'Potential Gain &amp; Risk/Reward', text: (function() {
@@ -4219,17 +4611,18 @@ function analyzeCoin() {
   /* Merge candle price range if available from the last Fetch Data call (GeckoTerminal or DeFade) */
   var _tc = window._tecCandles;
   if (_tc && _tc.current > 0) {
-    d.defCurrent    = _tc.current;
-    d.macroFloor    = _tc.macroFloor    || 0;
-    d.localFloor    = _tc.localFloor    || _tc.floor15mLow || _tc.low || 0;
-    d.floor15mLow   = _tc.floor15mLow   || _tc.low  || 0;
-    d.ceiling1hHigh = _tc.ceiling1hHigh || _tc.high || 0;
-    d.defHigh       = d.ceiling1hHigh;
-    d.defLow        = d.floor15mLow;
-    d.candleSource  = _tc.source || 'DeFade';
-    d.volM5         = _tc.volM5   || 0;
-    d.volH1         = _tc.volH1   || 0;
-    d.priceChangeM5 = (_tc.priceChangeM5 !== undefined && _tc.priceChangeM5 !== null) ? _tc.priceChangeM5 : null;
+    d.defCurrent        = _tc.current;
+    d.macroFloor        = _tc.macroFloor    || 0;
+    d.localFloor        = _tc.localFloor    || _tc.floor15mLow || _tc.low || 0;
+    d.floor15mLow       = _tc.floor15mLow   || _tc.low  || 0;
+    d.ceiling1hHigh     = _tc.ceiling1hHigh || _tc.high || 0;
+    d.defHigh           = d.ceiling1hHigh;
+    d.defLow            = d.floor15mLow;
+    d.candleSource      = _tc.source || 'DeFade';
+    d.volM5             = _tc.volM5   || 0;
+    d.volH1             = _tc.volH1   || 0;
+    d.priceChangeM5     = (_tc.priceChangeM5 !== undefined && _tc.priceChangeM5 !== null) ? _tc.priceChangeM5 : null;
+    d.structuralAnalysis = _tc.structuralAnalysis || null;
   }
 
   /* Auto-convert SOL fees to USD if SOL price available and USD not yet set */
@@ -4787,7 +5180,10 @@ function buildSetupText(d, analysis) {
   lines.push('02. Pattern — ' + patName);
 
   var txtCurrentMC = d.marketCap || 0;
-  var lpFloor = (d.liquidity > 0 && lmcR > 0) ? (d.liquidity / (lmcR / 100)) * 0.75 : txtCurrentMC * 0.65;
+  var txtSA        = d.structuralAnalysis || null;
+
+  /* ── LP Floor (reference only), candle-based levels ── */
+  var txtLpFloor   = (d.liquidity > 0 && lmcR > 0) ? (d.liquidity / (lmcR / 100)) * 0.75 : txtCurrentMC * 0.65;
   var txtHasMacro  = (d.defCurrent > 0 && d.macroFloor > 0);
   var txtHasLocal  = (d.defCurrent > 0 && d.localFloor  > 0);
   var txtHasCeil   = (d.defCurrent > 0 && d.ceiling1hHigh > 0);
@@ -4796,29 +5192,40 @@ function buildSetupText(d, analysis) {
   var txtCeil1hMC  = txtHasCeil  ? txtCurrentMC * (d.ceiling1hHigh / d.defCurrent) : null;
   var txtMomentumCeil = txtCurrentMC * ((d.buyPercent || 50) > 65 ? 3.8 : (d.buyPercent || 50) > 55 ? 2.6 : 1.9);
   var ceilMC = (txtCeil1hMC !== null && txtCeil1hMC > txtCurrentMC) ? Math.max(txtCeil1hMC, txtMomentumCeil) : txtMomentumCeil;
-  var txtFloorVals = [lpFloor];
-  if (txtMacroMC !== null && txtMacroMC > 0) txtFloorVals.push(txtMacroMC);
-  if (txtLocalMC !== null && txtLocalMC > 0) txtFloorVals.push(txtLocalMC);
-  var txtAvgFloor  = txtFloorVals.reduce(function(s, v) { return s + v; }, 0) / txtFloorVals.length;
-  var safeEntryLow  = txtAvgFloor * 1.05;
-  var safeEntryHigh = (txtLocalMC !== null) ? txtLocalMC : txtCurrentMC * 0.97;
-  var txtDistFloor  = txtCurrentMC > 0 ? ((txtCurrentMC - txtAvgFloor) / txtCurrentMC) * 100 : 0;
+
+  /* ── Active Shelf (acceptance cluster) ── */
+  var txtActiveShelfMC = txtLocalMC;
+  if (txtSA && txtSA.activeShelfPrice > 0 && d.defCurrent > 0) {
+    txtActiveShelfMC = txtCurrentMC * (txtSA.activeShelfPrice / d.defCurrent);
+  }
+
+  /* ── Distance from shelf & classification ── */
+  var txtDistShelf = txtActiveShelfMC && txtActiveShelfMC > 0 && txtCurrentMC > 0
+    ? ((txtCurrentMC - txtActiveShelfMC) / txtCurrentMC) * 100 : 0;
+  var txtDistClass = txtSA ? (txtSA.distClassification || '—') : (txtDistShelf <= 5 ? 'Shelf Entry' : txtDistShelf <= 12 ? 'Near Support' : txtDistShelf <= 20 ? 'Extended' : 'Air Entry');
+  var txtIsAir     = txtDistClass === 'Air Entry';
+
+  /* ── Safe entry range (shelf-anchored) ── */
+  var safeEntryLow  = txtActiveShelfMC ? txtActiveShelfMC * 1.03 : txtLpFloor * 1.05;
+  var safeEntryHigh = txtActiveShelfMC ? txtActiveShelfMC * 1.10 : (txtLocalMC || txtCurrentMC * 0.97);
+  var txtActionSig  = (txtIsAir || txtCurrentMC > safeEntryHigh * 1.05) ? 'WAIT FOR DIP' : 'BUY';
   var txtGain       = txtCurrentMC > 0 ? ((ceilMC - txtCurrentMC) / txtCurrentMC) * 100 : 0;
-  var txtRR         = txtDistFloor > 0 ? txtGain / txtDistFloor : 0;
-  var txtAirEntry   = (txtMacroMC !== null && txtLocalMC !== null && txtMacroMC > 0 && txtLocalMC > txtMacroMC * 1.175);
-  var txtActionSig  = (txtAirEntry || txtCurrentMC > safeEntryHigh) ? 'WAIT FOR DIP' : 'BUY';
+  var txtRR         = txtDistShelf > 0 ? txtGain / txtDistShelf : 0;
+
   var txtTp1Pct = settings.tp1 || 50;
   var txtTp2Pct = settings.tp2 || 90;
   var tp1MC = txtCurrentMC + ((ceilMC - txtCurrentMC) * (txtTp1Pct / 100));
   var tp2MC = txtCurrentMC + ((ceilMC - txtCurrentMC) * (txtTp2Pct / 100));
-  var floorParts = ['LP: ' + formatUSD(lpFloor)];
-  if (txtMacroMC !== null) floorParts.push('Macro: ' + formatUSD(txtMacroMC));
-  if (txtLocalMC !== null) floorParts.push('Local(15m): ' + formatUSD(txtLocalMC));
-  var floorLabel = floorParts.join(' | ');
-  if (txtAirEntry) floorLabel += '  ⚠ AIR ENTRY';
-  var ceilLabel  = txtCeil1hMC !== null && txtCeil1hMC > txtCurrentMC ? formatUSD(ceilMC) + ' (1h candle high)' : formatUSD(ceilMC) + ' (momentum)';
-  lines.push('03. Floor: ' + floorLabel + '  |  Ceiling: ' + ceilLabel);
-  /* Vol/Fees Ratio */
+
+  /* ── Build floor/support line ── */
+  var ceilLabel = txtCeil1hMC !== null && txtCeil1hMC > txtCurrentMC ? formatUSD(ceilMC) + ' (1h candle high)' : formatUSD(ceilMC) + ' (momentum)';
+  var shelfLine = txtActiveShelfMC ? 'Active Shelf: ' + formatUSD(txtActiveShelfMC) : 'Shelf: N/A';
+  if (txtMacroMC) shelfLine += ' | Macro Floor: ' + formatUSD(txtMacroMC) + ' (context)';
+  shelfLine += ' | LP Floor: ' + formatUSD(txtLpFloor) + ' (rug ref only)';
+  if (txtIsAir)  shelfLine += '  ⚠ AIR ENTRY — ' + txtDistShelf.toFixed(1) + '% above shelf';
+  lines.push('03. Support Structure: ' + shelfLine + '  |  Ceiling: ' + ceilLabel);
+
+  /* ── Vol/Fees Ratio ── */
   var txtFeeUSD = d.totalFeeUSD || 0;
   var txtVol24h = d.vol24h || d.volume || 0;
   if (txtFeeUSD && txtVol24h) {
@@ -4826,27 +5233,43 @@ function buildSetupText(d, analysis) {
     var txtFakeVol  = txtFeeUSD < txtVol24h * 0.00033;
     lines.push('03b. 24h Vol/Fees: ' + formatUSD(txtVol24h) + ' vol | $' + Math.round(txtFeeUSD).toLocaleString() + ' fees | ' + txtFeeRatio + '% ratio' + (txtFakeVol ? '  ⚠ FAKE VOLUME WARNING' : '  ✓ HEALTHY'));
   }
-  /* Volume Velocity */
+  /* ── Volume Velocity ── */
   if (d.volM5 > 0 && d.volH1 > 0) {
     var txtVelRatio = d.volM5 / (d.volH1 / 12);
     var txtPm5 = d.priceChangeM5;
     var txtVolVerdict;
-    if (txtVelRatio > 2.0 && txtPm5 !== null && txtPm5 < 0)       txtVolVerdict = 'ABORT: AGGRESSIVE DUMP';
-    else if (txtVelRatio > 1.5 && txtPm5 !== null && txtPm5 > 0)  txtVolVerdict = 'BULLISH';
-    else if (txtVelRatio < 0.7 && txtPm5 !== null && txtPm5 > 0)  txtVolVerdict = 'ABORT: FAKE BREAKOUT';
-    else if (txtVelRatio < 0.7 && txtPm5 !== null && txtPm5 < 0)  txtVolVerdict = 'CAUTION: WAIT FOR DIP';
-    else                                                            txtVolVerdict = 'Neutral';
+    if      (txtVelRatio > 2.0 && txtPm5 !== null && txtPm5 < 0) txtVolVerdict = 'ABORT: AGGRESSIVE DUMP';
+    else if (txtVelRatio > 1.5 && txtPm5 !== null && txtPm5 > 0) txtVolVerdict = 'BULLISH';
+    else if (txtVelRatio < 0.7 && txtPm5 !== null && txtPm5 > 0) txtVolVerdict = 'ABORT: FAKE BREAKOUT';
+    else if (txtVelRatio < 0.7 && txtPm5 !== null && txtPm5 < 0) txtVolVerdict = 'CAUTION: WAIT FOR DIP';
+    else                                                           txtVolVerdict = 'Neutral';
     lines.push('03c. Volume Velocity: M5=$' + d.volM5.toFixed(0) + ' H1=$' + d.volH1.toFixed(0)
       + ' Ratio=' + txtVelRatio.toFixed(2) + 'x  ' + txtVolVerdict);
   }
-  lines.push('04. Safe Entry: ' + formatUSD(safeEntryLow) + ' – ' + formatUSD(safeEntryHigh) + '  |  Signal: ' + txtActionSig);
-  lines.push('05. Distance to Floor (avg): ' + txtDistFloor.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  ⚠ POOR RISK/REWARD' : ''));
+  /* ── Safe Entry + Action Signal ── */
+  lines.push('04. Safe Entry: ' + formatUSD(safeEntryLow) + ' – ' + formatUSD(safeEntryHigh) + '  |  Signal: ' + txtActionSig
+    + '  |  Position: ' + txtDistClass + ' (' + txtDistShelf.toFixed(1) + '% from shelf)');
+  /* ── Structural Analysis Scores ── */
+  if (txtSA) {
+    lines.push('05. Structural Analysis:');
+    lines.push('    Acceptance Score: ' + txtSA.acceptanceScore + '/100 (' + txtSA.acceptanceClass + ')');
+    lines.push('    Demand Return Score: ' + txtSA.demandReturnScore + '/100 (' + txtSA.demandClass + ')');
+    lines.push('    Shelf Type: ' + txtSA.shelfType + ' — ' + txtSA.shelfTypeDesc);
+    lines.push('    Structure Sequence: ' + txtSA.structureSequence);
+    lines.push('    Trend: ' + txtSA.trendState + ' | VWAP: ' + txtSA.vwapPosition + ' | Vol Regime: ' + txtSA.volRegime + (txtSA.compressionDetected ? ' | COMPRESSION DETECTED' : '') + (txtSA.parabolicRisk ? ' | PARABOLIC RISK' : ''));
+    lines.push('    Shelf Defenses: ' + txtSA.defenseCount + ' (' + txtSA.defenseClassification + ') | ATR: ' + txtSA.atrPct + '% | SD: ' + txtSA.sdPct + '%');
+    lines.push('    Overhead Supply: ' + txtSA.overheadRisk + ' (' + txtSA.overheadDensityPct + '% closes above)');
+    lines.push('    Breakout Efficiency: ' + txtSA.breakoutEfficiency + '% (' + txtSA.breakoutLabel + ')');
+    lines.push('    Confidence Tier: ' + txtSA.confidenceTier + ' — ' + txtSA.tierLabel + ' (Score: ' + txtSA.tierScore + '/100)');
+  } else {
+    lines.push('05. Distance from Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  ⚠ POOR RISK/REWARD' : ''));
+  }
   lines.push('06. TP1 (' + txtTp1Pct + '%): ' + formatUSD(tp1MC) + ' MC (+' + (((tp1MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)  |  TP2 (' + txtTp2Pct + '%): ' + formatUSD(tp2MC) + ' MC (+' + (((tp2MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)');
 
   var stratNote = analysis.status === 'SAFE'
-    ? 'Scale in at market with 50–60% now, reserves for dip to floor.'
+    ? 'Scale in at market with 50–60% now, reserves for dip to shelf.'
     : analysis.status === 'CAUTION'
-    ? 'Split entry: 25–30% now for exposure, remainder on floor confirmation.'
+    ? 'Split entry: 25–30% now for exposure, remainder on shelf confirmation.'
     : 'Stand aside — risk profile does not justify live capital.';
   lines.push('07. Strategy: ' + stratNote);
 
