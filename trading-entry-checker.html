@@ -1261,7 +1261,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
         </div>
         <div class="form-group">
           <label>Total Fees (SOL)</label>
-          <input type="number" id="fTotalFeeSOL" placeholder="e.g. 2.5" min="0" step="0.001" oninput="(function(v){if(!isNaN(v)&&v>0&&window._tecSolPrice>0){var u=document.getElementById('fTotalFeeUSD');if(u)u.value=Math.round(v*window._tecSolPrice);}})(parseFloat(this.value))">
+          <input type="number" id="fTotalFeeSOL" placeholder="e.g. 2.5" min="0" step="0.001" oninput="tecConvertFeeSOLInput(this.value)">
         </div>
         <div class="form-group">
           <label>Total Fees (USD) <span style="color:var(--text-muted);font-size:0.75rem;">(auto/manual)</span></label>
@@ -4131,6 +4131,12 @@ function parseTelegramText(text) {
   /* ── Caller Name — detect who called/signalled the token ────────────── */
   var callerName = '';
   var callerPatterns = [
+    /* Plain-name formats (no @ required) — checked first */
+    /Caller\s+Name\s*:\s*([^\n@]{2,60})/i,          /* "Caller Name: Solana Early Trending" */
+    /Called\s+[Bb]y\s*:\s*([^\n@]{2,60})/i,          /* "Called by: Some Group" */
+    /[Cc]aller\s*:\s*([^\n@]{2,60})/i,               /* "Caller: Some Group" */
+    /[Ss]ignal(?:led|ed)?\s+(?:by\s*)?:\s*([^\n@]{2,60})/i, /* "Signalled by: Some Group" */
+    /* @ handle formats (legacy / Telegram handles) */
     /[Cc]all(?:ed|er)\s+(?:by\s*:?\s*)?(@[\w.]+)/,
     /[Ss]ignal(?:led|ed)?\s+(?:by\s*:?\s*)?(@[\w.]+)/,
     /[Cc]alled\s+[Bb]y\s*:?\s*(@[\w.]+)/,
@@ -5159,6 +5165,41 @@ el('resetSettingsBtn').addEventListener('click', function() {
   showToast('Settings reset to defaults', 'info');
 });
 
+/* ── SOL price fetch helper — Jupiter first, CoinGecko fallback ─────── */
+async function tecFetchSolPrice() {
+  /* Jupiter (uses fetchWithFallback which auto-retries via corsproxy on CORS fail) */
+  try {
+    var jd = await fetchWithFallback('https://api.jup.ag/price/v2?ids=So11111111111111111111111111111111111111112');
+    var entry = jd && jd.data && jd.data['So11111111111111111111111111111111111111112'];
+    if (entry && entry.price) { window._tecSolPrice = parseFloat(entry.price) || 0; return; }
+  } catch(e) {}
+  /* CoinGecko fallback */
+  try {
+    var cg = await fetchWithFallback('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+    if (cg && cg.solana && cg.solana.usd) { window._tecSolPrice = parseFloat(cg.solana.usd) || 0; }
+  } catch(e) {}
+}
+
+/* ── SOL → USD fee conversion (on-demand, with page-load eager fetch) ─── */
+async function tecConvertFeeSOLInput(rawVal) {
+  var v = parseFloat(rawVal);
+  if (isNaN(v) || v <= 0) return;
+  /* Use cached price immediately if available */
+  if (window._tecSolPrice > 0) {
+    var u = el('fTotalFeeUSD');
+    if (u) u.value = Math.round(v * window._tecSolPrice);
+    return;
+  }
+  /* Fetch on-demand — happens first time user types before Fetch Data runs */
+  await tecFetchSolPrice();
+  if (window._tecSolPrice > 0) {
+    var u2 = el('fTotalFeeUSD');
+    if (u2) u2.value = Math.round(v * window._tecSolPrice);
+  }
+}
+/* Eagerly warm the SOL price cache on page load so the first keystroke is instant */
+(function() { tecFetchSolPrice().catch(function(){}); })();
+
 el('parseBtn').addEventListener('click', function() {
   var raw = pasteArea.value.trim();
   if (!raw) { showToast('Paste some scanner bot text first', 'error'); return; }
@@ -5186,6 +5227,12 @@ el('parseBtn').addEventListener('click', function() {
     showToast('No recognisable fields found — is this scanner bot text?', 'error');
   } else {
     showToast('Parsed ' + filled + ' field' + (filled === 1 ? '' : 's') + ' from bot text' + bundleDbg, 'success');
+  }
+  /* Auto-sync: copy Coin Input text into QEC paste area and re-parse */
+  var _qa = el('qecPasteArea');
+  if (_qa) {
+    _qa.value = raw;
+    if (typeof qecAutoParse === 'function') qecAutoParse();
   }
 });
 
