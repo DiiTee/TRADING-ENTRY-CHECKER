@@ -1,0 +1,672 @@
+STRUCTURAL ANALYSIS ENGINE IMPROVEMENTS
+
+OBJECTIVE
+
+Improve the engine's ability to distinguish:
+
+- Healthy accumulation
+- Re-accumulation before continuation
+- Dying shelves
+- Distribution shelves
+- Dead-cat bounces
+
+while preserving current functionality.
+
+ANTI-DOUBLE-COUNTING RULE
+
+Avoid using the same underlying signal to heavily influence multiple major scores.
+
+Example:
+
+Higher-Low Structure already contributes to:
+
+- HL Ladder Score
+- Shelf Type Classification
+- Structure Sequence
+
+Do not allow Higher-Low Structure to dominate Demand Return Score as well.
+
+Each major score should measure a distinct aspect of market structure whenever possible.
+
+
+========================================================
+FIX #1 — ACCEPTANCE SCORE NORMALIZATION
+
+Problem:
+
+Current Acceptance Score components are weighted twice.
+
+Example:
+
+densityPart =
+(component score × percentage)
+then multiplied again by weight.
+
+This causes some components (especially volume concentration) to contribute far less than intended.
+
+Required Change:
+
+Step 1:
+
+Calculate raw component scores:
+
+DensityScore (0–100)
+DefenseScore (0–100)
+CompressionScore (0–100)
+VolumeScore (0–100)
+DistanceScore (0–100)
+
+Step 2:
+
+Apply weights:
+
+AcceptanceScore =
+DensityScore * 0.35 +
+DefenseScore * 0.25 +
+CompressionScore * 0.20 +
+VolumeScore * 0.10 +
+DistanceScore * 0.10
+
+Clamp result to:
+
+0–100
+
+========================================================
+FIX #2 — DEMAND RETURN SCORE REBALANCE
+
+Problem:
+
+Higher-Low Structure is overrepresented.
+
+Required New Weights:
+
+Higher-Low Structure = 25%
+
+Demand Expansion = 35%
+
+Bounce Velocity = 25%
+
+VWAP Position = 15%
+
+New Formula:
+
+DemandReturnScore =
+HLScore * 0.25 +
+DemandExpansionScore * 0.35 +
+BounceVelocityScore * 0.25 +
+VWAPScore * 0.15
+
+========================================================
+FIX #3 — REMOVE FROZEN BUY VOLUME PLACEHOLDER
+
+Problem:
+
+buyVolAcc is permanently fixed at 50.
+
+This makes 20% of Demand Return Score meaningless.
+
+Remove:
+
+buyVolAcc = 50
+
+completely.
+
+Replace with Demand Expansion Score.
+
+========================================================
+FIX #4 — DEMAND EXPANSION SCORE
+
+Purpose:
+
+Detect whether demand is increasing or fading.
+
+Output:
+
+0–100
+
+Inputs:
+
+Recent Window:
+Last 15 candles
+
+Previous Window:
+15 candles immediately before that
+
+Primary Method:
+
+If buy/sell data exists:
+
+Buy Count Expansion
+
+Buy Volume Expansion
+
+Measure growth versus previous window.
+
+Scoring:
+
+Large increase = high score
+
+Stable = neutral
+
+Declining = low score
+
+
+A full breakdown of the Demand Expansion Score: 
+
+Growth >50% = 100
+
+Growth 25–50% = 85
+
+Growth 10–25% = 70
+
+Growth 0–10% = 55
+
+Decline 0–10% = 40
+
+Decline 10–25% = 25
+
+Decline >25% = 10
+
+========================================================
+FREE FALLBACK METHOD
+
+If GeckoTerminal does not provide buy volume or buy count:
+
+Use candle-derived proxy.
+
+For each window:
+
+Bull Volume =
+Sum of volume from green candles
+
+Bear Volume =
+Sum of volume from red candles
+
+Bull Dominance =
+BullVolume /
+(BullVolume + BearVolume)
+
+Compare:
+
+Recent Bull Dominance
+
+vs
+
+Previous Bull Dominance
+
+Scoring:
+
+Increase >20% = 100
+
+Increase 10–20% = 80
+
+Increase 5–10% = 65
+
+Flat = 50
+
+Decrease = 30
+
+Sharp decrease = 10
+
+Display:
+
+"Demand Expansion Source"
+
+Values:
+
+Native Buy/Sell Data
+Bull/Bear Volume Proxy
+
+========================================================
+OPTIONAL SECOND FREE FALLBACK
+
+If available from API:
+
+Use transaction counts.
+
+Examples:
+
+Buys vs Sells
+
+Recent Buy Count
+
+Previous Buy Count
+
+Use transaction growth instead of buy volume.
+
+========================================================
+FIX #5 — TRUE BOUNCE VELOCITY
+
+Problem:
+
+Current implementation measures bounce size.
+
+It does not measure bounce speed.
+
+Required:
+
+Identify:
+
+Shelf Defense Low
+
+Bounce High
+
+Calculate:
+
+BounceMagnitude =
+((BounceHigh - ShelfLow) / ShelfLow) × 100
+
+BounceDuration =
+Number of candles needed to reach BounceHigh
+
+Velocity =
+BounceMagnitude / BounceDuration
+
+Score:
+
+Fast + Large Bounce = 100
+
+Moderate = 75
+
+Slow = 50
+
+Weak = 25
+
+Dead Bounce = 0
+
+Display:
+
+Bounce Magnitude %
+
+Bounce Duration
+
+Bounce Velocity Score
+
+========================================================
+FIX #6 — CONFIDENCE TIER IMPROVEMENT
+
+Current issue:
+
+Shelf Type and Structure Sequence are not included.
+
+Add:
+
+Shelf Type Score
+
+Accumulation = 100
+
+Re-Accumulation = 90
+
+Neutral = 50
+
+Distribution = 20
+
+Dead-Cat = 0
+
+Structure Sequence Score
+
+Uptrend → Shelf = 100
+
+Pullback → Shelf = 85
+
+Sideways → Shelf = 60
+
+Crash → Shelf = 20
+
+Parabolic → Shelf = 10
+
+New Confidence Formula:
+
+Acceptance Score = 25%
+
+Demand Return Score = 20%
+
+HL Ladder = 10%
+
+Overhead Supply = 10%
+
+Breakout Efficiency = 15%
+
+Distance From Shelf = 5%
+
+Shelf Type = 10%
+
+Structure Sequence = 5%
+
+========================================================
+FIX #7 — BREAKOUT EFFICIENCY IMPORTANCE
+
+Increase influence.
+
+Breakout Efficiency weight:
+
+10% → 15%
+
+Reason:
+
+Continuation candidates should heavily reward efficient breakouts.
+
+========================================================
+RECOMMENDED ENTRY CHECKLIST PANEL
+
+Add a separate panel:
+
+Recommended Entry Checklist
+
+Each item must display:
+
+PASS
+CAUTION
+FAIL
+
+with reasoning.
+
+Checks:
+
+Entry Position
+
+Acceptance Score
+
+Demand Return Score
+
+Demand Expansion Score
+
+Shelf Type
+
+Structure Sequence
+
+Overhead Supply
+
+Breakout Efficiency
+
+VWAP Position
+
+Trend Structure
+
+Confidence Tier
+
+Final Result:
+
+PASS
+
+CAUTION
+
+AVOID
+
+
+=============================
+Full Criteria to check: 
+
+ENTRY POSITION
+
+✓ Shelf Entry
+✓ Near Support
+
+Avoid:
+✗ Extended
+✗ Air Entry
+
+------------------------------------------------
+
+ACCEPTANCE SCORE
+
+Minimum: 70
+
+Preferred: 80+
+
+------------------------------------------------
+
+DEMAND RETURN SCORE
+
+Minimum: 65
+
+Preferred: 75+
+
+------------------------------------------------
+
+DEMAND EXPANSION SCORE
+
+Minimum: 60
+
+Preferred: 75+
+
+------------------------------------------------
+
+SHELF TYPE
+
+✓ Accumulation
+
+✓ Re-Accumulation
+
+Avoid:
+
+✗ Distribution
+
+✗ Dead-Cat
+
+------------------------------------------------
+
+STRUCTURE SEQUENCE
+
+✓ Uptrend → Shelf
+
+✓ Pullback → Shelf
+
+Avoid:
+
+✗ Crash → Shelf
+
+✗ Parabolic Pump → Shelf
+
+------------------------------------------------
+
+OVERHEAD SUPPLY
+
+✓ Low
+
+✓ Manageable
+
+Avoid:
+
+✗ High
+
+------------------------------------------------
+
+BREAKOUT EFFICIENCY
+
+Minimum: 60%
+
+Preferred: 80%+
+
+------------------------------------------------
+
+VWAP POSITION
+
+✓ Above VWAP
+
+Acceptable:
+~ At VWAP
+
+Avoid:
+✗ Below VWAP
+
+------------------------------------------------
+
+TREND STRUCTURE
+
+✓ Mostly Higher Lows
+
+✓ Rising Shelf
+
+Avoid:
+
+✗ Repeated Lower Lows
+
+------------------------------------------------
+
+CONFIDENCE TIER
+
+✓ S Tier
+
+✓ A Tier
+
+✓ Strong B Tier
+
+Avoid:
+
+✗ C Tier
+
+✗ D Tier
+
+=============================
+FINAL DECISION LOGIC
+
+If 3 or more Avoid conditions are present (i.e. 3 or more FAIL items exist)
+
+Final Result = AVOID
+
+Even if overall tier remains high. Even if Confidence Tier looks good.
+
+OVERRIDE RULES
+
+Automatic AVOID if:
+
+Shelf Type = Dead-Cat
+
+OR
+
+Overhead Supply = High
+
+AND
+
+Confidence Tier is not S
+
+OR
+
+Demand Return Score < 40
+
+These conditions override the normal fail count.
+
+===================
+Show the full details of the Final Checklist and Recommendation with the passed and or failed criteria so I can make a well-informed decision.
+
+
+========================================================
+MARKET REFRESH ADVISORY
+
+Add a section:
+
+Analysis Freshness
+
+Show:
+
+Time Since Last Analysis
+
+Example:
+
+Analyzed 8 minutes ago
+
+Recommendations:
+
+0–5 min:
+Fresh
+
+5–15 min:
+Refresh Soon
+
+15–30 min:
+Refresh Recommended
+
+30+ min:
+Refresh Now
+
+Immediate Refresh Triggers:
+
+Price moves >10%
+
+Volume spike >25%
+
+Shelf break
+
+Major breakout
+
+Large red candle
+
+Confidence Tier change
+
+Display advisory prominently near final recommendation.
+
+
+
+========================================================
+Make sure to use the following free data sources for Structural Analysis if GeckoTerminal is incomplete or unavailable.
+
+The order I'd use is:
+
+1. GeckoTerminal buy/sell data (best if available)
+
+2. DEX Screener transaction counts for buys/sells (first fallback option) 
+
+3. Bull vs Bear volume proxy from OHLCV candles (final fallback option)
+
+
+Add a visible label beside Demand Expansion Score:
+
+Data Quality:
+
+High Confidence 
+Medium Confidence
+Proxy Estimate
+
+Each with a note so that I'll immediately know whether the score came from: 
+real buy/sell data 
+transaction counts for buys/sells
+fallback estimation from OHLCV candles
+
+This will make the app's output much easier to trust when I'm making a fast entry decision.
+
+
+========================================================
+DATA INTEGRITY CHECK
+
+If fewer than 50 candles are available:
+
+Display:
+
+"Insufficient data for reliable structural analysis."
+
+Reduce Confidence Tier by one level.
+
+Examples:
+
+S → A
+A → B
+B → C
+
+and display warning prominently.
+
+
+========================================================
+
+RUNNER POTENTIAL
+
+RUNNER POTENTIAL
+
+Estimate and Display:
+
+Low
+Moderate
+High
+Very High
+
+Based on:
+
+Acceptance Score
+Demand Return Score
+Demand Expansion Score
+Breakout Efficiency
+Overhead Supply
+Shelf Type
+
+This is a ranking metric, not a statistical probability.
+
