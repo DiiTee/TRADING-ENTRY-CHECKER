@@ -6484,51 +6484,6 @@ async function qecFetchTopHolders() {
 }
 
 /* ── QEC text cleaner + parser (Soul Scan format) ── */
-/* ── Split a multi-bot paste into named sections ─────────────────────────────
-   Detects known bot header lines ("BotName:") and groups all following content
-   under that bot's normalised key.
-   Returns e.g. { soulscanner: ['...section1...','...section2...'], phanes: [...], ... }  */
-function qecSplitBotSections(raw) {
-  var known = [
-    'Soul Scanner', 'SoulScanner',
-    'Phanes',
-    'TokenScan', 'Token Scan',
-    'Monsta', 'Rick',
-    'GMGN_bot', 'GMGN bot', 'GMGN',
-    'apeit',
-    'SolHouse AI Scanner',
-    'Caller Name'
-  ];
-  var escaped  = known.map(function(b){ return b.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); });
-  var headerRx = new RegExp('^\\s*(' + escaped.join('|') + ')\\s*:', 'i');
-
-  var lines    = raw.split('\n');
-  var sections = {};
-  var curBot   = null;
-  var curBuf   = [];
-
-  function flush() {
-    if (!curBot || !curBuf.length) return;
-    var key = curBot.toLowerCase().replace(/[\s_]+/g,'');
-    if (!sections[key]) sections[key] = [];
-    sections[key].push(curBuf.join('\n'));
-  }
-
-  for (var i = 0; i < lines.length; i++) {
-    var m = lines[i].match(headerRx);
-    if (m) {
-      flush();
-      curBot = m[1].trim();
-      curBuf = [lines[i]]; /* keep header line in section */
-    } else if (curBot) {
-      curBuf.push(lines[i]);
-    }
-    /* lines before the first recognised header are ignored */
-  }
-  flush();
-  return sections;
-}
-
 function qecCleanInput(raw) {
   return raw
     .replace(/\(\s*https?:\/\/[^)]+\)/gi,'')
@@ -6557,79 +6512,78 @@ function qecTryMatch(text) {
 }
 
 function qecAutoParse() {
-  var raw      = el('qecPasteArea').value;
-  /* Split the entire multi-bot paste into per-bot named sections first.
-     Only Soul Scanner sections and the first Phanes section are used;
-     all other bots (TokenScan, Rick, Monsta, GMGN, apeit, etc.) are ignored. */
-  var sections  = qecSplitBotSections(raw);
-  var soulParts = sections['soulscanner'] || [];  /* both regular + bundle scans */
-  var phanesArr = sections['phanes']      || [];  /* main scan + dev history     */
+  var raw  = el('qecPasteArea').value;
+  var text = qecCleanInput(raw);
 
-  if (!soulParts.length && !phanesArr.length) return;
+  /* ── Source detection ──────────────────────────────────────────────────
+     QEC fields are populated ONLY from known sources:
+       • Soul Scanner (regular or bundle scan) → fills all QEC fields
+       • Phanes                                → fills Top 10 Holder % ONLY
+     Any other scan text is ignored.                                      */
+  var isSoul   = /soul[\s_]?scanner|soul_scanner_bot/i.test(raw) ||
+                 (/•\s*Top\s*:/i.test(raw) && /Hodls?\s*:/i.test(raw)) ||
+                 (/Total\s+Stats\s*:/i.test(raw) && /💎\s*Holding/i.test(raw));
+  var isPhanes = /phanes/i.test(raw) ||
+                 /[├└]\s*TH\s+[\d.]+/i.test(raw) ||
+                 /[├└]\s*Top\s*10\s+[\d.]+/i.test(raw);
 
-  /* ══ Soul Scanner sections → fill ALL QEC fields ══════════════════════
-     Combine every Soul Scanner section so that bundle-scan totals
-     (💎 Holding / 💼 Wallets) enrich the regular-scan data.             */
-  if (soulParts.length) {
-    var combined = soulParts.join('\n');
-    var text     = qecCleanInput(combined);
+  if (!isSoul && !isPhanes) return; /* not a recognised source — do nothing */
 
-    /* CA */
+  /* ── Soul Scanner: fill all QEC fields ── */
+  if (isSoul) {
     var b58    = '[1-9A-HJ-NP-Za-km-z]';
     var lineCA = text.match(new RegExp('^\\s*('+b58+'{32,44})\\s*$','m'));
     var anyCA  = text.match(new RegExp(b58+'{43,44}'));
     var ca = (lineCA&&lineCA[1]) || (anyCA&&anyCA[0]) || '';
     if (ca && el('fCA') && !el('fCA').value.trim()) el('fCA').value = ca;
 
-    /* Market fields */
-    var mcRaw  = qecTryMatch(text, /\bMC\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i, /Market\s*Cap\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
-    var liqRaw = qecTryMatch(text, /\bLiq(?:uidity)?\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
-    var volRaw = qecTryMatch(text, /\bVol(?:ume)?\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
-    var h      = qecTryMatch(text, /Hodls?\s*:\s*(\d[\d,]*)/i, /Holders?\s*:\s*(\d[\d,]*)/i).replace(/,/g,'');
-    var top1   = qecTryMatch(text, /•\s*Top\s*:\s*([\d.]+)%/i, /\bTop\s*:\s*([\d.]+)%/i);
-    var f_qty  = qecTryMatch(text, /Fake\s*:\s*(\d+)\s/i).replace(/,/g,'');
-    var f_perc = qecTryMatch(text, /Fake[^\n]*\[([\d.]+)%\]/i, /Fake[^\n]*:\s*([\d.]+)%/i);
-    var air    = qecTryMatch(text, /Airdrop\s*:\s*([\d.]+)%/i);
-    /* Bundle holding: prefer Total Stats "💎 Holding:" (bundle scan), fall back to "→ X%" (regular scan) */
-    var bun_p  = qecTryMatch(text, /💎\s*Holding\s*:\s*([\d.]+)%/i, /→\s*([\d.]+)%/);
-    var bun_q  = qecTryMatch(text, /💼\s*Wallets?\s*:\s*(\d+)/i).replace(/,/g,'');
+    var mcRaw = qecTryMatch(text, /\bMC\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i, /Market\s*Cap\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i, /Mcap\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
+    var liqRaw= qecTryMatch(text, /\bLiq(?:uidity)?\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
+    var volRaw= qecTryMatch(text, /\bVol(?:ume)?\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
+    var h     = qecTryMatch(text, /Hodls?\s*:\s*(\d[\d,]*)/i, /Holders?\s*:\s*(\d[\d,]*)/i).replace(/,/g,'');
+    var top1  = qecTryMatch(text, /•\s*Top\s*:\s*([\d.]+)%/i, /\bTop\s*:\s*([\d.]+)%/i, /Top\s*(?:1|Holder)\s*:\s*([\d.]+)%/i);
+    var f_qty = qecTryMatch(text, /Fake\s*:\s*(\d+)\s/i).replace(/,/g,'');
+    var f_perc= qecTryMatch(text, /Fake[^\n]*\[([\d.]+)%\]/i, /Fake[^\n]*:\s*([\d.]+)%/i);
+    var air   = qecTryMatch(text, /Airdrop\s*:\s*([\d.]+)%/i);
+    var bun_p = qecTryMatch(text, /💎\s*Holding\s*:\s*([\d.]+)%/i, /Holding\s*:\s*([\d.]+)%/i, /→\s*([\d.]+)%/);
+    var bun_q = qecTryMatch(text, /💼\s*Wallets?\s*:\s*(\d+)/i, /Wallets?\s*:\s*(\d+)/i).replace(/,/g,'');
 
-    if (mcRaw)  el('qec_mc').value       = Math.round(qecParseMoney(mcRaw));
-    if (liqRaw) el('qec_liq').value      = Math.round(qecParseMoney(liqRaw));
-    if (volRaw) el('qec_vol').value      = Math.round(qecParseMoney(volRaw));
-    if (h)      el('qec_h').value        = h;
-    if (f_qty)  el('qec_f_qty').value    = f_qty;
-    if (f_perc) el('qec_f_perc').value   = f_perc;
+    if (mcRaw)  el('qec_mc').value  = Math.round(qecParseMoney(mcRaw));
+    if (liqRaw) el('qec_liq').value = Math.round(qecParseMoney(liqRaw));
+    if (volRaw) el('qec_vol').value = Math.round(qecParseMoney(volRaw));
+    if (h)      el('qec_h').value   = h;
+    if (f_qty)  el('qec_f_qty').value  = f_qty;
+    if (f_perc) el('qec_f_perc').value = f_perc;
     if (bun_p)  el('qec_bun_perc').value = bun_p;
     if (bun_q)  el('qec_bun_qty').value  = bun_q;
-    if (air)    el('qec_air').value      = air;
-    if (top1)   el('qec_top1').value     = top1;
+    if (air)    el('qec_air').value  = air;
+    if (top1)   el('qec_top1').value = top1;
 
-    /* Dev address — search only within Soul Scanner sections */
-    var devM = combined.match(/(?:✅\s*DEV|👷|🧑‍💻)[^\n]*?([1-9A-HJ-NP-Za-km-z]{32,44})/);
-    if (devM) qecSetDevAddress(devM[1]);
-
-    /* Deployment stats */
-    var depM = combined.match(/Deployed\s*:\s*(\d+)/i);
-    var bonM = combined.match(/Bonded\s*:\s*(\d+)/i);
+    /* Dev / Creator address */
+    var rickDevM = raw.match(/^([1-9A-HJ-NP-Za-km-z]{32,44})\s*[\r\n]+[^\r\n]*(?:DEF\s*[⋅·]|GMGN|EXP\s*[⋅·])/m);
+    if (rickDevM) {
+      qecSetDevAddress(rickDevM[1]);
+    } else {
+      var devAddrLine = raw.match(/(?:✅\s*DEV|👷|🧑‍💻)[^\n]*?([1-9A-HJ-NP-Za-km-z]{32,44})/);
+      if (devAddrLine) qecSetDevAddress(devAddrLine[1]);
+    }
+    var depM = raw.match(/Deployed\s*:\s*(\d+)/i);
+    var bonM = raw.match(/Bonded\s*:\s*(\d+)/i);
     if (depM || bonM) {
-      qecSetDevAddress(window._devAddress || null,
-        depM ? parseInt(depM[1],10) : null,
-        bonM ? parseInt(bonM[1],10) : null);
+      var dep = depM ? parseInt(depM[1],10) : null;
+      var bon = bonM ? parseInt(bonM[1],10) : null;
+      qecSetDevAddress(window._devAddress || null, dep, bon);
     }
   }
 
-  /* ══ Phanes sections → Top 10 Holder % ONLY ══════════════════════════
-     Try each Phanes section in order; stop at the first one that has a
-     Top 10 value (the main coin scan, not the dev-history section).     */
-  for (var pi = 0; pi < phanesArr.length; pi++) {
-    var pText = qecCleanInput(phanesArr[pi]);
-    var t10   = qecTryMatch(pText,
+  /* ── Phanes: Top 10 Holder % ONLY ── */
+  if (isPhanes) {
+    var t10 = qecTryMatch(text,
       /T(?:op)?\s*10\s*:?\s*(?:Holders?\s*)?\[?\s*([\d.]+)%/i,
       /Top10\s+(?:holding|Holders?)\s*:?\s*([\d.]+)%/i,
       /[├└]\s*Top\s*10\s+([\d.]+)/
     );
-    if (t10) { el('qec_top10').value = parseFloat(t10).toFixed(2); break; }
+    if (t10) el('qec_top10').value = parseFloat(t10).toFixed(2);
   }
 }
 
