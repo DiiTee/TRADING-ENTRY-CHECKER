@@ -1809,8 +1809,10 @@ async function fetchFromCA(ca) {
   apiDiagRow.classList.add('hidden');
   missingFieldsRow.classList.add('hidden');
 
-  window._tecCandles  = null; /* reset candle cache for this fetch */
-  window._tecDexTxns  = null; /* reset tx fallback for structural analysis */
+  window._tecCandles     = null;       /* reset candle cache for this fetch */
+  window._tecDexTxns     = null;       /* reset tx fallback for structural analysis */
+  window._tecOhlcvSource = null;       /* 'GeckoTerminal' | 'DEX Screener' | null */
+  window._tecEngineMode  = 'FLOW';     /* 'STRUCTURE' when candles available, 'FLOW' otherwise */
   var fetched    = {};
   var apiResults = [];   /* badge HTML */
   var diagItems  = [];   /* diagnostic panel entries { cls, icon, html } */
@@ -2416,6 +2418,8 @@ async function fetchFromCA(ca) {
           source:             'GeckoTerminal',
           structuralAnalysis: gtStructuralAnalysis
         };
+        window._tecOhlcvSource = 'GeckoTerminal';
+        if (gtStructuralAnalysis) window._tecEngineMode = 'STRUCTURE';
         if (gtMacroFloor > 0 || gtLocalFloor > 0) {
           addBadge('GeckoTerminal', 'ok');
           addDiag('ok', 'GeckoTerminal',
@@ -2438,6 +2442,59 @@ async function fetchFromCA(ca) {
     } catch(e) {
       addBadge('GeckoTerminal', 'fail');
       addDiag('fail', 'GeckoTerminal', 'Data could not be fetched: ' + errReason(e) + '. Floor/ceiling will use LP depth estimate.');
+    }
+  }
+
+  /* ── 5a-fallback: DEX Screener OHLCV (when GeckoTerminal candles unavailable) ── */
+  if (window._tecEngineMode !== 'STRUCTURE') {
+    try {
+      var dexPairAddr = window._tecPoolAddress || '';
+      if (dexPairAddr) {
+        var nowTs  = Math.floor(Date.now() / 1000);
+        var fromTs = nowTs - (6 * 3600);
+        var dexCandleUrl = 'https://api.dexscreener.com/latest/dex/ohlcv/solana/' + dexPairAddr +
+                           '?from=' + fromTs + '&to=' + nowTs + '&resolution=15';
+        var dexCandleRaw = await fetchWithFallback(dexCandleUrl);
+        /* Support multiple possible response shapes */
+        var dexRawList = null;
+        if (Array.isArray(dexCandleRaw))                              dexRawList = dexCandleRaw;
+        else if (dexCandleRaw && Array.isArray(dexCandleRaw.ohlcv))  dexRawList = dexCandleRaw.ohlcv;
+        else if (dexCandleRaw && Array.isArray(dexCandleRaw.data))   dexRawList = dexCandleRaw.data;
+        if (dexRawList && dexRawList.length >= 3) {
+          /* Normalize to [timestamp, open, high, low, close, volume] */
+          var dexNorm = dexRawList.map(function(c) {
+            if (Array.isArray(c)) return c;
+            return [c.t||c.time||0, c.o||c.open||0, c.h||c.high||0, c.l||c.low||0, c.c||c.close||0, c.v||c.volume||0];
+          });
+          var dexSaAttrs = window._tecDexTxns ? { transactions: window._tecDexTxns } : null;
+          var dexSA = computeStructuralAnalysis(dexNorm, dexSaAttrs);
+          var dexClose = dexNorm[dexNorm.length - 1][4] || 0;
+          if (dexSA && dexClose > 0) {
+            var dexHighs = dexNorm.map(function(c){ return c[2]; });
+            var dexLows  = dexNorm.map(function(c){ return c[3]; });
+            window._tecCandles = {
+              current:       dexClose,
+              macroFloor:    dexSA.macroFloorPrice  || 0,
+              localFloor:    dexSA.activeShelfPrice || 0,
+              floor15mLow:   dexSA.activeShelfPrice || 0,
+              ceiling1hHigh: Math.max.apply(null, dexHighs),
+              high:          Math.max.apply(null, dexHighs),
+              low:           Math.min.apply(null, dexLows),
+              volM5: 0, volH1: 0, priceChangeM5: null,
+              source: 'DEX Screener',
+              structuralAnalysis: dexSA
+            };
+            window._tecOhlcvSource = 'DEX Screener';
+            window._tecEngineMode  = 'STRUCTURE';
+            addBadge('DEX Screener OHLCV', 'ok');
+            addDiag('ok', 'DEX Screener OHLCV',
+              'OHLCV candle fallback succeeded (' + dexNorm.length + ' candles). ' +
+              'Structural Analysis computed from DEX Screener data. Confidence Tier: ' + dexSA.confidenceTier + '.');
+          }
+        }
+      }
+    } catch(e) {
+      addDiag('partial', 'DEX Screener OHLCV', 'Candle fallback attempted but failed: ' + (e && e.message ? e.message : String(e)) + '. Falling back to Flow Mode.');
     }
   }
 
@@ -4080,6 +4137,55 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   };
 }
 
+/* ── Transaction Pressure Score ──────────────────────────────────────────────
+   Estimates buyer dominance from USD buy/sell volume (primary) or buy% (proxy).
+   Returns null when no buy/sell data is available at all.                    */
+function computeTransactionPressureScore(d) {
+  var buyVol  = d.buyUSD    || 0;
+  var sellVol = d.sellUSD   || 0;
+  var buyPct  = d.buyPercent || 0;
+  var dominance, source;
+  if (buyVol > 0 || sellVol > 0) {
+    dominance = (buyVol + sellVol) > 0 ? buyVol / (buyVol + sellVol) : 0.5;
+    source    = 'Buy/Sell USD Volume';
+  } else if (buyPct > 0) {
+    dominance = buyPct / 100;
+    source    = 'Buy% Tx Ratio (proxy)';
+  } else {
+    return null;
+  }
+  var score = dominance >= 0.70 ? 100 :
+              dominance >= 0.60 ?  80 :
+              dominance >= 0.50 ?  60 :
+              dominance >= 0.40 ?  40 : 20;
+  var label = dominance >= 0.70 ? 'Strong Buyer Pressure'   :
+              dominance >= 0.60 ? 'Moderate Buyer Pressure' :
+              dominance >= 0.50 ? 'Neutral Flow'            :
+              dominance >= 0.40 ? 'Weak Buyer Pressure'     : 'Seller Dominated';
+  return { score: score, label: label, source: source, pct: (dominance * 100).toFixed(1) };
+}
+
+/* ── Data Coverage ────────────────────────────────────────────────────────────
+   Returns { pct, items[], qualityLabel } reflecting how many key data points
+   are present for the current analysis.                                       */
+function computeDataCoverage(d, sa) {
+  var dTx = window._tecDexTxns;
+  var hasTx = !!(dTx && (parseInt(dTx.h1.buys) > 0 || parseInt(dTx.h1.sells) > 0));
+  var items = [
+    { label: 'OHLCV Candles',       ok: !!(window._tecOhlcvSource),                             value: window._tecOhlcvSource  || '' },
+    { label: 'Tx Data (Buy/Sell)',   ok: hasTx,                                                  value: hasTx ? 'DEX Screener'  : '' },
+    { label: 'VWAP',                 ok: !!(sa && sa.vwap),                                      value: sa ? 'Computed'         : '' },
+    { label: 'Demand Expansion',     ok: !!(sa ? sa.demandExpansionScore !== undefined : hasTx), value: sa ? sa.demandExpansionSource : (hasTx ? 'DEX Screener Tx' : '') },
+    { label: 'Overhead Supply',      ok: !!(sa && sa.overheadRisk),                              value: sa ? sa.overheadRisk    : '' },
+    { label: 'Acceptance Score',     ok: !!(sa && sa.acceptanceScore !== undefined),             value: sa ? sa.acceptanceScore + '/100' : '' },
+    { label: 'Structural Shelf',     ok: !!(sa && sa.shelfType),                                 value: sa ? sa.shelfType       : '' },
+  ];
+  var okCount = items.filter(function(i){ return i.ok; }).length;
+  var pct     = Math.round((okCount / items.length) * 100);
+  var quality = pct >= 80 ? 'High Confidence' : pct >= 50 ? 'Medium Confidence' : 'Low Confidence';
+  return { pct: pct, items: items, quality: quality };
+}
+
 function buildEntryBriefingHTML(d, analysis) {
   var ageMin = analysis.ageMinutes;
   var sClass = analysis.status.toLowerCase();
@@ -4296,95 +4402,181 @@ function buildEntryBriefingHTML(d, analysis) {
         return t;
       })() },
     { num: '06', label: 'Structural Analysis Scores', text: (function() {
-        if (!sa) {
-          /* ── Fallback: compute Demand Expansion from DEX Screener tx data ── */
-          var dTx = window._tecDexTxns;
-          var h1b = dTx && parseInt(dTx.h1.buys)  || 0;
-          var h1s = dTx && parseInt(dTx.h1.sells) || 0;
-          var m5b = dTx && parseInt(dTx.m5.buys)  || 0;
-          if (h1b > 0) {
-            var deScore, deSource, deQuality;
-            if (m5b > 0) {
-              /* Method 1 — GeckoTerminal/DEX Screener native buy/sell data (best available) */
-              var prevBuysPerSlice = Math.max(0.1, (h1b - m5b) / 11);
-              var buyGrowth = ((m5b - prevBuysPerSlice) / prevBuysPerSlice) * 100;
-              deScore   = buyGrowth > 50 ? 100 : buyGrowth > 25 ? 85 : buyGrowth > 10 ? 70 :
-                          buyGrowth > 0  ?  55 : buyGrowth > -10 ? 40 : buyGrowth > -25 ? 25 : 10;
-              deSource  = 'DEX Screener Buy/Sell Data';
-              deQuality = 'Medium Confidence';
-            } else {
-              /* Method 2 — DEX Screener transaction counts for buys/sells (first fallback) */
-              var totalH1 = h1b + h1s;
-              var buyRatio = totalH1 > 0 ? h1b / totalH1 : 0.5;
-              deScore   = buyRatio >= 0.65 ? 80 : buyRatio >= 0.55 ? 65 : buyRatio >= 0.45 ? 50 :
-                          buyRatio >= 0.35 ? 35 : 20;
-              deSource  = 'DEX Screener Tx Count Ratio';
-              deQuality = 'Medium Confidence';
-            }
-            var deColor      = deScore >= 75 ? 'var(--safe)' : deScore >= 60 ? 'var(--caution)' : '#ff4757';
-            var dqBadgeColor = '#ffeb3b';
-            var t = '<div style="margin-bottom:7px;padding:4px 8px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.08);font-size:0.72rem;color:#ff9800;">⚠ GeckoTerminal candle data unavailable — showing partial analysis from DEX Screener transaction data. Full analysis requires Fetch Data with a GeckoTerminal-listed pair.</div>';
-            t += 'Demand Expansion: <strong style="color:' + deColor + ';">' + deScore + '/100</strong>';
-            t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.62rem;font-weight:700;color:#111;background:' + dqBadgeColor + ';">' + deQuality + '</span>';
-            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">via ' + deSource + '</span><br>';
-            t += '<span style="color:var(--text-muted);font-size:0.72rem;">Acceptance Score, Demand Return, Bounce Velocity, Shelf Analysis: <em>N/A — requires OHLCV candle data.</em></span>';
-            return t;
-          }
-          return '<span style="color:var(--text-muted);">Structural analysis requires GeckoTerminal candle data — use Fetch Data to populate.</span>';
-        }
+        var engineMode = window._tecEngineMode  || 'FLOW';
+        var ohlcvSrc   = window._tecOhlcvSource || null;
+        var tps        = computeTransactionPressureScore(d);
+        var cov        = computeDataCoverage(d, sa);
         var t = '';
-        /* Insufficient data warning */
-        if (sa.insufficientData) {
-          t += '<div style="margin-bottom:6px;padding:4px 8px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.08);font-size:0.72rem;color:#ff9800;">⚠ Insufficient candle data (&lt;50 candles) — Confidence Tier reduced by one level. Add more history for reliable analysis.</div>';
+
+        /* ── Mode Banner ── */
+        if (engineMode === 'STRUCTURE') {
+          t += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;padding:4px 10px;border-left:3px solid var(--accent-cyan);background:rgba(0,255,204,0.05);">';
+          t += '<span style="color:var(--accent-cyan);font-size:0.70rem;font-weight:700;letter-spacing:1px;">⬡ STRUCTURE MODE ACTIVE</span>';
+          t += '&nbsp;<span style="color:var(--text-muted);font-size:0.62rem;">OHLCV Source: <strong style="color:var(--accent-cyan);">' + ohlcvSrc + '</strong></span>';
+          t += '</div>';
+        } else {
+          t += '<div style="margin-bottom:7px;padding:6px 10px;border-left:3px solid #ff4757;background:rgba(255,71,87,0.07);">';
+          t += '<div style="color:#ff4757;font-size:0.72rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">⚡ FLOW MODE ACTIVE &nbsp;·&nbsp; STRUCTURE DATA UNAVAILABLE &nbsp;·&nbsp; Confidence Reduced</div>';
+          t += '<div style="color:var(--text-muted);font-size:0.68rem;">Both GeckoTerminal and DEX Screener OHLCV unavailable. Analysis based on transaction flow data only. Maximum confidence tier: B.</div>';
+          t += '</div>';
         }
-        /* Acceptance Score */
-        var asColor = sa.acceptanceScore >= 80 ? 'var(--safe)' : sa.acceptanceScore >= 65 ? 'var(--caution)' : '#ff4757';
-        t += 'Acceptance Score: <strong style="color:' + asColor + ';">' + sa.acceptanceScore + '/100</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.acceptanceClass + ')</span><br>';
-        /* Demand Return Score */
-        var drColor = sa.demandReturnScore >= 80 ? 'var(--safe)' : sa.demandReturnScore >= 65 ? 'var(--caution)' : '#ff4757';
-        t += 'Demand Return Score: <strong style="color:' + drColor + ';">' + sa.demandReturnScore + '/100</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.demandClass + ')</span><br>';
-        /* Demand Expansion Score */
-        var deColor = sa.demandExpansionScore >= 75 ? 'var(--safe)' : sa.demandExpansionScore >= 60 ? 'var(--caution)' : '#ff4757';
-        var dqBadgeColor = sa.demandExpansionQuality === 'High Confidence' ? '#00e676' : sa.demandExpansionQuality === 'Medium Confidence' ? '#ffeb3b' : '#ff9800';
-        t += 'Demand Expansion: <strong style="color:' + deColor + ';">' + sa.demandExpansionScore + '/100</strong>';
-        t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.62rem;font-weight:700;color:#111;background:' + dqBadgeColor + ';">' + sa.demandExpansionQuality + '</span>';
-        t += ' <span style="color:var(--text-muted);font-size:0.70rem;">via ' + sa.demandExpansionSource + '</span><br>';
-        /* Bounce Velocity */
-        var bvColor = sa.bounceVelocityScore >= 75 ? 'var(--safe)' : sa.bounceVelocityScore >= 50 ? 'var(--caution)' : '#ff4757';
-        t += 'Bounce Velocity Score: <strong style="color:' + bvColor + ';">' + sa.bounceVelocityScore + '/100</strong>';
-        if (sa.bounceMagnitude !== null) t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(+' + sa.bounceMagnitude + '% over ' + sa.bounceDuration + ' candle' + (sa.bounceDuration !== 1 ? 's' : '') + ')</span>';
-        t += '<br>';
-        /* Shelf type + sequence */
-        t += 'Shelf Type: <strong style="color:var(--accent-cyan);">' + sa.shelfType + '</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">— ' + sa.shelfTypeDesc + '</span><br>';
-        t += 'Structure Sequence: <span style="color:var(--accent-cyan);">' + sa.structureSequence + '</span><br>';
-        /* Defense + compression */
-        t += 'Shelf Defenses: <strong>' + sa.defenseCount + '</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.defenseClassification + ')</span>';
-        t += ' &nbsp;|&nbsp; ATR: <strong>' + sa.atrPct + '%</strong> &nbsp;|&nbsp; SD: <strong>' + sa.sdPct + '%</strong><br>';
-        /* Overhead + breakout */
-        var ohColor = sa.overheadScore >= 80 ? 'var(--safe)' : sa.overheadScore >= 65 ? 'var(--caution)' : '#ff4757';
-        t += 'Overhead Supply: <strong style="color:' + ohColor + ';">' + sa.overheadRisk + '</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.overheadDensityPct + '% of closes above)</span>';
-        var boColor = sa.breakoutEfficiency >= 60 ? 'var(--safe)' : sa.breakoutEfficiency >= 40 ? 'var(--caution)' : '#ff4757';
-        t += ' &nbsp;|&nbsp; Breakout Efficiency: <strong style="color:' + boColor + ';">' + sa.breakoutEfficiency + '%</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.breakoutLabel + ')</span><br>';
-        /* Runner Potential */
-        t += 'Runner Potential: <strong style="color:' + sa.runnerColor + ';">' + sa.runnerPotential + '</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(ranking metric — not a statistical probability)</span><br>';
-        /* Confidence Tier */
-        t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + sa.tierColor + ';background:rgba(0,0,0,0.2);">';
-        t += 'Confidence Tier: <strong style="color:' + sa.tierColor + ';font-size:1.15em;letter-spacing:2px;">' + sa.confidenceTier + '</strong>';
-        t += ' &nbsp;<strong style="color:' + sa.tierColor + ';">' + sa.tierLabel + '</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(Score: ' + sa.tierScore + '/100)</span>';
-        t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">Tier reflects setup quality, not guaranteed outcome. S/A = best available — not a certainty.</span>';
+
+        /* ── Data Coverage Panel ── */
+        var covC = cov.pct >= 80 ? '#00e676' : cov.pct >= 50 ? '#ffeb3b' : '#ff4757';
+        t += '<div style="margin-bottom:8px;padding:5px 8px;background:rgba(0,0,0,0.22);border-radius:4px;border:1px solid rgba(255,255,255,0.06);">';
+        t += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">';
+        t += '<span style="color:var(--text-secondary);font-size:0.65rem;font-weight:700;letter-spacing:0.5px;">MARKET STRUCTURE QUALITY</span>';
+        t += '&nbsp;<strong style="color:' + covC + ';font-size:0.85rem;">Data Coverage: ' + cov.pct + '%</strong>';
+        t += '&nbsp;<span style="padding:1px 5px;border-radius:3px;font-size:0.60rem;font-weight:700;color:#111;background:' + covC + ';">' + cov.quality + '</span>';
         t += '</div>';
+        t += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1px 14px;">';
+        cov.items.forEach(function(item) {
+          var ic = item.ok ? '#00e676' : '#ff4757';
+          t += '<span style="font-size:0.62rem;color:var(--text-muted);">';
+          t += '<span style="color:' + ic + ';">' + (item.ok ? '✓' : '✗') + '</span> ' + item.label + ': ';
+          t += '<span style="color:' + ic + ';">' + (item.ok ? item.value : 'Missing') + '</span></span>';
+        });
+        t += '</div></div>';
+
+        /* ═══════════════════════════════════════════════════════
+           STRUCTURE MODE — full candle-based analysis
+           ═══════════════════════════════════════════════════════ */
+        if (engineMode === 'STRUCTURE' && sa) {
+          if (sa.insufficientData) {
+            t += '<div style="margin-bottom:6px;padding:4px 8px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.08);font-size:0.72rem;color:#ff9800;">⚠ Insufficient candle data (&lt;50 candles) — Confidence Tier reduced by one level.</div>';
+          }
+          var asC = sa.acceptanceScore >= 80 ? 'var(--safe)' : sa.acceptanceScore >= 65 ? 'var(--caution)' : '#ff4757';
+          t += 'Acceptance Score: <strong style="color:' + asC + ';">' + sa.acceptanceScore + '/100</strong> <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.acceptanceClass + ')</span><br>';
+          var drC = sa.demandReturnScore >= 80 ? 'var(--safe)' : sa.demandReturnScore >= 65 ? 'var(--caution)' : '#ff4757';
+          t += 'Demand Return Score: <strong style="color:' + drC + ';">' + sa.demandReturnScore + '/100</strong> <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.demandClass + ')</span><br>';
+          var deC = sa.demandExpansionScore >= 75 ? 'var(--safe)' : sa.demandExpansionScore >= 60 ? 'var(--caution)' : '#ff4757';
+          var dqB = sa.demandExpansionQuality === 'High Confidence' ? '#00e676' : sa.demandExpansionQuality === 'Medium Confidence' ? '#ffeb3b' : '#ff9800';
+          t += 'Demand Expansion: <strong style="color:' + deC + ';">' + sa.demandExpansionScore + '/100</strong>';
+          t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.62rem;font-weight:700;color:#111;background:' + dqB + ';">' + sa.demandExpansionQuality + '</span>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">via ' + sa.demandExpansionSource + '</span><br>';
+          if (tps) {
+            var tpC = tps.score >= 80 ? 'var(--safe)' : tps.score >= 60 ? 'var(--caution)' : '#ff4757';
+            t += 'Transaction Pressure: <strong style="color:' + tpC + ';">' + tps.score + '/100</strong>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + tps.label + ' &nbsp;' + tps.pct + '% buy dom. — ' + tps.source + ')</span><br>';
+          }
+          var bvC = sa.bounceVelocityScore >= 75 ? 'var(--safe)' : sa.bounceVelocityScore >= 50 ? 'var(--caution)' : '#ff4757';
+          t += 'Bounce Velocity Score: <strong style="color:' + bvC + ';">' + sa.bounceVelocityScore + '/100</strong>';
+          if (sa.bounceMagnitude !== null) t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(+' + sa.bounceMagnitude + '% over ' + sa.bounceDuration + ' candle' + (sa.bounceDuration !== 1 ? 's' : '') + ')</span>';
+          t += '<br>';
+          t += 'Shelf Type: <strong style="color:var(--accent-cyan);">' + sa.shelfType + '</strong> <span style="color:var(--text-muted);font-size:0.72rem;">— ' + sa.shelfTypeDesc + '</span><br>';
+          t += 'Structure Sequence: <span style="color:var(--accent-cyan);">' + sa.structureSequence + '</span><br>';
+          t += 'Shelf Defenses: <strong>' + sa.defenseCount + '</strong> <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.defenseClassification + ')</span>';
+          t += ' &nbsp;|&nbsp; ATR: <strong>' + sa.atrPct + '%</strong> &nbsp;|&nbsp; SD: <strong>' + sa.sdPct + '%</strong><br>';
+          var ohC = sa.overheadScore >= 80 ? 'var(--safe)' : sa.overheadScore >= 65 ? 'var(--caution)' : '#ff4757';
+          t += 'Overhead Supply: <strong style="color:' + ohC + ';">' + sa.overheadRisk + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.overheadDensityPct + '% of closes above)</span>';
+          var boC = sa.breakoutEfficiency >= 60 ? 'var(--safe)' : sa.breakoutEfficiency >= 40 ? 'var(--caution)' : '#ff4757';
+          t += ' &nbsp;|&nbsp; Breakout Efficiency: <strong style="color:' + boC + ';">' + sa.breakoutEfficiency + '%</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.breakoutLabel + ')</span><br>';
+          t += 'Runner Potential: <strong style="color:' + sa.runnerColor + ';">' + sa.runnerPotential + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(ranking metric — not a statistical probability)</span><br>';
+          t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + sa.tierColor + ';background:rgba(0,0,0,0.2);">';
+          t += 'Confidence Tier: <strong style="color:' + sa.tierColor + ';font-size:1.15em;letter-spacing:2px;">' + sa.confidenceTier + '</strong>';
+          t += ' &nbsp;<strong style="color:' + sa.tierColor + ';">' + sa.tierLabel + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(Score: ' + sa.tierScore + '/100)</span>';
+          t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">Tier reflects setup quality, not guaranteed outcome. S/A = best available — not a certainty.</span>';
+          t += '</div>';
+
+        /* ═══════════════════════════════════════════════════════
+           FLOW MODE — transaction data only, no candles
+           ═══════════════════════════════════════════════════════ */
+        } else {
+          /* Demand Expansion (3-tier fallback) */
+          var dTx = window._tecDexTxns;
+          var h1b = dTx ? (parseInt(dTx.h1.buys)  || 0) : 0;
+          var h1s = dTx ? (parseInt(dTx.h1.sells) || 0) : 0;
+          var m5b = dTx ? (parseInt(dTx.m5.buys)  || 0) : 0;
+          var fDeScore, fDeSource, fDeQuality;
+          if (h1b > 0 && m5b > 0) {
+            var fPrevBPS = Math.max(0.1, (h1b - m5b) / 11);
+            var fBGrowth = ((m5b - fPrevBPS) / fPrevBPS) * 100;
+            fDeScore   = fBGrowth > 50 ? 100 : fBGrowth > 25 ? 85 : fBGrowth > 10 ? 70 :
+                         fBGrowth > 0  ?  55 : fBGrowth > -10 ? 40 : fBGrowth > -25 ? 25 : 10;
+            fDeSource  = 'DEX Screener Buy/Sell Data';
+            fDeQuality = 'Medium Confidence';
+          } else if (h1b > 0) {
+            var fTotH1  = h1b + h1s;
+            var fBRatio = fTotH1 > 0 ? h1b / fTotH1 : 0.5;
+            fDeScore   = fBRatio >= 0.65 ? 80 : fBRatio >= 0.55 ? 65 : fBRatio >= 0.45 ? 50 : fBRatio >= 0.35 ? 35 : 20;
+            fDeSource  = 'DEX Screener Tx Count Ratio';
+            fDeQuality = 'Medium Confidence';
+          }
+          if (fDeScore !== undefined) {
+            var fDeC = fDeScore >= 75 ? 'var(--safe)' : fDeScore >= 60 ? 'var(--caution)' : '#ff4757';
+            t += 'Demand Expansion: <strong style="color:' + fDeC + ';">' + fDeScore + '/100</strong>';
+            t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.62rem;font-weight:700;color:#111;background:#ffeb3b;">' + fDeQuality + '</span>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">via ' + fDeSource + '</span><br>';
+          } else {
+            t += 'Demand Expansion: <span style="color:var(--text-muted);font-style:italic;">N/A — no tx data available</span><br>';
+          }
+
+          /* Transaction Pressure Score */
+          if (tps) {
+            var fTpC = tps.score >= 80 ? 'var(--safe)' : tps.score >= 60 ? 'var(--caution)' : '#ff4757';
+            t += 'Transaction Pressure: <strong style="color:' + fTpC + ';">' + tps.score + '/100</strong>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + tps.label + ' &nbsp;' + tps.pct + '% buy dom. — ' + tps.source + ')</span><br>';
+          } else {
+            t += 'Transaction Pressure: <span style="color:var(--text-muted);font-style:italic;">N/A — no buy/sell volume data</span><br>';
+          }
+
+          /* Candle-dependent metrics — always N/A in Flow Mode */
+          t += '<div style="margin:5px 0;padding:4px 8px;background:rgba(0,0,0,0.2);border-radius:3px;">';
+          t += '<span style="color:var(--text-muted);font-size:0.65rem;font-weight:700;letter-spacing:0.5px;">CANDLE-DEPENDENT METRICS — UNAVAILABLE IN FLOW MODE</span><br>';
+          var naS = 'color:rgba(255,255,255,0.25);font-style:italic;font-size:0.70rem;';
+          t += '<span style="' + naS + '">Acceptance Score: N/A &nbsp;·&nbsp; Demand Return: N/A &nbsp;·&nbsp; Bounce Velocity: N/A</span><br>';
+          t += '<span style="' + naS + '">Shelf Type: N/A &nbsp;·&nbsp; Structure Sequence: N/A &nbsp;·&nbsp; Shelf Defenses: N/A</span><br>';
+          t += '<span style="' + naS + '">ATR%: N/A &nbsp;·&nbsp; SD%: N/A &nbsp;·&nbsp; VWAP Position: N/A</span>';
+          t += '</div>';
+
+          /* Flow Mode Runner Potential (low-confidence) */
+          var fRunParts = 0, fRunSum = 0;
+          if (fDeScore  !== undefined) { fRunSum += fDeScore;  fRunParts++; }
+          if (tps)                     { fRunSum += tps.score; fRunParts++; }
+          if (fRunParts > 0) {
+            var fRunAvg    = fRunSum / fRunParts;
+            var fRunner    = fRunAvg >= 75 ? 'Very High' : fRunAvg >= 60 ? 'High' : fRunAvg >= 45 ? 'Moderate' : 'Low';
+            var fRunColor  = fRunner === 'Very High' ? '#00ffcc' : fRunner === 'High' ? '#00e676' : fRunner === 'Moderate' ? '#ffeb3b' : '#ff9800';
+            t += 'Runner Potential: <strong style="color:' + fRunColor + ';">' + fRunner + '</strong>';
+            t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.60rem;font-weight:700;color:#111;background:#ff9800;">Low Confidence Estimate</span><br>';
+          }
+
+          /* Flow Mode Confidence Tier — capped at B */
+          var fTierInput = 0, fTierN = 0;
+          if (fDeScore !== undefined) { fTierInput += fDeScore;  fTierN++; }
+          if (tps)                    { fTierInput += tps.score; fTierN++; }
+          var fTierRaw   = fTierN > 0 ? Math.round(fTierInput / fTierN) : 0;
+          var fTierScore = Math.min(fTierRaw, 79); /* hard cap — S(≥90) and A(≥80) not available in Flow Mode */
+          var fTier, fTierLabel, fTierColor;
+          if      (fTierScore >= 65) { fTier = 'B'; fTierLabel = 'Tradable Setup';  fTierColor = '#ffeb3b'; }
+          else if (fTierScore >= 50) { fTier = 'C'; fTierLabel = 'Speculative';     fTierColor = '#ff9800'; }
+          else                       { fTier = 'D'; fTierLabel = 'Avoid';           fTierColor = '#ff4757'; }
+          t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + fTierColor + ';background:rgba(0,0,0,0.2);">';
+          t += 'Confidence Tier (Flow): <strong style="color:' + fTierColor + ';font-size:1.15em;letter-spacing:2px;">' + fTier + '</strong>';
+          t += ' &nbsp;<strong style="color:' + fTierColor + ';">' + fTierLabel + '</strong>';
+          t += '<br><span style="color:#ff9800;font-size:0.68rem;font-style:italic;">S and A tiers unavailable in Flow Mode — insufficient structural data. Maximum: B tier.</span>';
+          t += '</div>';
+
+          /* Final Flow Mode warning */
+          t += '<div style="margin-top:7px;padding:5px 10px;border:1px solid rgba(255,71,87,0.35);border-radius:4px;background:rgba(255,71,87,0.05);font-size:0.70rem;color:#ff8a80;">';
+          t += '<strong>⚠ Structural analysis unavailable.</strong> Current recommendation is based primarily on transaction flow and demand data. Confidence reduced.';
+          t += '</div>';
+        }
+
         return t;
       })() },
     { num: '06b', label: 'Recommended Entry Checklist', text: (function() {
-        if (!sa || !sa.entryChecklist) return '<span style="color:var(--text-muted);">Requires GeckoTerminal candle data — use Fetch Data to populate. (DEX Screener partial data shown in 06 above where available.)</span>';
+        var engineMode = window._tecEngineMode || 'FLOW';
+        if (!sa || !sa.entryChecklist) {
+          if (engineMode === 'FLOW') {
+            return '<span style="color:#ff9800;font-size:0.72rem;">⚡ Flow Mode active — Entry Checklist requires OHLCV candle data. Fetch Data to attempt candle retrieval from GeckoTerminal or DEX Screener.</span>';
+          }
+          return '<span style="color:var(--text-muted);">Requires OHLCV candle data — use Fetch Data to populate.</span>';
+        }
         var rows = sa.entryChecklist.map(function(item) {
           var sc = item.status === 'pass' ? 'var(--safe)' : item.status === 'caution' ? 'var(--caution)' : '#ff4757';
           var sl = item.status === 'pass' ? 'PASS' : item.status === 'caution' ? 'CAUTION' : 'FAIL';

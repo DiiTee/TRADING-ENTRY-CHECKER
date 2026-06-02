@@ -1,0 +1,321 @@
+STRUCTURAL ANALYSIS ENGINE — RESILIENCE & FALLBACK UPGRADE
+
+OBJECTIVE
+
+Prevent the Entry Checker from becoming mostly unusable when OHLCV candle data is unavailable.
+
+Create graceful degradation instead of complete metric failure.
+
+========================================================
+OHLCV FALLBACK HIERARCHY
+
+Current Issue:
+
+The engine relies heavily on GeckoTerminal 15m candles.
+
+If GeckoTerminal OHLCV fails:
+
+- Acceptance Score becomes unavailable
+- Demand Return becomes unavailable
+- Bounce Velocity becomes unavailable
+- Shelf Analysis becomes unavailable
+- Confidence Tier becomes severely degraded
+
+Required Change:
+
+Add OHLCV fallback hierarchy.
+
+Attempt candle retrieval in this order:
+
+1. GeckoTerminal OHLCV
+
+2. DEX Screener OHLCV
+   (if available)
+
+
+Only mark candle-dependent metrics unavailable if ALL candle sources fail.
+
+Display:
+
+OHLCV Source:
+
+GeckoTerminal
+DEX Screener
+
+========================================================
+STRUCTURE MODE VS FLOW MODE
+
+Add engine operating modes.
+
+MODE 1:
+
+STRUCTURE MODE
+
+Requirements:
+
+OHLCV candles available.
+
+Available Metrics:
+
+Acceptance Score
+Demand Return Score
+Demand Expansion Score
+Bounce Velocity
+Shelf Type
+Structure Sequence
+Shelf Defenses
+ATR%
+SD%
+VWAP Position
+Overhead Supply
+Breakout Efficiency
+Confidence Tier
+Runner Potential
+
+Display:
+
+"STRUCTURE MODE ACTIVE"
+
+========================================================
+
+MODE 2:
+
+FLOW MODE
+
+Requirements:
+
+No OHLCV data available.
+
+Purpose:
+
+Provide limited analysis using transaction flow data only.
+
+Display:
+
+"STRUCTURE DATA UNAVAILABLE"
+
+"FLOW MODE ACTIVE"
+
+"Confidence Reduced"
+
+========================================================
+FLOW MODE METRICS
+
+When candles are unavailable:
+
+Still calculate:
+
+Demand Expansion Score (as already set)
+
+Transaction Pressure Score
+
+Overhead Supply
+(if available)
+
+Runner Potential
+(low-confidence version)
+
+========================================================
+TRANSACTION PRESSURE SCORE
+
+Purpose:
+
+Estimate buyer dominance without candles.
+
+Inputs:
+
+Buy Count
+
+Sell Count
+
+Buy USD Volume
+
+Sell USD Volume
+
+Primary Formula:
+
+BuyDominance =
+BuyVolume /
+(BuyVolume + SellVolume)
+
+Score:
+
+≥70% = 100
+
+60–70% = 80
+
+50–60% = 60
+
+40–50% = 40
+
+<40% = 20
+
+Classifications:
+
+Strong Buyer Pressure
+
+Moderate Buyer Pressure
+
+Neutral Flow
+
+Weak Buyer Pressure
+
+Seller Dominated
+
+Display:
+
+Transaction Pressure Score
+
+========================================================
+FLOW MODE RUNNER POTENTIAL
+
+Purpose:
+
+Provide a rough ranking when candles are unavailable.
+
+Use available metrics only.
+
+Examples:
+
+Demand Expansion
+
+Transaction Pressure
+
+Overhead Supply
+
+Do NOT use unavailable metrics.
+
+Display:
+
+Runner Potential
+
+Low
+
+Moderate
+
+High
+
+Very High
+
+Display badge:
+
+"Low Confidence Estimate"
+
+========================================================
+UNAVAILABLE METRIC HANDLING
+
+When candle data is unavailable:
+
+Display:
+
+Acceptance Score: N/A
+
+Demand Return Score: N/A
+
+Bounce Velocity: N/A
+
+Shelf Type: N/A
+
+Structure Sequence: N/A
+
+Shelf Defenses: N/A
+
+ATR%: N/A
+
+SD%: N/A
+
+VWAP Position: N/A
+
+Do NOT substitute fake values.
+
+Do NOT substitute neutral values.
+
+Mark clearly as unavailable.
+
+========================================================
+CONFIDENCE TIER PROTECTION
+
+When operating in FLOW MODE:
+
+Do not generate S Tier.
+
+Maximum possible tier:
+
+B Tier
+
+Reason:
+
+Insufficient structural information.
+
+Example:
+
+Structure Mode:
+S / A / B / C / D
+
+Flow Mode:
+B / C / D only
+
+========================================================
+DATA QUALITY PANEL
+
+Add dedicated panel.
+
+Display:
+
+Market Structure Quality
+
+Values:
+
+High Confidence
+
+Medium Confidence
+
+Low Confidence
+
+Factors:
+
+OHLCV Source
+
+Buy/Sell Source
+
+Transaction Source
+
+Missing Data
+
+Display full breakdown.
+
+========================================================
+FINAL WARNING MESSAGE
+
+When Flow Mode is active:
+
+Display:
+
+"Structural analysis unavailable. Current recommendation is based primarily on transaction flow and demand data. Confidence reduced."One additional change I'd strongly recommend:
+
+
+========================================================
+DATA COVERAGE
+
+Add a "Data Coverage %" metric.
+
+Example:
+
+Data Coverage: 96%
+
+OHLCV: Available
+Transactions: Available
+VWAP: Available
+Demand Expansion: Available
+
+or
+
+Data Coverage: 42%
+
+OHLCV: Missing
+Transactions: Available
+VWAP: Missing
+Demand Expansion: Available
+
+This will let me immediately judge whether you're looking at a fully analyzed setup or a degraded fallback analysis before risking capital.
+
