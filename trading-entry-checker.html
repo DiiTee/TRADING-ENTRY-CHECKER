@@ -1809,7 +1809,8 @@ async function fetchFromCA(ca) {
   apiDiagRow.classList.add('hidden');
   missingFieldsRow.classList.add('hidden');
 
-  window._tecCandles = null; /* reset candle cache for this fetch */
+  window._tecCandles  = null; /* reset candle cache for this fetch */
+  window._tecDexTxns  = null; /* reset tx fallback for structural analysis */
   var fetched    = {};
   var apiResults = [];   /* badge HTML */
   var diagItems  = [];   /* diagnostic panel entries { cls, icon, html } */
@@ -1885,6 +1886,7 @@ async function fetchFromCA(ca) {
         h1: { buys: (txns.h1 && txns.h1.buys)  || 0, sells: (txns.h1 && txns.h1.sells) || 0 },
         m5: { buys: (txns.m5 && txns.m5.buys)  || 0, sells: (txns.m5 && txns.m5.sells) || 0 }
       };
+      window._tecDexTxns = fetched._dexTxns; /* global reference for SA fallback */
 
       var pc = pair.priceChange || {};
       if (pc.m5  !== undefined && pc.m5  !== null) fetched.perf5m  = parseFloat(pc.m5);
@@ -4294,7 +4296,42 @@ function buildEntryBriefingHTML(d, analysis) {
         return t;
       })() },
     { num: '06', label: 'Structural Analysis Scores', text: (function() {
-        if (!sa) return '<span style="color:var(--text-muted);">Structural analysis requires GeckoTerminal candle data — use Fetch Data to populate.</span>';
+        if (!sa) {
+          /* ── Fallback: compute Demand Expansion from DEX Screener tx data ── */
+          var dTx = window._tecDexTxns;
+          var h1b = dTx && parseInt(dTx.h1.buys)  || 0;
+          var h1s = dTx && parseInt(dTx.h1.sells) || 0;
+          var m5b = dTx && parseInt(dTx.m5.buys)  || 0;
+          if (h1b > 0) {
+            var deScore, deSource, deQuality;
+            if (m5b > 0) {
+              /* Method 1 — GeckoTerminal/DEX Screener native buy/sell data (best available) */
+              var prevBuysPerSlice = Math.max(0.1, (h1b - m5b) / 11);
+              var buyGrowth = ((m5b - prevBuysPerSlice) / prevBuysPerSlice) * 100;
+              deScore   = buyGrowth > 50 ? 100 : buyGrowth > 25 ? 85 : buyGrowth > 10 ? 70 :
+                          buyGrowth > 0  ?  55 : buyGrowth > -10 ? 40 : buyGrowth > -25 ? 25 : 10;
+              deSource  = 'DEX Screener Buy/Sell Data';
+              deQuality = 'Medium Confidence';
+            } else {
+              /* Method 2 — DEX Screener transaction counts for buys/sells (first fallback) */
+              var totalH1 = h1b + h1s;
+              var buyRatio = totalH1 > 0 ? h1b / totalH1 : 0.5;
+              deScore   = buyRatio >= 0.65 ? 80 : buyRatio >= 0.55 ? 65 : buyRatio >= 0.45 ? 50 :
+                          buyRatio >= 0.35 ? 35 : 20;
+              deSource  = 'DEX Screener Tx Count Ratio';
+              deQuality = 'Medium Confidence';
+            }
+            var deColor      = deScore >= 75 ? 'var(--safe)' : deScore >= 60 ? 'var(--caution)' : '#ff4757';
+            var dqBadgeColor = '#ffeb3b';
+            var t = '<div style="margin-bottom:7px;padding:4px 8px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.08);font-size:0.72rem;color:#ff9800;">⚠ GeckoTerminal candle data unavailable — showing partial analysis from DEX Screener transaction data. Full analysis requires Fetch Data with a GeckoTerminal-listed pair.</div>';
+            t += 'Demand Expansion: <strong style="color:' + deColor + ';">' + deScore + '/100</strong>';
+            t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.62rem;font-weight:700;color:#111;background:' + dqBadgeColor + ';">' + deQuality + '</span>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">via ' + deSource + '</span><br>';
+            t += '<span style="color:var(--text-muted);font-size:0.72rem;">Acceptance Score, Demand Return, Bounce Velocity, Shelf Analysis: <em>N/A — requires OHLCV candle data.</em></span>';
+            return t;
+          }
+          return '<span style="color:var(--text-muted);">Structural analysis requires GeckoTerminal candle data — use Fetch Data to populate.</span>';
+        }
         var t = '';
         /* Insufficient data warning */
         if (sa.insufficientData) {
@@ -4347,7 +4384,7 @@ function buildEntryBriefingHTML(d, analysis) {
         return t;
       })() },
     { num: '06b', label: 'Recommended Entry Checklist', text: (function() {
-        if (!sa || !sa.entryChecklist) return '<span style="color:var(--text-muted);">Requires Fetch Data to populate.</span>';
+        if (!sa || !sa.entryChecklist) return '<span style="color:var(--text-muted);">Requires GeckoTerminal candle data — use Fetch Data to populate. (DEX Screener partial data shown in 06 above where available.)</span>';
         var rows = sa.entryChecklist.map(function(item) {
           var sc = item.status === 'pass' ? 'var(--safe)' : item.status === 'caution' ? 'var(--caution)' : '#ff4757';
           var sl = item.status === 'pass' ? 'PASS' : item.status === 'caution' ? 'CAUTION' : 'FAIL';
@@ -6342,7 +6379,7 @@ function qecRunAudit() {
   /* Sync shared fields from main app form when QEC field is blank */
   var mc  = qecReadNum('qec_mc',      'fMarketCap', 0);
   var liq = qecReadNum('qec_liq',     'fLiquidity', 0);
-  var vol = qecReadNum('qec_vol',     'fVolume', 0);
+  var vol = qecReadNum('qec_vol',     'fVol24h', 0);
   var h   = qecReadNum('qec_h',       'fHolders', 0);
   var top1= qecReadNum('qec_top1',    'fTH', 0);
   var top10=qecReadNum('qec_top10',   'fT10', 0);
@@ -7100,6 +7137,20 @@ loadSettings();
 loadSmartWallets();
 loadFlaggedWallets();
 renderTable();
+
+/* ── Sync QEC vol/fees fields whenever main form values change ── */
+(function() {
+  function syncVolFeesToQec() {
+    var volEl  = el('fVol24h');
+    var feeEl  = el('fTotalFeeUSD');
+    var qVolEl = el('qec_vol');
+    var qFeeEl = el('qec_fees');
+    if (volEl && qVolEl && volEl.value.trim() !== '') qVolEl.value = volEl.value;
+    if (feeEl && qFeeEl && feeEl.value.trim() !== '') qFeeEl.value = feeEl.value;
+  }
+  var _v = el('fVol24h');    if (_v) _v.addEventListener('input', syncVolFeesToQec);
+  var _f = el('fTotalFeeUSD'); if (_f) _f.addEventListener('input', syncVolFeesToQec);
+})();
 </script>
 <!-- ── Quick-Add Wallet Modal ── -->
 <div id="qaOverlay" class="qa-overlay" style="display:none;" onclick="if(event.target===this)closeQuickAdd()">
