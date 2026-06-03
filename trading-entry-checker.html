@@ -847,6 +847,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .btn-wl-refresh:hover { background: rgba(0,212,255,0.18); }
 .btn-wl-reanalyze { background: rgba(0,255,136,0.07); color: var(--safe);       border: 1px solid rgba(0,255,136,0.2); }
 .btn-wl-reanalyze:hover { background: rgba(0,255,136,0.15); }
+.btn-wl-clear    { background: rgba(159,168,218,0.08); color: var(--text-secondary); border: 1px solid rgba(159,168,218,0.2); }
+.btn-wl-clear:hover  { background: rgba(159,168,218,0.18); color: var(--text-primary); }
 .btn-wl-remove   { background: rgba(255,61,113,0.07); color: var(--skip);       border: 1px solid rgba(255,61,113,0.2); margin-left: auto; }
 .btn-wl-remove:hover { background: rgba(255,61,113,0.18); }
 .btn-watchlist {
@@ -7654,6 +7656,7 @@ function wlRender() {
       '</div>' +
       '<div class="wl-item-actions" onclick="event.stopPropagation();">' +
         '<button class="btn btn-sm btn-wl-load"      onclick="wlLoadCoin(\''    + entry.id + '\')"><i class="fa-solid fa-arrow-up-right-from-square"></i> Load</button>' +
+        '<button class="btn btn-sm btn-wl-clear"     onclick="wlClearInput()"><i class="fa-solid fa-eraser"></i> Clear</button>' +
         '<button class="btn btn-sm btn-wl-refresh"   onclick="wlRefresh(\''     + entry.id + '\')"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>' +
         '<button class="btn btn-sm btn-wl-reanalyze" onclick="wlReanalyze(\''   + entry.id + '\')"><i class="fa-solid fa-magnifying-glass-chart"></i> Re-analyze</button>' +
         '<button class="btn btn-sm btn-wl-remove"    onclick="wlRemove(\''      + entry.id + '\')"><i class="fa-solid fa-trash"></i></button>' +
@@ -7720,6 +7723,15 @@ function wlLoadCoin(id) {
   var coinCard = el('pasteArea') ? el('pasteArea').closest('.card') : null;
   if (coinCard) window.scrollTo({ top: coinCard.offsetTop - 20, behavior: 'smooth' });
   showToast('Loaded ' + (entry.name||'coin') + ' — edit, fetch or analyze', 'info');
+}
+
+function wlClearInput() {
+  /* Trigger the existing Clear All button so all reset logic runs in one place */
+  var clearBtn = el('clearInputBtn');
+  if (clearBtn) clearBtn.click();
+  var coinCard = el('pasteArea') ? el('pasteArea').closest('.card') : null;
+  if (coinCard) window.scrollTo({ top: coinCard.offsetTop - 20, behavior: 'smooth' });
+  showToast('Coin Input cleared — ready for new data', 'info');
 }
 
 async function wlRefresh(id) {
