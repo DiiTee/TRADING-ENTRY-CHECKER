@@ -760,6 +760,106 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
   .bm-flag { font-size: 0.7rem; }
   .bm-auto-title { font-size: 0.64rem; }
 }
+
+/* ── Watchlist ──────────────────────────────────────────────────────────── */
+.wl-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-cyan); color: #0a0e27;
+  border-radius: 50px; font-size: 0.58rem; font-weight: 800;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  margin-left: 6px; font-family: 'Orbitron', sans-serif;
+}
+.wl-controls {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px; flex-wrap: wrap;
+}
+.wl-sort-label {
+  font-size: 0.7rem; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap;
+}
+.wl-empty {
+  text-align: center; padding: 32px 20px;
+  color: var(--text-muted); font-size: 0.85rem; line-height: 1.8;
+}
+.wl-empty i { font-size: 2rem; display: block; margin-bottom: 10px; opacity: 0.35; }
+.wl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 12px;
+}
+.wl-item {
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px;
+  transition: border-color 0.25s, box-shadow 0.25s;
+  position: relative;
+}
+.wl-item:hover { border-color: rgba(0,212,255,0.4); box-shadow: 0 0 16px rgba(0,212,255,0.08); }
+.wl-item-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 10px; flex-wrap: wrap;
+}
+.wl-name {
+  font-family: 'Orbitron', sans-serif; font-weight: 700;
+  font-size: 0.78rem; color: var(--text-primary);
+  flex: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.wl-ticker {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+  color: var(--accent-cyan); background: rgba(0,212,255,0.08);
+  border: 1px solid rgba(0,212,255,0.2);
+  border-radius: 4px; padding: 2px 7px; white-space: nowrap;
+}
+.wl-verdict {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 50px;
+  font-family: 'Orbitron', sans-serif; font-size: 0.6rem;
+  font-weight: 700; letter-spacing: 1px; white-space: nowrap;
+}
+.wl-verdict.safe    { background: rgba(0,255,136,0.12);  color: var(--safe);    border: 1px solid rgba(0,255,136,0.25); }
+.wl-verdict.caution { background: rgba(255,214,0,0.12);  color: var(--caution); border: 1px solid rgba(255,214,0,0.25); }
+.wl-verdict.skip    { background: rgba(255,61,113,0.12); color: var(--skip);    border: 1px solid rgba(255,61,113,0.25); }
+.wl-verdict.unknown { background: rgba(159,168,218,0.08); color: var(--text-muted); border: 1px solid rgba(159,168,218,0.2); }
+.wl-scores { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.wl-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(10,14,39,0.6); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 8px;
+}
+.wl-chip-label { color: var(--text-muted); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.wl-chip-val   { color: var(--text-primary); font-size: 0.68rem; font-weight: 600; }
+.wl-item-meta {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.wl-meta-item { display: flex; flex-direction: column; gap: 1px; }
+.wl-meta-label { font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); opacity: 0.7; }
+.wl-meta-val   { color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 0.63rem; }
+.wl-freshness  { font-size: 0.65rem; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+.wl-item-actions {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  padding-top: 10px; border-top: 1px solid rgba(40,53,147,0.4);
+}
+.btn-wl-load     { background: var(--gradient); color: #0a0e27; font-weight: 700; }
+.btn-wl-load:hover { box-shadow: 0 4px 16px rgba(0,212,255,0.3); transform: translateY(-1px); }
+.btn-wl-refresh  { background: rgba(0,212,255,0.08);  color: var(--accent-cyan); border: 1px solid rgba(0,212,255,0.25); }
+.btn-wl-refresh:hover { background: rgba(0,212,255,0.18); }
+.btn-wl-reanalyze { background: rgba(0,255,136,0.07); color: var(--safe);       border: 1px solid rgba(0,255,136,0.2); }
+.btn-wl-reanalyze:hover { background: rgba(0,255,136,0.15); }
+.btn-wl-remove   { background: rgba(255,61,113,0.07); color: var(--skip);       border: 1px solid rgba(255,61,113,0.2); margin-left: auto; }
+.btn-wl-remove:hover { background: rgba(255,61,113,0.18); }
+.btn-watchlist {
+  background: rgba(255,214,0,0.1); color: var(--caution);
+  border: 1px solid rgba(255,214,0,0.3);
+}
+.btn-watchlist:hover { background: rgba(255,214,0,0.2); }
+.btn-refresh-analysis {
+  background: rgba(0,212,255,0.1); color: var(--accent-cyan);
+  border: 1px solid rgba(0,212,255,0.25);
+}
+.btn-refresh-analysis:hover { background: rgba(0,212,255,0.2); }
+.wl-item.wl-refreshing { opacity: 0.55; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -1004,6 +1104,32 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
         <button class="btn btn-primary btn-sm" id="saveSettingsBtn"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
         <button class="btn btn-warning btn-sm" id="resetSettingsBtn"><i class="fa-solid fa-rotate-left"></i> Reset to Defaults</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Watchlist Card ── -->
+  <div class="card" id="watchlistCard">
+    <div class="card-title collapsed" id="watchlistToggle">
+      <i class="fa-solid fa-star"></i> Watchlist
+      <span class="wl-count" id="wlCount">0</span>
+      <i class="fa-solid fa-chevron-down toggle-icon"></i>
+    </div>
+    <div class="card-body collapsible collapsed" id="watchlistBody" style="max-height:0;">
+      <div class="wl-controls">
+        <span class="wl-sort-label">Sort by:</span>
+        <select id="wlSort" class="settings-input" style="width:auto;padding:6px 10px;font-size:0.78rem;" onchange="wlRender()">
+          <option value="date_desc">Date Added — Newest First</option>
+          <option value="date_asc">Date Added — Oldest First</option>
+          <option value="alpha_asc">Alphabetical A–Z</option>
+          <option value="alpha_desc">Alphabetical Z–A</option>
+        </select>
+        <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="wlClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
+      </div>
+      <div id="wlEmpty" class="wl-empty">
+        <i class="fa-solid fa-star"></i>
+        No coins on watchlist yet.<br>Analyze a coin and click <strong style="color:var(--caution);">Add to Watchlist</strong> to save it here.
+      </div>
+      <div id="wlGrid" class="wl-grid"></div>
     </div>
   </div>
 
@@ -1365,6 +1491,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
         <button class="btn btn-dexscreener" id="buyDexscreenerBtn" title="Open token on Dexscreener in a new window"><i class="fa-solid fa-chart-line"></i> Dexscreener</button>
         <button class="btn btn-soul-scanner" id="buySoulScannerBtn" title="Open Soul Scanner for this token"><i class="fa-solid fa-ghost"></i> Soul Scanner</button>
         <button class="btn btn-coin-ca" id="copyCoinCABtn" title="Copy Coin Name and CA to clipboard"><i class="fa-solid fa-copy"></i> Coin Name &amp; CA</button>
+        <button class="btn btn-watchlist" id="addWatchlistBtn"><i class="fa-solid fa-star"></i> Add to Watchlist</button>
+        <button class="btn btn-refresh-analysis" id="refreshAnalysisBtn"><i class="fa-solid fa-arrows-rotate"></i> Refresh Analysis</button>
         <button class="btn btn-secondary" id="analyzeAnotherBtn"><i class="fa-solid fa-rotate"></i> Analyze Another</button>
       </div>
     </div>
@@ -7353,10 +7481,327 @@ function buildCrossReferenceHTML() {
   '</div>';
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   WATCHLIST — persistent coin tracker with refresh, re-analyze & freshness
+   ═══════════════════════════════════════════════════════════════════════════ */
+var watchlist  = [];
+var WL_KEY     = 'tec_watchlist';
+var WL_FIELDS  = [
+  'fCoin','fCA','fAge','fLiq','fVol','fMcap','fBuy','fSell','fBuyUSD','fSellUSD',
+  'fBuyVolPct','fTH','fT10','fBundle','fBundleCluster','fSingleBundle','fSmart',
+  'fBuzz','fBots','fSnipers','fFirst20','fHolders','fFakeHolders','fFakeVol',
+  'fPerf5m','fLiqLocked','fLiqBurned','fMintable','fFreezable','fDevSold',
+  'fDevWallet','fBondingCurve','fBondingPct','fAMM','fSellTax','fHoneypot',
+  'fVol24h','fTotalFeeSOL','fTotalFeeUSD','fPattern','fNarrative','fNotes','fRugScore'
+];
+
+/* ── Storage ── */
+function wlLoad() {
+  try { watchlist = JSON.parse(localStorage.getItem(WL_KEY) || '[]'); } catch(e) { watchlist = []; }
+  wlRender();
+}
+function wlSave() {
+  try { localStorage.setItem(WL_KEY, JSON.stringify(watchlist)); } catch(e) {}
+  var c = el('wlCount'); if (c) c.textContent = watchlist.length || '0';
+}
+
+/* ── Helpers ── */
+function wlExtractTicker(name) {
+  if (!name) return '—';
+  var m = name.match(/\$([A-Za-z0-9]+)/);
+  if (m) return '$' + m[1].toUpperCase();
+  m = name.match(/\(([A-Za-z0-9]{2,10})\)/);
+  if (m) return '$' + m[1].toUpperCase();
+  return '$' + name.replace(/\s.*/, '').slice(0, 8).toUpperCase();
+}
+function wlGetSecurityVerdict(d) {
+  var bc = d.bundleClusterPct || 0, t10 = d.top10 || 0,
+      sb = d.singleBundlePct  || 0, th  = d.topHolder || 0;
+  if (bc > 25 || t10 > 40 || sb > 15 || th > 12) return 'HIGH';
+  if (bc > 12 || t10 > 28 || sb > 8  || th > 8)  return 'MEDIUM';
+  return 'LOW';
+}
+function wlFreshness(ts) {
+  if (!ts) return { label: '—', color: 'var(--text-muted)' };
+  var m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 5)  return { label: 'Fresh ('               + m + 'm ago)', color: '#00e676' };
+  if (m < 15) return { label: 'Refresh Soon ('         + m + 'm ago)', color: '#ffeb3b' };
+  if (m < 30) return { label: 'Refresh Recommended ('  + m + 'm ago)', color: '#ff9800' };
+  return             { label: '\u26a0 Refresh Now ('    + m + 'm ago)', color: '#ff4757' };
+}
+function wlFmtDate(ts) {
+  if (!ts) return '—';
+  var d = new Date(ts);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/* ── Capture / restore form state ── */
+function wlCaptureForm() {
+  var data = { paste: pasteArea ? pasteArea.value : '' };
+  WL_FIELDS.forEach(function(id) { var e = el(id); if (e) data[id] = e.value; });
+  return data;
+}
+function wlPopulateForm(entry) {
+  var data = entry.formData || {};
+  if (pasteArea && data.paste !== undefined) pasteArea.value = data.paste;
+  WL_FIELDS.forEach(function(id) {
+    var e = el(id);
+    if (e && data[id] !== undefined && data[id] !== null) e.value = data[id];
+  });
+}
+
+/* ── Build / sync watchlist entry from currentAnalysis ── */
+function wlBuildEntry(existingId, existingDateAdded) {
+  if (!currentAnalysis) return null;
+  var d  = currentAnalysis.data;
+  var sa = d.structuralAnalysis || null;
+  return {
+    id:               existingId || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+    name:             d.coin || 'Unknown',
+    ticker:           wlExtractTicker(d.coin),
+    ca:               d.ca || '',
+    dateAdded:        existingDateAdded || Date.now(),
+    lastAnalysisTime: Date.now(),
+    confidenceTier:   sa ? (sa.confidenceTier  || '—') : '—',
+    runnerPotential:  sa ? (sa.runnerPotential  || '—') : '—',
+    entryVerdict:     currentAnalysis.status || '—',
+    securityVerdict:  wlGetSecurityVerdict(d),
+    passPct:          Math.round(currentAnalysis.passPct || 0),
+    formData:         wlCaptureForm()
+  };
+}
+function wlSyncEntry(id) {
+  if (!currentAnalysis) return;
+  var idx = watchlist.findIndex(function(e) { return e.id === id; });
+  if (idx < 0) return;
+  var d  = currentAnalysis.data;
+  var sa = d.structuralAnalysis || null;
+  var orig = watchlist[idx];
+  watchlist[idx] = {
+    id:               orig.id,
+    name:             d.coin || orig.name,
+    ticker:           wlExtractTicker(d.coin) || orig.ticker,
+    ca:               d.ca || orig.ca,
+    dateAdded:        orig.dateAdded,
+    lastAnalysisTime: Date.now(),
+    confidenceTier:   sa ? (sa.confidenceTier || '—') : orig.confidenceTier,
+    runnerPotential:  sa ? (sa.runnerPotential || '—') : orig.runnerPotential,
+    entryVerdict:     currentAnalysis.status || orig.entryVerdict,
+    securityVerdict:  wlGetSecurityVerdict(d),
+    passPct:          Math.round(currentAnalysis.passPct || 0),
+    formData:         wlCaptureForm()
+  };
+}
+
+/* ── Sort ── */
+function wlSorted() {
+  var mode = (el('wlSort') || {}).value || 'date_desc';
+  var arr  = watchlist.slice();
+  if      (mode === 'date_desc')  arr.sort(function(a,b){ return b.dateAdded - a.dateAdded; });
+  else if (mode === 'date_asc')   arr.sort(function(a,b){ return a.dateAdded - b.dateAdded; });
+  else if (mode === 'alpha_asc')  arr.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+  else if (mode === 'alpha_desc') arr.sort(function(a,b){ return (b.name||'').localeCompare(a.name||''); });
+  return arr;
+}
+
+/* ── Render ── */
+function wlRender() {
+  var countEl = el('wlCount'), emptyEl = el('wlEmpty'), gridEl = el('wlGrid');
+  if (!gridEl) return;
+  if (countEl) countEl.textContent = watchlist.length || '0';
+  if (!watchlist.length) {
+    if (emptyEl) emptyEl.style.display = '';
+    gridEl.innerHTML = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  gridEl.innerHTML = wlSorted().map(function(entry) {
+    var vClass   = ['safe','caution','skip'].indexOf((entry.entryVerdict||'').toLowerCase()) >= 0
+                 ? (entry.entryVerdict||'').toLowerCase() : 'unknown';
+    var secColor = entry.securityVerdict === 'HIGH'   ? 'var(--skip)'
+                 : entry.securityVerdict === 'MEDIUM' ? 'var(--caution)'
+                 : entry.securityVerdict === 'LOW'    ? 'var(--safe)' : 'var(--text-muted)';
+    var tierColor= entry.confidenceTier === 'S' ? '#00ffcc'
+                 : entry.confidenceTier === 'A' ? '#00e676'
+                 : entry.confidenceTier === 'B' ? '#ffeb3b'
+                 : entry.confidenceTier === 'C' ? '#ff9800'
+                 : entry.confidenceTier === 'D' ? '#ff4757' : 'var(--text-muted)';
+    var runColor = entry.runnerPotential === 'Very High' ? '#00ffcc'
+                 : entry.runnerPotential === 'High'      ? '#00e676'
+                 : entry.runnerPotential === 'Moderate'  ? '#ffeb3b'
+                 : entry.runnerPotential === 'Low'       ? '#ff9800' : 'var(--text-muted)';
+    var fresh    = wlFreshness(entry.lastAnalysisTime);
+    var caShort  = entry.ca ? entry.ca.slice(0,8) + '\u2026' + entry.ca.slice(-4) : '—';
+
+    return '<div class="wl-item" id="wlItem_' + entry.id + '">' +
+      '<div class="wl-item-header">' +
+        '<span class="wl-name" title="' + (entry.name||'') + '">' + (entry.name||'—') + '</span>' +
+        '<span class="wl-ticker">' + (entry.ticker||'—') + '</span>' +
+        '<span class="wl-verdict ' + vClass + '">' + (entry.entryVerdict||'—') + '</span>' +
+      '</div>' +
+      '<div class="wl-scores">' +
+        '<div class="wl-chip"><span class="wl-chip-label">Pass</span><span class="wl-chip-val">' + (entry.passPct !== undefined ? entry.passPct + '%' : '—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Tier</span><span class="wl-chip-val" style="color:' + tierColor + ';">' + (entry.confidenceTier||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Runner</span><span class="wl-chip-val" style="color:' + runColor + ';">' + (entry.runnerPotential||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Security</span><span class="wl-chip-val" style="color:' + secColor + ';">' + (entry.securityVerdict||'—') + '</span></div>' +
+      '</div>' +
+      '<div class="wl-item-meta">' +
+        '<div class="wl-meta-item"><span class="wl-meta-label">CA</span><span class="wl-meta-val" title="' + (entry.ca||'') + '">' + caShort + '</span></div>' +
+        '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + '</span></div>' +
+        '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + '</span></div>' +
+        '<div class="wl-meta-item"><span class="wl-meta-label">Analysis Freshness</span><span class="wl-freshness wl-fresh-' + entry.id + '" style="color:' + fresh.color + ';">' + fresh.label + '</span></div>' +
+      '</div>' +
+      '<div class="wl-item-actions" onclick="event.stopPropagation();">' +
+        '<button class="btn btn-sm btn-wl-load"      onclick="wlLoadCoin(\''    + entry.id + '\')"><i class="fa-solid fa-arrow-up-right-from-square"></i> Load</button>' +
+        '<button class="btn btn-sm btn-wl-refresh"   onclick="wlRefresh(\''     + entry.id + '\')"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>' +
+        '<button class="btn btn-sm btn-wl-reanalyze" onclick="wlReanalyze(\''   + entry.id + '\')"><i class="fa-solid fa-magnifying-glass-chart"></i> Re-analyze</button>' +
+        '<button class="btn btn-sm btn-wl-remove"    onclick="wlRemove(\''      + entry.id + '\')"><i class="fa-solid fa-trash"></i></button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+/* ── Freshness ticker: update every 30 s without full re-render ── */
+setInterval(function() {
+  watchlist.forEach(function(entry) {
+    var spans = document.querySelectorAll('.wl-fresh-' + entry.id);
+    if (!spans.length) return;
+    var f = wlFreshness(entry.lastAnalysisTime);
+    spans.forEach(function(s) { s.textContent = f.label; s.style.color = f.color; });
+  });
+}, 30000);
+
+/* ── Actions ── */
+function wlAdd() {
+  if (!currentAnalysis) { showToast('Run Analyze Coin first', 'error'); return; }
+  var ca       = currentAnalysis.data.ca || '';
+  var existing = ca ? watchlist.find(function(e) { return e.ca === ca; }) : null;
+  if (existing) {
+    var idx = watchlist.indexOf(existing);
+    watchlist[idx] = wlBuildEntry(existing.id, existing.dateAdded);
+    wlSave(); wlRender();
+    showToast((currentAnalysis.data.coin || 'Coin') + ' watchlist entry updated', 'info');
+  } else {
+    watchlist.push(wlBuildEntry());
+    wlSave(); wlRender();
+    showToast((currentAnalysis.data.coin || 'Coin') + ' added to watchlist \u2605', 'success');
+    /* Auto-expand watchlist card */
+    var body = el('watchlistBody'), tog = el('watchlistToggle');
+    if (body && body.classList.contains('collapsed')) {
+      body.classList.remove('collapsed');
+      body.style.maxHeight = (body.scrollHeight + 2000) + 'px';
+      if (tog) tog.classList.remove('collapsed');
+    }
+  }
+}
+
+function wlRemove(id) {
+  var idx = watchlist.findIndex(function(e) { return e.id === id; });
+  if (idx < 0) return;
+  var name = watchlist[idx].name;
+  watchlist.splice(idx, 1);
+  wlSave(); wlRender();
+  showToast(name + ' removed from watchlist', 'info');
+}
+
+function wlClearAll() {
+  if (!watchlist.length) return;
+  if (!confirm('Clear all ' + watchlist.length + ' watchlist entr' + (watchlist.length === 1 ? 'y' : 'ies') + '?')) return;
+  watchlist = [];
+  wlSave(); wlRender();
+  showToast('Watchlist cleared', 'info');
+}
+
+function wlLoadCoin(id) {
+  var entry = watchlist.find(function(e) { return e.id === id; });
+  if (!entry) return;
+  wlPopulateForm(entry);
+  var coinCard = el('pasteArea') ? el('pasteArea').closest('.card') : null;
+  if (coinCard) window.scrollTo({ top: coinCard.offsetTop - 20, behavior: 'smooth' });
+  showToast('Loaded ' + (entry.name||'coin') + ' — edit, fetch or analyze', 'info');
+}
+
+async function wlRefresh(id) {
+  var entry = watchlist.find(function(e) { return e.id === id; });
+  if (!entry) return;
+  var itemEl = el('wlItem_' + id);
+  if (itemEl) itemEl.classList.add('wl-refreshing');
+  showToast('Fetching latest data for ' + (entry.name||'coin') + '\u2026', 'info');
+  wlPopulateForm(entry);
+  try { await fetchFromCA(entry.ca); } catch(e) {}
+  analyzeCoin();
+  if (currentAnalysis) {
+    wlSyncEntry(id);
+    wlSave(); wlRender();
+    showToast((entry.name||'Coin') + ' refreshed!', 'success');
+  }
+  var itemEl2 = el('wlItem_' + id);
+  if (itemEl2) itemEl2.classList.remove('wl-refreshing');
+}
+
+function wlReanalyze(id) {
+  var entry = watchlist.find(function(e) { return e.id === id; });
+  if (!entry) return;
+  wlPopulateForm(entry);
+  analyzeCoin();
+  if (currentAnalysis) {
+    wlSyncEntry(id);
+    wlSave(); wlRender();
+    showToast((entry.name||'Coin') + ' re-analyzed!', 'success');
+  }
+}
+
+/* ── Refresh Analysis button (current coin, also syncs watchlist if present) ── */
+async function refreshCurrentAnalysis() {
+  var ca = el('fCA') ? el('fCA').value.trim() : '';
+  if (!ca) { showToast('Enter a Contract Address first', 'error'); return; }
+  var btn = el('refreshAnalysisBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Fetching\u2026'; }
+  showToast('Fetching latest data\u2026', 'info');
+  try { await fetchFromCA(ca); } catch(e) {}
+  analyzeCoin();
+  if (currentAnalysis) {
+    var d = currentAnalysis.data;
+    var inWL = d.ca ? watchlist.find(function(e) { return e.ca === d.ca; }) : null;
+    if (inWL) { wlSyncEntry(inWL.id); wlSave(); wlRender(); }
+    showToast('Analysis refreshed!', 'success');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Refresh Analysis'; }
+}
+
+/* ── Watchlist card toggle ── */
+(function() {
+  var tog = el('watchlistToggle');
+  if (!tog) return;
+  tog.addEventListener('click', function() {
+    var body = el('watchlistBody');
+    var collapsed = body.classList.contains('collapsed');
+    if (collapsed) {
+      body.classList.remove('collapsed');
+      body.style.maxHeight = (body.scrollHeight + 2000) + 'px';
+      tog.classList.remove('collapsed');
+    } else {
+      body.classList.add('collapsed');
+      body.style.maxHeight = '0';
+      tog.classList.add('collapsed');
+    }
+  });
+})();
+
+/* ── Wire up new buttons ── */
+(function() {
+  var addWl = el('addWatchlistBtn');
+  if (addWl) addWl.addEventListener('click', wlAdd);
+  var refBtn = el('refreshAnalysisBtn');
+  if (refBtn) refBtn.addEventListener('click', refreshCurrentAnalysis);
+})();
+
 loadSettings();
 loadSmartWallets();
 loadFlaggedWallets();
 renderTable();
+wlLoad();
 
 /* ── Sync QEC vol/fees fields whenever main form values change ──────────────
    Uses Object.defineProperty to intercept both programmatic .value assignments
