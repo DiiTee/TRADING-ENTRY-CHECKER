@@ -862,6 +862,49 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 }
 .btn-refresh-analysis:hover { background: rgba(0,212,255,0.2); }
 .wl-item.wl-refreshing { opacity: 0.55; pointer-events: none; }
+
+/* ── Trading Reminder ──────────────────────────────────────────────────── */
+.trading-reminder {
+  border: 1px solid rgba(255,214,0,0.3);
+  border-left: 4px solid var(--caution);
+  background: rgba(255,214,0,0.05);
+  border-radius: 10px;
+  padding: 14px 20px;
+  margin-bottom: 18px;
+  display: flex; align-items: center; gap: 14px;
+}
+.trading-reminder-icon {
+  font-size: 1.3rem; color: var(--caution); flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(255,214,0,0.5));
+}
+.trading-reminder-text {
+  font-style: italic; font-size: 0.82rem; color: var(--text-secondary);
+  line-height: 1.7;
+}
+.trading-reminder-text strong { color: var(--caution); font-style: normal; }
+.trading-reminder-author {
+  font-size: 0.72rem; color: var(--text-muted); font-style: normal;
+  margin-top: 3px; display: block;
+}
+
+/* ── Bubblemaps Quick Scan ─────────────────────────────────────────────── */
+.bm-quick-scan {
+  background: rgba(10,14,39,0.7); border: 1px solid rgba(0,212,255,0.2);
+  border-radius: 10px; padding: 12px 16px; margin: 10px 0 4px;
+}
+.bm-quick-scan-title {
+  font-family: 'Orbitron', sans-serif; font-size: 0.68rem; font-weight: 700;
+  color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 1.2px;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
+}
+.bm-quick-scan-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 6px 0; font-size: 0.78rem; color: var(--text-secondary);
+  line-height: 1.5;
+}
+.bm-quick-scan-row + .bm-quick-scan-row {
+  border-top: 1px solid rgba(40,53,147,0.4);
+}
 </style>
 </head>
 <body>
@@ -870,6 +913,15 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
     <h1><i class="fa-solid fa-shield-halved"></i> Trading Entry Checker</h1>
     <p class="subtitle">Solana Micro-Cap &amp; Memecoin Filter Dashboard</p>
   </header>
+
+  <div class="trading-reminder">
+    <div class="trading-reminder-icon"><i class="fa-solid fa-quote-left"></i></div>
+    <div class="trading-reminder-text">
+      "Discipline turns a <strong>mid strategy</strong> into a profitable one.<br>
+      Lack of discipline turns a <strong>strong strategy</strong> into a disaster."
+      <span class="trading-reminder-author">— Uncracked</span>
+    </div>
+  </div>
 
   <div class="card" id="settingsCard">
     <div class="card-title collapsed" id="settingsToggle">
@@ -3587,6 +3639,19 @@ function buildSecurityBriefingHTML(d) {
       '<i class="fa-solid fa-circle-nodes"></i> Open Bubblemaps Visual' +
     '</button>' +
 
+    /* 2b. Quick Bubblemaps Scan note */
+    '<div class="bm-quick-scan">' +
+      '<div class="bm-quick-scan-title"><i class="fa-solid fa-magnifying-glass"></i> Quick Bubblemaps Scan</div>' +
+      '<div class="bm-quick-scan-row">' +
+        '<span style="font-size:1rem;flex-shrink:0;">✅</span>' +
+        '<span><strong style="color:var(--safe);">YES — Healthy:</strong> Multiple non-connected bubbles of <strong style="color:var(--safe);">different sizes</strong> scattered across the map</span>' +
+      '</div>' +
+      '<div class="bm-quick-scan-row">' +
+        '<span style="font-size:1rem;flex-shrink:0;">❌</span>' +
+        '<span><strong style="color:var(--skip);">NO — Red Flag:</strong> Giant central cluster with interconnected and/or <strong style="color:var(--skip);">same-size bubbles</strong></span>' +
+      '</div>' +
+    '</div>' +
+
     /* 3. iFrame wrap — hidden until button clicked */
     '<div id="bmIframeWrap" style="display:none;">' +
 
@@ -6293,13 +6358,6 @@ el('exportTxtBtn').addEventListener('click', function() {
     L.push(sep);
     L.push(' * QUICK ENTRY CHECKER:');
     L.push('Verdict  : ' + qr.verdict);
-    L.push('Clean H/MC: ' + qr.hmc.toFixed(2) + (qr.hmc > 5 ? ' [PASS]' : ' [FAIL]'));
-    L.push('L/MC Ratio: ' + qr.lmc.toFixed(1) + '%' + (qr.lmc > 8 ? ' [PASS]' : ' [FAIL]'));
-    L.push('Vol/Liq   : ' + qr.vl.toFixed(1) + 'x' + (qr.vl >= 2 && qr.vl <= 9 ? ' [PASS]' : ' [FAIL]'));
-    if (qr.vfRatio !== null && qr.vfRatio !== undefined) {
-      L.push('V/F Ratio : ' + qr.vfRatio.toFixed(4) + '%' + (qr.vfRatio >= 0.033 ? ' [PASS]' : ' [FAIL — POSSIBLE FAKE VOL]'));
-    }
-    L.push('  QEC SAFETY CHECKLIST');
     qr.checks.forEach(function(c) {
       L.push('  ' + (c.pass ? '[PASS]' : '[FAIL]') + ' ' + c.name + ': ' + c.val);
     });
