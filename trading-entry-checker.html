@@ -7603,7 +7603,7 @@ function wlCaptureForm() {
 }
 function wlPopulateForm(entry) {
   var data = entry.formData || {};
-  if (pasteArea && data.paste !== undefined) pasteArea.value = data.paste;
+  if (pasteArea && data.paste) pasteArea.value = data.paste;
   WL_FIELDS.forEach(function(id) {
     var e = el(id);
     if (e && data[id] !== undefined && data[id] !== null) e.value = data[id];
