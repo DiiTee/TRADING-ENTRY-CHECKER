@@ -1,0 +1,571 @@
+STRUCTURAL ANALYSIS ENGINE REFINEMENTS
+
+OBJECTIVE
+
+Improve reliability of continuation-entry detection while reducing noise and false positives.
+
+========================================================
+IMPROVEMENT #1 — DEMAND EXPANSION STABILITY
+========================================================
+
+Current issue:
+
+Demand Expansion uses:
+
+Recent 15 candles
+
+vs
+
+Previous 15 candles
+
+This can be overly sensitive to a single whale buy or short-term spike.
+
+Required Change:
+
+Create:
+
+Short-Term Expansion Score
+
+using:
+
+Last 15 candles
+
+vs
+
+Previous 15 candles
+
+Create:
+
+Medium-Term Expansion Score
+
+using:
+
+Last 30 candles
+
+vs
+
+Previous 30 candles
+
+Final Demand Expansion Score:
+
+DemandExpansion =
+(ShortTermExpansion × 0.70)
++
+(MediumTermExpansion × 0.30)
+
+Display:
+
+Short-Term Expansion
+Medium-Term Expansion
+Final Demand Expansion
+
+========================================================
+IMPROVEMENT #2 — RUNNER POTENTIAL REWEIGHTING
+========================================================
+
+Current issue:
+
+Runner Potential uses equal weighting.
+
+Continuation setups should prioritize momentum and demand.
+
+Use:
+
+Demand Return Score = 25%
+
+Demand Expansion Score = 25%
+
+Acceptance Score = 20%
+
+Breakout Efficiency = 15%
+
+Overhead Supply Score = 10%
+
+Shelf Type Score = 5%
+
+Display full breakdown.
+
+========================================================
+IMPROVEMENT #3 — BREAKOUT CONFIDENCE
+========================================================
+
+Current issue:
+
+1 successful breakout out of 1 attempt
+and
+5 successful breakouts out of 5 attempts
+
+both score 100%.
+
+This is misleading.
+
+Required:
+
+Create:
+
+Attempt Confidence Modifier
+
+Based on number of breakout attempts.
+
+Example:
+
+1 attempt = 60% confidence
+
+2 attempts = 75%
+
+3 attempts = 85%
+
+4+ attempts = 100%
+
+Final Breakout Efficiency:
+
+BreakoutEfficiency =
+RawEfficiency × AttemptConfidenceModifier
+
+Display:
+
+Attempts
+Successful Breakouts
+Raw Efficiency
+Confidence Modifier
+Final Efficiency
+
+========================================================
+IMPROVEMENT #4 — SHELF QUALITY SCORE
+Current Issue:
+The strongest shelf may still be weak.
+Do NOT block trades solely because shelf quality is weak.
+Instead:
+Create:
+Shelf Quality Score
+Inputs:
+Density Score
+Defense Score
+Volume Score
+Recency Weight
+Output:
+0–100
+Classifications:
+85–100 = Strong Shelf
+70–84 = Healthy Shelf
+55–69 = Developing Shelf
+40–54 = Weak Shelf
+0–39 = Unproven Shelf
+Display:
+Shelf Quality Score
+Shelf Quality Classification
+======================================================== SHELF QUALITY IMPACT
+Strong Shelf
+No penalty
+Healthy Shelf
+No penalty
+Developing Shelf
+Minor Confidence Tier reduction
+Weak Shelf
+Moderate Confidence Tier reduction
+Unproven Shelf
+Major Confidence Tier reduction
+Entry Checklist = FAIL for Shelf Quality
+======================================================== ENTRY CHECKLIST INTEGRATION
+Shelf Quality:
+Strong Shelf = PASS
+Healthy Shelf = PASS
+Developing Shelf = CAUTION
+Weak Shelf = CAUTION
+Unproven Shelf = FAIL
+======================================================== RUNNER POTENTIAL INTEGRATION
+Shelf Quality should contribute to Runner Potential.
+Strong and Healthy shelves increase Runner Potential.
+Developing shelves have neutral impact.
+Weak and Unproven shelves reduce Runner Potential.
+======================================================== DISPLAY REQUIREMENTS
+Display Shelf Quality prominently within Structural Analysis.
+Example:
+Shelf Quality: 82 / 100
+Classification: Healthy Shelf
+Impact:
+No Confidence Penalty
+DATA COVERAGE INDICATOR
+Add:
+Data Coverage %
+Purpose:
+Allow the user to immediately understand how complete the analysis is.
+Examples:
+Data Coverage: 95%
+OHLCV: Available
+Demand Expansion: Available
+VWAP: Available
+Transaction Data: Available
+or
+Data Coverage: 48%
+OHLCV: Missing
+Demand Expansion: Available
+VWAP: Missing
+Transaction Data: Available
+Display prominently near Confidence Tier and Analysis Freshness.
+
+
+========================================================
+
+Also, Add: 
+
+SUPPLY ABSORPTION SCORE
+
+Purpose:
+
+Measure how effectively buyers absorb selling pressure.
+
+Inputs:
+
+Demand Expansion
+
+Volume Expansion
+
+Shelf Defenses
+
+Breakout Efficiency
+
+Output:
+
+0–100
+
+Labels:
+
+Weak
+Moderate
+Strong
+Exceptional
+
+Supply Absorption Score will reflect in the final Structural Analysis Scores & Recommended Entry Checklist as well.
+
+========================================================
+
+ADDITIONAL STRUCTURAL ANALYSIS EXPANSION 
+
+OBJECTIVE
+
+Improve detection of:
+
+- Growing mindshare
+- Whale accumulation
+- Pre-breakout setups
+- Distribution
+- Manipulation traps
+
+========================================================
+HOLDER COUNT MOVEMENT
+========================================================
+
+Purpose:
+
+Measure adoption and mindshare growth.
+
+Preferred Data Sources:
+
+1. Helius (primary source)
+2. Solscan (fallback)
+3. DexScreener (secondary fallback if available)
+
+Track:
+
+Current Holders
+
+Holder Change
+
+Holder Growth %
+
+========================================================
+HOLDER TREND CLASSIFICATION
+========================================================
+
+Rapid Growth
+
+Moderate Growth
+
+Stable
+
+Slow Decline
+
+Rapid Decline
+
+========================================================
+BULLISH SIGNALS
+========================================================
+
+Rising Holders
+
+Rising Holders During Pullbacks
+
+Rising Holders During Consolidation
+
+========================================================
+BEARISH SIGNALS
+========================================================
+
+Falling Holders
+
+Falling Holders During Price Increases
+
+Rapid Holder Loss
+
+========================================================
+HOLDER MOMENTUM SCORE
+========================================================
+
+0-100
+
+Add to Structural Analysis.
+
+========================================================
+VOLUME EXPANSION PATTERN
+========================================================
+
+Analyze:
+
+Volume Trend
+
+Price Trend
+
+========================================================
+BULLISH CONDITIONS
+========================================================
+
+Price Pullback
+
+AND
+
+Volume Increasing
+
+Meaning:
+
+Dip Buyers Active
+
+========================================================
+BEARISH CONDITIONS
+========================================================
+
+Red Candles
+
+AND
+
+Volume Increasing
+
+Meaning:
+
+Aggressive Selling
+
+========================================================
+VOLUME EXPANSION SCORE
+========================================================
+
+0-100
+
+Display:
+
+Bullish
+
+Neutral
+
+Bearish
+
+========================================================
+PRE-BREAKOUT SQUEEZE
+========================================================
+
+Detect:
+
+Price Range Compression
+
+ATR Compression
+
+SD Compression
+
+Liquidity Stability
+
+Acceptance Building
+
+========================================================
+CONFIRMATION REQUIREMENTS
+========================================================
+
+Demand Return >= 65
+
+Acceptance >= 70
+
+Overhead Supply not High
+
+========================================================
+OUTPUT
+========================================================
+
+Pre-Breakout Squeeze
+
+Strong
+
+Moderate
+
+Weak
+
+========================================================
+DOUBLE ACCUMULATION PATTERN
+========================================================
+
+Purpose:
+
+Detect repeated whale accumulation.
+
+Requirements:
+
+Two significant accumulation clusters. 
+
+At similar price levels
+
+Separated in time
+
+Supported by volume
+
+That is: 
+
+Similar Level
+
+= within 5% price deviation
+
+Separated by at least 10 candles
+
+Supported by above-average volume.
+
+
+Display:
+
+Double Accumulation
+
+Confidence Level
+
+========================================================
+TRAP PATTERN DETECTION
+========================================================
+
+Create dedicated section:
+
+Trap Patterns
+
+========================================================
+FAKE BREAKOUT PATTERN
+========================================================
+
+Detect:
+
+Large Green Candle
+
+Breakout Attempt
+
+Volume Expansion Weak
+
+Demand Expansion Weak
+
+Breakout Efficiency Low
+
+Output:
+
+Fake Breakout Risk
+
+========================================================
+BUNDLE PUMP PATTERN
+========================================================
+
+Detect:
+no
+High concentration of early buys
+
+AND
+
+Clustered Wallet Activity
+
+AND
+
+Large ownership concentration
+
+AND
+
+Bundle Evidence
+
+Output:
+
+Bundle Pump Risk
+
+========================================================
+PERFECT CLIMB PATTERN
+========================================================
+
+Detect:
+
+Extended Uptrend
+
+Minimal Pullbacks
+
+Minimal Volatility
+
+Abnormally Consistent Buying
+
+Output:
+
+Perfect Climb Risk
+
+Warning:
+
+Potential Coordinated Manipulation
+
+NOTE: 
+Be cautious with "Perfect Climb Pattern = always manipulation". There are genuine runners that climb smoothly. Label it "Perfect Climb Risk" rather than declaring manipulation outright. That avoids false positives.
+
+========================================================
+EXIT SPIKE PATTERN
+========================================================
+
+Detect:
+
+Large Vertical Wick
+
+Followed By:
+
+Rapid Selling
+
+Large Volume
+
+Demand Collapse
+
+Output:
+
+Exit Spike Risk
+
+========================================================
+TRAP RISK SCORE
+========================================================
+
+0-100
+
+Labels:
+
+Low Risk
+
+Moderate Risk
+
+High Risk
+
+Extreme Risk
+
+========================================================
+CHECKLIST INTEGRATION
+========================================================
+
+Add:
+
+Holder Momentum
+
+Volume Expansion
+
+Pre-Breakout Squeeze
+
+Trap Risk
+
+to the Recommended Entry Checklist.
