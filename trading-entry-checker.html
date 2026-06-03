@@ -3540,91 +3540,308 @@ async function fetchHeliusTopHolders(ca) {
 
 /* ═══════════════════════════════════════════════════════════════ */
 
+/* ─── Dev Reputation ─── */
+function computeDevReputation(d) {
+  var score = 60;
+  var factors = [];
+  var covCount = 0, covTotal = 7;
+
+  var rugNum = null;
+  if (d.rugScore) { rugNum = parseInt(d.rugScore, 10); if (!isNaN(rugNum)) covCount++; else rugNum = null; }
+  if (d.devAddress) covCount++;
+  if (d.devWallet !== undefined && d.devWallet !== null) covCount++;
+  if (d.devSold !== undefined && d.devSold !== null) covCount++;
+  if (d.bundleClusterPct !== undefined && d.bundleClusterPct !== null) covCount++;
+  if (d.fakeVol !== undefined && d.fakeVol !== null) covCount++;
+  if (d.fakeHolders !== undefined && d.fakeHolders !== null) covCount++;
+
+  if (rugNum !== null) {
+    if (rugNum >= 80)      { score += 15; factors.push({ t:'pos', txt:'RugCheck score excellent ('+rugNum+'/100)' }); }
+    else if (rugNum >= 60) { score +=  5; factors.push({ t:'pos', txt:'RugCheck score acceptable ('+rugNum+'/100)' }); }
+    else if (rugNum >= 40) { score -= 10; factors.push({ t:'neg', txt:'RugCheck moderate risk ('+rugNum+'/100)' }); }
+    else                   { score -= 25; factors.push({ t:'neg', txt:'RugCheck high risk ('+rugNum+'/100)' }); }
+  }
+
+  if (d.mintable   === 'Yes') { score -= 20; factors.push({ t:'neg', txt:'Mint authority active — supply not fixed' }); }
+  if (d.freezable  === 'Yes') { score -= 15; factors.push({ t:'neg', txt:'Freeze authority active — wallets can be frozen' }); }
+
+  if (d.devSold === 'Yes')            { score += 10; factors.push({ t:'pos', txt:'Developer sold position — no dev dump pressure' }); }
+  else if ((d.devWallet||0) > 5)      { score -= 15; factors.push({ t:'neg', txt:'Dev holds '+(d.devWallet||0).toFixed(1)+'% unsold — significant dump risk' }); }
+  else if ((d.devWallet||0) > 2)      { score -=  5; factors.push({ t:'neu', txt:'Dev holds '+(d.devWallet||0).toFixed(1)+'% — moderate, watch for exits' }); }
+  else                                { score +=  5; factors.push({ t:'pos', txt:'Dev wallet minimal ('+(d.devWallet||0).toFixed(1)+'%) — low threat' }); }
+
+  if (d.liqBurned === 'Yes')          { score += 10; factors.push({ t:'pos', txt:'LP burned — rug-pull via LP removal impossible' }); }
+  else if (d.liqLocked === 'Yes')     { score +=  5; factors.push({ t:'pos', txt:'LP locked — reduced rug risk' }); }
+  else                                { score -= 15; factors.push({ t:'neg', txt:'LP unprotected — liquidity can be removed anytime' }); }
+
+  var bc = d.bundleClusterPct || 0;
+  if (bc > 25)                          { score -= 20; factors.push({ t:'neg', txt:'High bundle cluster ('+bc.toFixed(1)+'%) — coordinated insider risk' }); }
+  else if (bc > 12)                     { score -= 10; factors.push({ t:'neg', txt:'Moderate bundle presence ('+bc.toFixed(1)+'%)' }); }
+  else if (bc === 0 && d.bundle === 0)  { score +=  5; factors.push({ t:'pos', txt:'No bundle wallets — organic distribution' }); }
+
+  if ((d.fakeVol||0) > 15 || (d.fakeHolders||0) > 15) { score -= 15; factors.push({ t:'neg', txt:'Significant wash trading — metrics artificially inflated' }); }
+  else if ((d.fakeVol||0) > 8 || (d.fakeHolders||0) > 8) { score -= 8; factors.push({ t:'neu', txt:'Moderate wash trading signal — treat volume stats cautiously' }); }
+
+  score = Math.max(0, Math.min(100, score));
+  var label = score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 55 ? 'Neutral' : score >= 35 ? 'Questionable' : 'High Risk';
+  var color = score >= 75 ? '#00e676' : score >= 55 ? '#ffeb3b' : score >= 35 ? '#ff9800' : '#ff4757';
+
+  var covPct   = Math.round((covCount / covTotal) * 100);
+  var confScore = covPct;
+  if (!d.rugScore) confScore = Math.max(0, confScore - 15);
+  var confLabel = confScore >= 70 ? 'High Confidence' : confScore >= 45 ? 'Medium Confidence' : 'Low Confidence';
+
+  return { score:score, label:label, color:color, factors:factors, covPct:covPct, confScore:confScore, confLabel:confLabel };
+}
+
+/* ─── Self-Snipe Detection ─── */
+function computeSelfSniperRisk(d) {
+  var signals = [];
+  if ((d.snipers||0) >= 8)                              signals.push('High sniper count at launch ('+( d.snipers||0)+')');
+  else if ((d.snipers||0) >= 4)                         signals.push('Moderate sniper presence at launch ('+(d.snipers||0)+')');
+  if ((d.bundleClusterPct||0) >= 20)                    signals.push('High bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'% supply coordinated)');
+  else if ((d.bundleClusterPct||0) >= 12)               signals.push('Moderate bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'%)');
+  if ((d.devWallet||0) >= 5 && d.devSold !== 'Yes')    signals.push('Dev holds '+(d.devWallet||0).toFixed(1)+'% unsold');
+  if ((d.fakeVol||0) >= 20)                             signals.push('Heavy fake volume ('+(d.fakeVol||0).toFixed(1)+'%) — artificial pump indicator');
+  else if ((d.fakeVol||0) >= 12)                        signals.push('Moderate fake volume ('+(d.fakeVol||0).toFixed(1)+'%)');
+  if ((d.bots||0) >= 30)                                signals.push('Heavy bot activity at launch ('+(d.bots||0)+' bots)');
+
+  var count = signals.length;
+  var verdict, color;
+  if (count === 0)      { verdict = 'No Evidence'; color = '#00e676'; }
+  else if (count === 1) { verdict = 'Possible';    color = '#ffeb3b'; }
+  else if (count === 2) { verdict = 'Likely';      color = '#ff9800'; }
+  else                  { verdict = 'Confirmed';   color = '#ff4757'; }
+
+  return { verdict:verdict, color:color, signals:signals, count:count };
+}
+
+/* ─── Wallet Cluster Risk ─── */
+function computeWalletClusterRisk(d) {
+  var bc = d.bundleClusterPct || 0, t10 = d.top10 || 0, sn = d.snipers || 0, sb = d.singleBundlePct || 0;
+  var rs = 0;
+  if (bc > 20) rs += 3; else if (bc > 10) rs += 2; else if (bc > 5) rs += 1;
+  if (t10 > 40) rs += 2; else if (t10 > 28) rs += 1;
+  if (sn > 10) rs += 2; else if (sn > 5) rs += 1;
+  if (sb > 15) rs += 2; else if (sb > 8) rs += 1;
+  var level, color;
+  if (rs >= 5) { level = 'High'; color = '#ff4757'; }
+  else if (rs >= 2) { level = 'Medium'; color = '#ff9800'; }
+  else { level = 'Low'; color = '#00e676'; }
+  return { level:level, color:color, score:rs, bundleClust:bc, top10:t10, snipers:sn };
+}
+
+/* ─── Early Buyer Health ─── */
+function computeEarlyBuyerHealth(d) {
+  var score = 50, good = [], bad = [];
+  var bc = d.bundleClusterPct || 0, bn = d.bundle || 0;
+  if (bn === 0)       { score += 20; good.push('No bundle wallets — organic buy-in'); }
+  else if (bc > 25)   { score -= 28; bad.push('Bundle wallets control '+bc.toFixed(1)+'% — highly coordinated entry'); }
+  else if (bc > 12)   { score -= 15; bad.push('Bundle cluster at '+bc.toFixed(1)+'% — possible coordinated buying'); }
+  else                { score -=  5; bad.push('Minor bundle presence ('+bc.toFixed(1)+'%)'); }
+
+  var sn = d.snipers || 0;
+  if (sn === 0)     { score += 12; good.push('No snipers detected — non-targeted launch'); }
+  else if (sn <= 3) { score +=  3; good.push('Low sniper count ('+sn+') — minimal mercenary buying'); }
+  else if (sn <= 8) { score -= 10; bad.push(sn+' snipers — early supply in mercenary hands'); }
+  else              { score -= 18; bad.push('Heavy sniper presence ('+sn+') — coordinated extraction risk'); }
+
+  var fh = d.fakeHolders || 0;
+  if (fh === 0)       { score +=  8; good.push('No fake holders detected'); }
+  else if (fh < 8)    { score -=  3; }
+  else if (fh < 15)   { score -= 12; bad.push(fh.toFixed(1)+'% fake holders — distribution partially artificial'); }
+  else                { score -= 20; bad.push(fh.toFixed(1)+'% fake holders — heavily manipulated'); }
+
+  var fv = d.fakeVol || 0;
+  if (fv === 0)       { score +=  5; good.push('No wash trading detected'); }
+  else if (fv < 8)    { score -=  3; }
+  else if (fv < 15)   { score -= 10; bad.push(fv.toFixed(1)+'% fake volume — some artificial activity'); }
+  else                { score -= 18; bad.push(fv.toFixed(1)+'% fake volume — significant wash trading'); }
+
+  var th = d.topHolder || 0;
+  if (th > 15)              { score -= 12; bad.push('Single whale holds '+th.toFixed(1)+'% — extreme concentration'); }
+  else if (th > 8)          { score -=  5; bad.push('Top holder at '+th.toFixed(1)+'% — notable concentration'); }
+  else if (th > 0 && th < 5){ score +=  5; good.push('Healthy top holder spread ('+th.toFixed(1)+'% max)'); }
+
+  score = Math.max(0, Math.min(100, score));
+  var label, color;
+  if (score >= 75)      { label = 'Organic';             color = '#00e676'; }
+  else if (score >= 60) { label = 'Mostly Organic';      color = '#00e676'; }
+  else if (score >= 42) { label = 'Mixed';               color = '#ffeb3b'; }
+  else if (score >= 28) { label = 'Suspicious';          color = '#ff9800'; }
+  else                  { label = 'Highly Coordinated';  color = '#ff4757'; }
+
+  return { score:score, label:label, color:color, goodSignals:good, badSignals:bad };
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+
 function buildSecurityBriefingHTML(d) {
   var bundleClust = d.bundleClusterPct || 0;
   var top10 = d.top10 || 0;
   var singleB = d.singleBundlePct || 0;
   var topH = d.topHolder || 0;
 
+  /* ── Legacy cabRisk badge (unchanged) ── */
   var cabRisk = 'LOW';
   if (bundleClust > 25 || top10 > 40 || singleB > 15 || topH > 12) cabRisk = 'HIGH';
   else if (bundleClust > 12 || top10 > 28 || singleB > 8 || topH > 8) cabRisk = 'MEDIUM';
-
   var riskCls = cabRisk.toLowerCase();
 
+  /* ── New analysis modules ── */
+  var devRep     = computeDevReputation(d);
+  var selfSnipe  = computeSelfSniperRisk(d);
+  var clusterRisk= computeWalletClusterRisk(d);
+  var ebHealth   = computeEarlyBuyerHealth(d);
+
+  /* ══ Security Checklist — 14 items, PASS=2 CAUTION=1 FAIL=0 ══ */
+  var SEC = [];
+
+  /* 1 — LP Status */
+  var lpOk = d.liqBurned === 'Yes' || d.liqLocked === 'Yes';
+  SEC.push({ label:'LP Status',
+    val: d.liqBurned === 'Yes' ? 'Burned' : d.liqLocked === 'Yes' ? 'Locked' : 'Unprotected',
+    pts: lpOk ? 2 : 0, status: lpOk ? 'PASS' : 'FAIL',
+    note: lpOk ? 'Rug-pull via LP removal '+(d.liqBurned==='Yes'?'impossible':'prevented') : 'Liquidity can be removed at any time' });
+
+  /* 2 — Mint Authority */
+  var mintS = d.mintable === 'No' ? 'PASS' : d.mintable === 'Yes' ? 'FAIL' : 'CAUTION';
+  SEC.push({ label:'Mint Authority', val: d.mintable || 'Unknown',
+    pts: mintS==='PASS'?2:mintS==='CAUTION'?1:0, status:mintS,
+    note: mintS==='PASS'?'Supply is fixed — no inflation risk':mintS==='FAIL'?'New tokens can be minted at will':'Authority status unknown' });
+
+  /* 3 — Freeze Authority */
+  var frzS = d.freezable === 'No' ? 'PASS' : d.freezable === 'Yes' ? 'FAIL' : 'CAUTION';
+  SEC.push({ label:'Freeze Authority', val: d.freezable || 'Unknown',
+    pts: frzS==='PASS'?2:frzS==='CAUTION'?1:0, status:frzS,
+    note: frzS==='PASS'?'Wallets cannot be frozen':frzS==='FAIL'?'Developer can freeze holder wallets':'Authority status unknown' });
+
+  /* 4 — Dev Reputation */
+  var drS = devRep.score >= 70 ? 'PASS' : devRep.score >= 45 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Dev Reputation', val: devRep.label+' ('+devRep.score+')',
+    pts: drS==='PASS'?2:drS==='CAUTION'?1:0, status:drS,
+    note: 'Confidence: '+devRep.confLabel+' ('+devRep.covPct+'% data coverage)' });
+
+  /* 5 — Dev Wallet */
+  var dwS = d.devSold==='Yes'?'PASS':(d.devWallet||0)>5?'FAIL':'CAUTION';
+  SEC.push({ label:'Dev Wallet', val: d.devSold==='Yes'?'Sold':(d.devWallet||0).toFixed(1)+'% held',
+    pts: dwS==='PASS'?2:dwS==='CAUTION'?1:0, status:dwS,
+    note: d.devSold==='Yes'?'No dev sell pressure':'Dev holds '+(d.devWallet||0).toFixed(1)+'% — potential exit risk' });
+
+  /* 6 — Holder Distribution */
+  var t10S = top10 < 25 ? 'PASS' : top10 < 38 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Holder Distribution', val: top10.toFixed(1)+'% (top 10)',
+    pts: t10S==='PASS'?2:t10S==='CAUTION'?1:0, status:t10S,
+    note: top10<25?'Healthy spread — no whale bloc dominance':top10<38?'Moderate concentration — susceptible to coordinated dumps':'High concentration — whale collapses possible' });
+
+  /* 7 — Top Holder Concentration */
+  var thS = topH < 5 ? 'PASS' : topH < 9 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Top Holder', val: topH.toFixed(1)+'% single wallet',
+    pts: thS==='PASS'?2:thS==='CAUTION'?1:0, status:thS,
+    note: topH<5?'Single-wallet exposure is low':topH<9?'Notable stake — monitor for exits':'Outsized single-wallet position — extreme dump risk' });
+
+  /* 8 — Bundle Risk */
+  var brS = bundleClust < 10 ? 'PASS' : bundleClust < 20 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Bundle Risk', val: (d.bundle||0)+' wallets ('+bundleClust.toFixed(1)+'%)',
+    pts: brS==='PASS'?2:brS==='CAUTION'?1:0, status:brS,
+    note: bundleClust<10?'Bundle concentration within acceptable range':bundleClust<20?'Notable bundle exposure — watch for coordinated exits':'High bundle concentration — coordinated dump risk is real' });
+
+  /* 9 — Volume Authenticity */
+  var vaS = (d.fakeVol||0) < 8 ? 'PASS' : (d.fakeVol||0) < 18 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Volume Authenticity', val: (d.fakeVol||0).toFixed(1)+'% fake vol',
+    pts: vaS==='PASS'?2:vaS==='CAUTION'?1:0, status:vaS,
+    note: (d.fakeVol||0)<8?'Volume metrics appear genuine':'Wash trading detected — reported volume is inflated' });
+
+  /* 10 — Sniper / Bot Risk */
+  var snN = d.snipers || 0;
+  var srS = snN < 4 ? 'PASS' : snN < 9 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Sniper / Bot Risk', val: snN+' snipers · '+(d.bots||0)+' bots',
+    pts: srS==='PASS'?2:srS==='CAUTION'?1:0, status:srS,
+    note: snN<4?'Low sniper activity — clean launch profile':snN<9?'Moderate snipers — some mercenary supply overhead':'Heavy sniper presence — expect rotation pressure on pumps' });
+
+  /* 11 — Contract Security */
+  var rugNum2 = d.rugScore ? parseInt(d.rugScore,10) : null;
+  if (rugNum2 !== null && isNaN(rugNum2)) rugNum2 = null;
+  var csS = (d.mintable!=='Yes' && d.freezable!=='Yes' && (rugNum2===null||rugNum2>=60)) ? 'PASS'
+          : (d.mintable==='Yes' || d.freezable==='Yes' || (rugNum2!==null && rugNum2<40)) ? 'FAIL' : 'CAUTION';
+  SEC.push({ label:'Contract Security', val: d.rugScore || (d.mintable!=='Yes'&&d.freezable!=='Yes'?'Clean':'Risk Flags'),
+    pts: csS==='PASS'?2:csS==='CAUTION'?1:0, status:csS,
+    note: csS==='PASS'?'No critical contract risks detected':'Contract has one or more elevated risk flags' });
+
+  /* 12 — Cabal Concentration */
+  var ccS = clusterRisk.level==='Low'?'PASS':clusterRisk.level==='Medium'?'CAUTION':'FAIL';
+  SEC.push({ label:'Cabal Concentration', val: clusterRisk.level+' cluster risk',
+    pts: ccS==='PASS'?2:ccS==='CAUTION'?1:0, status:ccS,
+    note: 'Bundle + top-10 + sniper composite cluster assessment' });
+
+  /* 13 — Early Buyer Health */
+  var ebS = ebHealth.score >= 60 ? 'PASS' : ebHealth.score >= 38 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Early Buyer Health', val: ebHealth.label+' ('+ebHealth.score+'/100)',
+    pts: ebS==='PASS'?2:ebS==='CAUTION'?1:0, status:ebS,
+    note: ebHealth.score>=60?'Buy-in pattern appears organic':'Coordinated or artificial early accumulation detected' });
+
+  /* 14 — Self-Snipe Risk */
+  var ssS = selfSnipe.verdict==='No Evidence'?'PASS':selfSnipe.verdict==='Possible'?'CAUTION':'FAIL';
+  SEC.push({ label:'Self-Snipe Risk', val: selfSnipe.verdict,
+    pts: ssS==='PASS'?2:ssS==='CAUTION'?1:0, status:ssS,
+    note: selfSnipe.count>0?selfSnipe.signals[0]:'No self-snipe signals detected' });
+
+  /* ── Security Tier scoring ── */
+  var totalPts = SEC.reduce(function(s,i){ return s+i.pts; }, 0);
+  var maxPts   = SEC.length * 2;
+  var secPct   = totalPts / maxPts;
+  var failCnt  = SEC.filter(function(i){ return i.status==='FAIL'; }).length;
+  var cautCnt  = SEC.filter(function(i){ return i.status==='CAUTION'; }).length;
+  var passCnt  = SEC.filter(function(i){ return i.status==='PASS'; }).length;
+  var critFails= SEC.filter(function(i){ return i.status==='FAIL' && ['LP Status','Mint Authority','Bundle Risk','Self-Snipe Risk'].indexOf(i.label)!==-1; }).length;
+
+  var secTier, secVerdict, secTC, secVC;
+  if      (secPct >= 0.82 && failCnt === 0)  { secTier='A'; secVerdict='SAFE';          secTC='#00ffcc'; secVC='#00e676'; }
+  else if (secPct >= 0.64 && critFails === 0) { secTier='B'; secVerdict='MODERATE RISK'; secTC='#00e676'; secVC='#ffeb3b'; }
+  else if (secPct >= 0.43)                    { secTier='C'; secVerdict='HIGH RISK';     secTC='#ffeb3b'; secVC='#ff9800'; }
+  else                                        { secTier='D'; secVerdict='AVOID';         secTC='#ff9800'; secVC='#ff4757'; }
+  if (critFails >= 2 || failCnt >= 5)                          { secTier='D'; secVerdict='AVOID';         secTC='#ff9800'; secVC='#ff4757'; }
+  else if (critFails >= 1 && secVerdict==='SAFE')              { secTier='B'; secVerdict='MODERATE RISK'; secTC='#00e676'; secVC='#ffeb3b'; }
+
+  /* ── Existing briefing list (preserved) ── */
   var items = [];
-
-  if ((d.bundle || 0) === 0) {
-    items.push({ cls: '', text: 'No bundle wallets detected — distribution appears organic.' });
+  if ((d.bundle||0)===0) {
+    items.push({ cls:'', text:'No bundle wallets detected — distribution appears organic.' });
   } else {
-    var bundleVerdict = singleB > 15 ? 'danger' : singleB > 8 ? 'warn' : '';
-    items.push({ cls: bundleVerdict, text: (d.bundle || 0) + ' bundle wallet' + ((d.bundle || 0) !== 1 ? 's' : '') + ' identified, controlling ~' + bundleClust.toFixed(1) + '% of supply combined (largest actor: ' + singleB.toFixed(1) + '%). ' + (singleB > 15 ? 'Single entity holds outsized influence — coordinated dump risk is real.' : singleB > 8 ? 'Notable single bundle exposure — monitor for exit moves.' : 'Bundle concentration is within tolerable range.') });
+    var bundleVerdict = singleB>15?'danger':singleB>8?'warn':'';
+    items.push({ cls:bundleVerdict, text:(d.bundle||0)+' bundle wallet'+((d.bundle||0)!==1?'s':'')+' identified, controlling ~'+bundleClust.toFixed(1)+'% of supply combined (largest actor: '+singleB.toFixed(1)+'%). '+(singleB>15?'Single entity holds outsized influence — coordinated dump risk is real.':singleB>8?'Notable single bundle exposure — monitor for exit moves.':'Bundle concentration is within tolerable range.') });
   }
-
-  var t10cls = top10 > 40 ? 'danger' : top10 > 28 ? 'warn' : '';
-  items.push({ cls: t10cls, text: 'Top 10 wallets control ' + top10.toFixed(1) + '% of supply (top holder: ' + topH.toFixed(1) + '%). ' + (top10 > 40 ? 'Highly concentrated — whale collapses are possible with minimal co-ordination.' : top10 > 28 ? 'Moderate concentration — susceptible to whale-led sell-offs.' : 'Healthy distribution. No single bloc can dominate price alone.') });
-
-  var lpLine = '';
-  if (d.liqBurned === 'Yes') lpLine = 'LP burned — permanent liquidity floor is locked in. Cannot be rug-pulled via LP removal.';
-  else if (d.liqLocked === 'Yes') lpLine = 'LP locked — liquidity is secured. Verify lock duration and locker contract before entry.';
-  else lpLine = 'LP is neither locked nor burned. Developer can remove liquidity at any time.';
-  var lpCls = (d.liqBurned !== 'Yes' && d.liqLocked !== 'Yes') ? 'danger' : '';
-  items.push({ cls: lpCls, text: lpLine });
-
-  if (d.mintable === 'Yes') items.push({ cls: 'danger', text: 'Mint authority is ACTIVE — new tokens can be created at will, diluting every holder.' });
-  else items.push({ cls: '', text: 'Mint authority disabled — total supply is fixed. No inflation risk.' });
-
-  if (d.freezable === 'Yes') items.push({ cls: 'danger', text: 'Freeze authority is ACTIVE — individual wallets can be locked by the contract owner.' });
-  else items.push({ cls: '', text: 'Freeze authority disabled — your wallet cannot be locked out.' });
-
-  var devLine = '';
-  if (d.devSold === 'Yes') devLine = 'Dev has already sold out of the ' + (d.devWallet || 0).toFixed(1) + '% position. Dev sell pressure is fully neutralized — this is a positive signal.';
-  else if ((d.devWallet || 0) > 5) devLine = 'Dev still holds ' + (d.devWallet || 0).toFixed(1) + '% — elevated dump risk. Watch for wallet movement.';
-  else if ((d.devWallet || 0) > 2) devLine = 'Dev holds ' + (d.devWallet || 0).toFixed(1) + '% — moderate risk. Position is manageable but unsold.';
-  else devLine = 'Dev wallet is minimal at ' + (d.devWallet || 0).toFixed(1) + '% — low direct dump threat.';
-  var devCls = (d.devSold !== 'Yes' && (d.devWallet || 0) > 5) ? 'danger' : (d.devSold !== 'Yes' && (d.devWallet || 0) > 2) ? 'warn' : '';
-  items.push({ cls: devCls, text: devLine });
-
-  if ((d.fakeHolders || 0) > 15 || (d.fakeVol || 0) > 15) {
-    items.push({ cls: 'danger', text: 'Wash trading detected: ' + (d.fakeHolders || 0).toFixed(1) + '% fake holders, ' + (d.fakeVol || 0).toFixed(1) + '% fake volume. The reported metrics are artificially inflated.' });
-  } else if ((d.fakeHolders || 0) > 8 || (d.fakeVol || 0) > 8) {
-    items.push({ cls: 'warn', text: 'Moderate wash trading signal: ' + (d.fakeHolders || 0).toFixed(1) + '% fake holders, ' + (d.fakeVol || 0).toFixed(1) + '% fake volume. Take volume stats with caution.' });
-  }
-
-  var snipersN = d.snipers || 0;
-  var botsN = d.bots || 0;
-  var snipeCls = snipersN > 10 || botsN > 30 ? 'warn' : '';
-  items.push({ cls: snipeCls, text: snipersN + ' snipers and ' + botsN + ' bots detected at launch. ' + (snipersN > 10 ? 'Heavy sniper presence — early supply is in mercenary hands. Expect rotation pressure.' : snipersN > 5 ? 'Moderate sniper activity — watch for coordinated exits on pumps.' : 'Sniper activity is within normal range.') });
-
-  var adviceCls = cabRisk === 'HIGH' ? 'danger' : cabRisk === 'MEDIUM' ? 'warn' : '';
-  var adviceText = cabRisk === 'HIGH'
-    ? 'CAUTION: Multiple red flags present. If trading, keep size under 0.5% of portfolio and set a hard stop at -25%. Watch bundle wallet exits in real time.'
-    : cabRisk === 'MEDIUM'
-    ? 'Trade with reduced size (1–2% of portfolio max). Set a firm stop at the identified floor and monitor large-wallet transactions before adding.'
-    : 'Distribution looks healthy relative to the criteria. Apply normal micro-cap risk management — size appropriately and trail your stop with the floor.';
-
-  /* Sort: danger first, then warn, then neutral — most critical always at top */
-  var _sev = { 'danger': 2, 'warn': 1, '': 0 };
-  items.sort(function(a, b) { return _sev[b.cls] - _sev[a.cls]; });
-
+  var t10cls = top10>40?'danger':top10>28?'warn':'';
+  items.push({ cls:t10cls, text:'Top 10 wallets control '+top10.toFixed(1)+'% of supply (top holder: '+topH.toFixed(1)+'%). '+(top10>40?'Highly concentrated — whale collapses are possible with minimal co-ordination.':top10>28?'Moderate concentration — susceptible to whale-led sell-offs.':'Healthy distribution. No single bloc can dominate price alone.') });
+  var lpLine = d.liqBurned==='Yes'?'LP burned — permanent liquidity floor is locked in. Cannot be rug-pulled via LP removal.':d.liqLocked==='Yes'?'LP locked — liquidity is secured. Verify lock duration and locker contract before entry.':'LP is neither locked nor burned. Developer can remove liquidity at any time.';
+  items.push({ cls:(d.liqBurned!=='Yes'&&d.liqLocked!=='Yes')?'danger':'', text:lpLine });
+  if (d.mintable==='Yes') items.push({ cls:'danger', text:'Mint authority is ACTIVE — new tokens can be created at will, diluting every holder.' });
+  else items.push({ cls:'', text:'Mint authority disabled — total supply is fixed. No inflation risk.' });
+  if (d.freezable==='Yes') items.push({ cls:'danger', text:'Freeze authority is ACTIVE — individual wallets can be locked by the contract owner.' });
+  else items.push({ cls:'', text:'Freeze authority disabled — your wallet cannot be locked out.' });
+  var devLine = d.devSold==='Yes'?'Dev has already sold out of the '+(d.devWallet||0).toFixed(1)+'% position. Dev sell pressure is fully neutralized — this is a positive signal.':(d.devWallet||0)>5?'Dev still holds '+(d.devWallet||0).toFixed(1)+'% — elevated dump risk. Watch for wallet movement.':(d.devWallet||0)>2?'Dev holds '+(d.devWallet||0).toFixed(1)+'% — moderate risk. Position is manageable but unsold.':'Dev wallet is minimal at '+(d.devWallet||0).toFixed(1)+'% — low direct dump threat.';
+  var devCls = (d.devSold!=='Yes'&&(d.devWallet||0)>5)?'danger':(d.devSold!=='Yes'&&(d.devWallet||0)>2)?'warn':'';
+  items.push({ cls:devCls, text:devLine });
+  if ((d.fakeHolders||0)>15||(d.fakeVol||0)>15) { items.push({ cls:'danger', text:'Wash trading detected: '+(d.fakeHolders||0).toFixed(1)+'% fake holders, '+(d.fakeVol||0).toFixed(1)+'% fake volume. The reported metrics are artificially inflated.' }); }
+  else if ((d.fakeHolders||0)>8||(d.fakeVol||0)>8) { items.push({ cls:'warn', text:'Moderate wash trading signal: '+(d.fakeHolders||0).toFixed(1)+'% fake holders, '+(d.fakeVol||0).toFixed(1)+'% fake volume. Take volume stats with caution.' }); }
+  var snipersN=d.snipers||0, botsN=d.bots||0;
+  items.push({ cls:snipersN>10||botsN>30?'warn':'', text:snipersN+' snipers and '+botsN+' bots detected at launch. '+(snipersN>10?'Heavy sniper presence — early supply is in mercenary hands. Expect rotation pressure.':snipersN>5?'Moderate sniper activity — watch for coordinated exits on pumps.':'Sniper activity is within normal range.') });
+  var adviceCls = cabRisk==='HIGH'?'danger':cabRisk==='MEDIUM'?'warn':'';
+  var adviceText = cabRisk==='HIGH'?'CAUTION: Multiple red flags present. If trading, keep size under 0.5% of portfolio and set a hard stop at -25%. Watch bundle wallet exits in real time.':cabRisk==='MEDIUM'?'Trade with reduced size (1–2% of portfolio max). Set a firm stop at the identified floor and monitor large-wallet transactions before adding.':'Distribution looks healthy relative to the criteria. Apply normal micro-cap risk management — size appropriately and trail your stop with the floor.';
+  var _sev = { 'danger':2, 'warn':1, '':0 };
+  items.sort(function(a,b){ return _sev[b.cls]-_sev[a.cls]; });
   var listHTML = items.map(function(item, idx) {
     var extra = '';
-    if (item.cls === 'danger') {
-      /* Most prominent: red-tinted row, bold icon, slightly larger */
-      extra = ' style="background:rgba(255,61,113,0.07);border-radius:6px;padding:7px 10px 7px 18px;' +
-              'font-size:0.8rem;font-weight:600;margin-bottom:5px;"';
-      var prefix = idx === 0
-        ? '<i class="fa-solid fa-triangle-exclamation" style="color:var(--skip);margin-right:6px;"></i>'
-        : '<i class="fa-solid fa-circle-exclamation" style="color:var(--skip);margin-right:6px;font-size:0.75rem;"></i>';
-      return '<li class="' + item.cls + '"' + extra + '>' + prefix + item.text + '</li>';
+    if (item.cls==='danger') {
+      extra=' style="background:rgba(255,61,113,0.07);border-radius:6px;padding:7px 10px 7px 18px;font-size:0.8rem;font-weight:600;margin-bottom:5px;"';
+      var prefix = idx===0?'<i class="fa-solid fa-triangle-exclamation" style="color:var(--skip);margin-right:6px;"></i>':'<i class="fa-solid fa-circle-exclamation" style="color:var(--skip);margin-right:6px;font-size:0.75rem;"></i>';
+      return '<li class="'+item.cls+'"'+extra+'>'+prefix+item.text+'</li>';
     }
-    if (item.cls === 'warn') {
-      extra = ' style="background:rgba(255,214,0,0.05);border-radius:6px;padding:5px 10px 5px 18px;margin-bottom:3px;"';
-      return '<li class="' + item.cls + '"' + extra + '>' +
-             '<i class="fa-solid fa-circle-dot" style="color:var(--caution);margin-right:6px;font-size:0.7rem;"></i>' +
-             item.text + '</li>';
+    if (item.cls==='warn') {
+      extra=' style="background:rgba(255,214,0,0.05);border-radius:6px;padding:5px 10px 5px 18px;margin-bottom:3px;"';
+      return '<li class="'+item.cls+'"'+extra+'><i class="fa-solid fa-circle-dot" style="color:var(--caution);margin-right:6px;font-size:0.7rem;"></i>'+item.text+'</li>';
     }
-    return '<li class="' + item.cls + '">' + item.text + '</li>';
+    return '<li class="'+item.cls+'">'+item.text+'</li>';
   }).join('');
 
   /* ── Bubblemaps / Hybrid Decision Engine Section ── */
@@ -3725,9 +3942,115 @@ function buildSecurityBriefingHTML(d) {
     '<div class="bm-sep"></div>' +
     '</div>';
 
+  /* ══ Build new HTML sections ══ */
+  var nt = '';
+
+  /* ── Security Tier + Verdict Banner ── */
+  nt += '<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:stretch;">';
+  nt += '<div style="min-width:110px;padding:8px 14px;border-left:4px solid '+secTC+';background:rgba(0,0,0,0.28);border-radius:4px;flex-shrink:0;">';
+  nt += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:1px;margin-bottom:1px;">SECURITY TIER</div>';
+  nt += '<div style="font-size:2.4rem;font-weight:900;color:'+secTC+';letter-spacing:3px;line-height:1;">'+secTier+'</div>';
+  nt += '<div style="color:var(--text-muted);font-size:0.62rem;margin-top:2px;">'+totalPts+'/'+maxPts+' pts</div>';
+  nt += '</div>';
+  nt += '<div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.28);border-radius:4px;border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;justify-content:center;">';
+  nt += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:1px;margin-bottom:3px;">FINAL SECURITY VERDICT</div>';
+  nt += '<div style="font-size:1.35rem;font-weight:900;color:'+secVC+';letter-spacing:2px;">'+secVerdict+'</div>';
+  nt += '<div style="color:var(--text-muted);font-size:0.63rem;margin-top:3px;">'+failCnt+' FAIL &nbsp;·&nbsp; '+cautCnt+' CAUTION &nbsp;·&nbsp; '+passCnt+' PASS (of '+SEC.length+' checks)</div>';
+  nt += '</div>';
+  nt += '</div>';
+
+  /* ── Security Checklist ── */
+  nt += '<div style="margin-bottom:10px;">';
+  nt += '<div style="color:var(--text-secondary);font-size:0.62rem;font-weight:700;letter-spacing:0.8px;margin-bottom:5px;"><i class="fa-solid fa-shield-halved" style="margin-right:5px;"></i>SECURITY CHECKLIST <span style="color:var(--text-muted);font-weight:400;">— PASS=2pts · CAUTION=1pt · FAIL=0pts</span></div>';
+  nt += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:3px;">';
+  SEC.forEach(function(item) {
+    var bg = item.status==='PASS'?'rgba(0,230,118,0.05)':item.status==='FAIL'?'rgba(255,71,87,0.08)':'rgba(255,214,0,0.05)';
+    var bc = item.status==='PASS'?'rgba(0,230,118,0.2)':item.status==='FAIL'?'rgba(255,71,87,0.3)':'rgba(255,214,0,0.2)';
+    var sc = item.status==='PASS'?'#00e676':item.status==='FAIL'?'#ff4757':'#ffeb3b';
+    nt += '<div style="padding:5px 8px;background:'+bg+';border:1px solid '+bc+';border-radius:3px;">';
+    nt += '<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;">';
+    nt += '<span style="font-size:0.67rem;color:var(--text-muted);">'+item.label+'</span>';
+    nt += '<span style="font-size:0.60rem;font-weight:700;color:'+sc+';white-space:nowrap;">'+item.status+' ('+item.pts+')</span>';
+    nt += '</div>';
+    nt += '<div style="font-size:0.68rem;color:'+sc+';font-weight:600;line-height:1.3;">'+item.val+'</div>';
+    nt += '<div style="font-size:0.61rem;color:rgba(255,255,255,0.38);line-height:1.3;">'+item.note+'</div>';
+    nt += '</div>';
+  });
+  nt += '</div></div>';
+
+  /* ── Dev Reputation ── */
+  nt += '<div style="margin-bottom:9px;padding:8px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+devRep.color+';">';
+  nt += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:5px;">';
+  nt += '<div><span style="color:var(--text-secondary);font-size:0.60rem;font-weight:700;letter-spacing:0.8px;">DEV REPUTATION</span><br>';
+  nt += '<strong style="color:'+devRep.color+';font-size:1.05em;">'+devRep.label+'</strong>';
+  nt += ' <span style="color:'+devRep.color+';font-size:0.75rem;font-weight:700;">'+devRep.score+'/100</span></div>';
+  var confC = devRep.covPct>=70?'#00e676':devRep.covPct>=45?'#ffeb3b':'#ff9800';
+  nt += '<div style="text-align:right;font-size:0.63rem;">';
+  nt += '<span style="color:'+confC+';font-weight:700;">'+devRep.confLabel+'</span><br>';
+  nt += '<span style="color:var(--text-muted);">Coverage: '+devRep.covPct+'%</span></div>';
+  nt += '</div>';
+  if (d.devAddress) nt += '<div style="font-size:0.61rem;color:var(--text-muted);margin-bottom:4px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;">Deployer: '+d.devAddress.slice(0,8)+'…'+d.devAddress.slice(-6)+'</div>';
+  nt += '<div style="display:flex;flex-wrap:wrap;gap:3px;">';
+  devRep.factors.forEach(function(f) {
+    var fc = f.t==='pos'?'#00e676':f.t==='neg'?'#ff4757':'#ffeb3b';
+    var fi = f.t==='pos'?'✓':f.t==='neg'?'✗':'·';
+    nt += '<div style="font-size:0.64rem;color:'+fc+';padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:3px;">'+fi+' '+f.txt+'</div>';
+  });
+  nt += '</div>';
+  if (devRep.covPct < 50) nt += '<div style="margin-top:5px;font-size:0.63rem;color:#ff9800;">⚠ Low data coverage — Dev Reputation is an estimate. Missing data alone does not indicate High Risk.</div>';
+  nt += '</div>';
+
+  /* ── Early Buyer Analysis ── */
+  nt += '<div style="margin-bottom:9px;padding:8px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+ebHealth.color+';">';
+  nt += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:5px;">';
+  nt += '<div><span style="color:var(--text-secondary);font-size:0.60rem;font-weight:700;letter-spacing:0.8px;">EARLY BUYER ANALYSIS</span><br>';
+  nt += '<strong style="color:'+ebHealth.color+';">'+ebHealth.label+'</strong>';
+  nt += ' <span style="color:var(--text-muted);font-size:0.72rem;">('+ebHealth.score+'/100)</span></div>';
+  nt += '<div style="font-size:0.63rem;color:var(--text-muted);">'+ebHealth.goodSignals.length+' healthy &nbsp;·&nbsp; '+ebHealth.badSignals.length+' danger</div>';
+  nt += '</div>';
+  if (ebHealth.goodSignals.length > 0) {
+    nt += '<div style="font-size:0.62rem;color:var(--text-muted);font-weight:700;letter-spacing:0.5px;margin-bottom:2px;">HEALTHY SIGNALS</div>';
+    nt += '<div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:4px;">';
+    ebHealth.goodSignals.forEach(function(s){ nt += '<div style="font-size:0.63rem;color:#00e676;padding:2px 6px;background:rgba(0,230,118,0.06);border-radius:3px;">✓ '+s+'</div>'; });
+    nt += '</div>';
+  }
+  if (ebHealth.badSignals.length > 0) {
+    nt += '<div style="font-size:0.62rem;color:var(--text-muted);font-weight:700;letter-spacing:0.5px;margin-bottom:2px;">DANGER SIGNALS</div>';
+    nt += '<div style="display:flex;flex-wrap:wrap;gap:2px;">';
+    ebHealth.badSignals.forEach(function(s){ nt += '<div style="font-size:0.63rem;color:#ff4757;padding:2px 6px;background:rgba(255,71,87,0.06);border-radius:3px;">✗ '+s+'</div>'; });
+    nt += '</div>';
+  }
+  nt += '</div>';
+
+  /* ── Wallet Cluster Risk + Self-Snipe Detection ── */
+  nt += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
+  /* Cluster */
+  nt += '<div style="flex:1;min-width:160px;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+clusterRisk.color+';">';
+  nt += '<div style="color:var(--text-secondary);font-size:0.60rem;font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">WALLET CLUSTER RISK</div>';
+  nt += '<strong style="color:'+clusterRisk.color+';font-size:1.05em;">'+clusterRisk.level+'</strong>';
+  nt += '<div style="font-size:0.63rem;color:var(--text-muted);margin-top:2px;">Bundles: '+clusterRisk.bundleClust.toFixed(1)+'% &nbsp;·&nbsp; Top 10: '+clusterRisk.top10.toFixed(1)+'% &nbsp;·&nbsp; Snipers: '+clusterRisk.snipers+'</div>';
+  nt += '<div style="font-size:0.62rem;color:rgba(255,255,255,0.38);margin-top:2px;">'+(clusterRisk.level==='Low'?'Wallet interactions appear independent':'clusterRisk.level'==='Medium'?'Moderate overlap — possible shared funding':'High coordination signal — funding or cluster risk elevated')+'</div>';
+  nt += '</div>';
+  /* Self-Snipe */
+  nt += '<div style="flex:1;min-width:160px;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+selfSnipe.color+';">';
+  nt += '<div style="color:var(--text-secondary);font-size:0.60rem;font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">SELF-SNIPE DETECTION</div>';
+  nt += '<strong style="color:'+selfSnipe.color+';font-size:1.05em;">'+selfSnipe.verdict+'</strong>';
+  nt += ' <span style="color:var(--text-muted);font-size:0.63rem;">('+selfSnipe.count+' signal'+(selfSnipe.count!==1?'s':'')+')</span>';
+  if (selfSnipe.signals.length > 0) {
+    nt += '<div style="margin-top:3px;display:flex;flex-direction:column;gap:2px;">';
+    selfSnipe.signals.forEach(function(s){ nt += '<div style="font-size:0.62rem;color:'+selfSnipe.color+';">⚑ '+s+'</div>'; });
+    nt += '</div>';
+  } else {
+    nt += '<div style="font-size:0.62rem;color:rgba(255,255,255,0.38);margin-top:3px;">No independent signals — launch appears clean</div>';
+  }
+  nt += '<div style="font-size:0.58rem;color:rgba(255,255,255,0.22);margin-top:4px;">Requires 2+ independent signals for Likely/Confirmed</div>';
+  nt += '</div>';
+  nt += '</div>';
+
   return '<div class="briefing-section">' +
     '<div class="briefing-title"><i class="fa-solid fa-user-secret"></i> Security / Cabal Briefing' +
     '<span class="risk-badge ' + riskCls + '" id="cabRiskBadge" data-base="' + riskCls + '">' + cabRisk + ' RISK</span></div>' +
+    nt +
     bmSection +
     '<ul class="briefing-list" id="cabRiskList">' + (_cabRiskBaseListHTML = listHTML) + '</ul>' +
     '<div class="briefing-advice ' + adviceCls + '" id="cabRiskAdvice" data-base="' + adviceCls + '"><i class="fa-solid fa-shield-halved" style="margin-right:6px;"></i>' + adviceText + '</div>' +

@@ -1,0 +1,449 @@
+
+CABAL / SECURITY BRIEFING EXPANSION 
+
+OBJECTIVE
+
+Improve detection of:
+
+- Rugs
+- Insider activity
+- Bundler activity
+- Coordinated wallets
+- Deployer manipulation
+- Artificial pumps
+
+while preserving current functionality.
+
+
+========================================================
+DEV REPUTATION
+========================================================
+
+Add:
+
+Dev Reputation
+
+Purpose:
+
+Estimate trustworthiness of the deployer.
+
+=========================
+
+Create a robust Dev Reputation section.
+
+Data Sources:
+
+- Solscan
+- Helius
+- Inputted scan text (as used in Quick Entry Checker section)
+- Existing security analysis
+
+Inputs (if available):
+
+Previous launches
+
+Successful launches
+
+Rug history
+
+Wallet age
+
+Wallet activity
+
+Known deployer associations
+
+Scoring:
+
+Excellent = 100
+
+Good = 80
+
+Neutral = 60
+
+Questionable = 35
+
+High Risk = 10
+
+Display:
+
+Dev Reputation Score
+
+and
+
+Dev Reputation Label
+
+========================================================
+DEV REPUTATION EXPANSION
+=======================================================
+DEV REPUTATION FACTORS
+========================================================
+
+Previous Rug History
+
+Detect:
+
+- Previous deployed tokens
+- Known rugs
+- Abandoned launches
+- Successful launches
+
+Score:
+
+Excellent
+Good
+Neutral
+Questionable
+High Risk
+
+========================================================
+FUNDING WALLET ANALYSIS
+========================================================
+
+Identify:
+
+Funding Wallet
+
+Show:
+
+- Wallet address
+- Wallet age
+- Number of transactions
+- Historical behavior
+
+Check:
+
+Did funding wallet previously fund:
+
+- Rugs
+- Bundles
+- Snipers
+- Insider wallets
+
+========================================================
+DEV FIRST TRANSACTIONS
+========================================================
+
+Analyze deployer's earliest transactions.
+
+Display:
+
+- First funding source
+- First transfer destination
+- Wallet creation timeline
+
+Purpose:
+
+Detect organized launch preparation.
+
+========================================================
+SELF-SNIPE DETECTION
+========================================================
+
+Detect whether:
+
+Deployer
+
+OR
+
+Funding Wallet
+
+OR
+
+Known Associated Wallets
+
+purchased immediately after launch.
+
+Signals:
+
+Purchase within launch window
+
+Matching funding source
+
+Wallet clustering
+
+Score:
+
+No Evidence
+
+Possible
+
+Likely
+
+Confirmed
+
+Display prominently.
+
+
+NOTE: 
+Require at least two independent signals before assigning:
+
+Likely
+
+or
+
+Confirmed
+
+Self-Snipe.
+
+
+This will prevent the flagging of innocent wallets.
+
+========================================================
+WALLET CLUSTER DETECTION
+========================================================
+
+Check whether:
+
+Funding wallet
+
+Bundlers
+
+Snipers
+
+Early buyers
+
+share:
+
+- Funding source
+- Transfer history
+- Wallet interactions
+
+Display:
+
+Cluster Risk
+
+Low
+
+Medium
+
+High
+
+========================================================
+BEHAVIOR PATTERN ANALYSIS
+========================================================
+
+Detect patterns:
+
+Large Airdrops
+
+Repeated Launch Behavior
+
+Reused Wallet Structures
+
+Repeated Bundle Behavior
+
+Repeated Exit Patterns
+
+Display:
+
+Behavior Summary
+
+========================================================
+DEV REPUTATION CONFIDENCE SCORE
+========================================================
+
+Output:
+
+0-100
+
+Based on:
+
+Data completeness
+
+Wallet visibility
+
+Historical coverage
+
+Cluster certainty
+
+Display:
+
+Low Confidence
+
+Medium Confidence
+
+High Confidence
+
+==============================================================
+=================================
+
+DEV REPUTATION DATA COVERAGE
+
+Display:
+
+Available Data %
+
+Examples:
+
+95% Coverage
+
+or
+
+35% Coverage
+
+If coverage <50%:
+
+Reduce Dev Reputation Confidence Score.
+
+Do not classify as High Risk solely due to missing data.
+
+========================================================
+EARLY BUYER ANALYSIS
+========================================================
+
+Create dedicated section:
+
+Early Buyer Analysis
+
+========================================================
+HEALTHY EARLY BUYER SIGNALS
+========================================================
+
+Detect:
+
+Varied Buy Sizes
+
+Organic Buy Timing
+
+Mixed Wallet Profiles
+
+No Funding Clusters
+
+No Repeating Patterns
+
+Score positively.
+
+========================================================
+DANGER SIGNALS
+========================================================
+
+Detect:
+
+Identical Buy Amounts
+
+Near-Perfect Timing
+
+Multiwallet Clusters
+
+Repeated Wallet Behavior
+
+Shared Funding Sources
+
+Bundle-Like Activity
+
+Score negatively.
+
+========================================================
+EARLY BUYER HEALTH SCORE
+========================================================
+
+0-100
+
+Labels:
+
+Organic
+
+Mostly Organic
+
+Mixed
+
+Suspicious
+
+Highly Coordinated
+
+=======================================================
+CABAL / SECURITY CHECKLIST
+========================================================
+
+Create:
+
+Security Checklist Score
+
+Structure similar to Entry Checklist.
+
+Each item should return:
+
+PASS
+
+CAUTION
+
+FAIL
+
+with explanation.
+
+Checks:
+
+Dev Reputation
+
+Holder Distribution
+
+Top Holder Concentration
+
+LP Status
+
+Mint Authority
+
+Freeze Authority
+
+Bundle Risk
+
+Fresh Wallet Risk
+
+Cabal Concentration
+
+Volume Authenticity
+
+Contract Security
+
+Final Security Verdict:
+
+SAFE
+
+MODERATE RISK
+
+HIGH RISK
+
+AVOID
+
+========================================================
+SECURITY SCORING
+========================================================
+
+PASS = 2 points
+
+CAUTION = 1 point
+
+FAIL = 0 points
+
+Calculate:
+
+Security Checklist Score
+
+Convert to:
+
+A Tier Security
+
+B Tier Security
+
+C Tier Security
+
+D Tier Security
+
+
+========================================================
+CABAL/SECURITY CHECKLIST INTEGRATION
+========================================================
+
+Add:
+
+Dev Reputation
+
+Early Buyer Health
+
+Cluster Risk
+
+Self-Snipe Risk
+
+to Cabal/Security Checklist.
+
+
