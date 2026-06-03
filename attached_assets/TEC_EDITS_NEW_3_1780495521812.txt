@@ -1,0 +1,600 @@
+ENTRY PATTERN ENGINE REHAUL
+
+OBJECTIVE
+
+Replace the current percentage-change-heavy pattern classification system with a structure-based classification system that leverages the existing Structural Analysis Engine.
+
+The goal is to produce more accurate and meaningful Entry Pattern labels while reducing over-classification into:
+
+- Dev Sell Absorption
+- Second Pump Leg
+
+========================================================
+CURRENT PROBLEM
+========================================================
+
+Current pattern detection relies heavily on:
+
+5m Change
+1h Change
+6h Change
+24h Change
+
+and uses first-match-wins logic.
+
+This causes:
+
+- Too many Dev Sell Absorption classifications
+- Too many Second Pump Leg classifications
+- Poor distinction between continuation and exhaustion
+- Poor distinction between absorption and simple recovery
+
+========================================================
+NEW PRIORITY ORDER
+========================================================
+
+Patterns should be determined primarily from:
+
+1. Shelf Type
+2. Structure Sequence
+3. Demand Return Score
+4. Demand Expansion Score
+5. Acceptance Score
+6. Breakout Efficiency
+7. Trend Structure
+8. Dev Activity
+
+Price change percentages should become supporting signals only.
+
+========================================================
+PATTERN:
+SECOND PUMP LEG
+========================================================
+
+Purpose:
+
+Identify genuine continuation after consolidation.
+
+Requirements:
+
+Shelf Type = Re-Accumulation
+
+AND
+
+Structure Sequence = Uptrend → Shelf
+OR
+Pullback → Shelf
+
+AND
+
+Demand Return Score ≥ 70
+
+AND
+
+Demand Expansion Score ≥ 65
+
+AND
+
+Breakout Efficiency ≥ 60
+
+Optional Boost:
+
+24h change > 50%
+
+Label:
+
+Second Pump Leg
+
+Confidence:
+
+High
+
+========================================================
+PATTERN:
+DEV SELL ABSORPTION
+========================================================
+
+Purpose:
+
+Identify successful absorption of developer selling.
+
+Requirements:
+
+Dev Sold = Yes
+
+AND
+
+Demand Return Score ≥ 65
+
+AND
+
+Demand Expansion Score ≥ 65
+
+AND
+
+Acceptance Score ≥ 70
+
+AND
+
+Shelf Type ≠ Distribution
+
+AND
+
+Shelf Type ≠ Dead-Cat
+
+Display:
+
+Developer selling absorbed by demand.
+
+Label:
+
+Dev Sell Absorption
+
+========================================================
+PATTERN:
+ACCUMULATION BREAKOUT
+========================================================
+
+Purpose:
+
+Identify early-stage breakouts before major expansion.
+
+Requirements:
+
+Shelf Type = Accumulation
+
+AND
+
+Acceptance Score ≥ 75
+
+AND
+
+Demand Return Score ≥ 65
+
+AND
+
+Breakout Efficiency ≥ 60
+
+AND
+
+Overhead Supply ≠ High
+
+Label:
+
+Accumulation Breakout
+
+========================================================
+PATTERN:
+RE-ACCUMULATION CONTINUATION
+========================================================
+
+Purpose:
+
+Identify established trends preparing for another move.
+
+Requirements:
+
+Shelf Type = Re-Accumulation
+
+AND
+
+Acceptance Score ≥ 70
+
+AND
+
+Demand Return Score ≥ 70
+
+AND
+
+Demand Expansion Score ≥ 60
+
+Label:
+
+Re-Accumulation Continuation
+
+========================================================
+PATTERN:
+FLOOR BOUNCE
+========================================================
+
+Purpose:
+
+Identify recovery from weakness.
+
+Requirements:
+
+Demand Return Score improving
+
+AND
+
+Acceptance Score between 55 and 75
+
+AND
+
+Shelf Type ≠ Dead-Cat
+
+AND
+
+Trend Structure improving
+
+Label:
+
+Floor Bounce
+
+========================================================
+PATTERN:
+V-REVERSAL
+========================================================
+
+Purpose:
+
+Identify sharp reversals from significant weakness.
+
+Requirements:
+
+Recent strong decline detected
+
+AND
+
+Demand Expansion Score ≥ 75
+
+AND
+
+Bounce Velocity Score ≥ 75
+
+AND
+
+Demand Return Score improving rapidly
+
+Label:
+
+V-Reversal
+
+========================================================
+PATTERN:
+DISTRIBUTION RISK
+========================================================
+
+Purpose:
+
+Warn of likely exhaustion.
+
+Requirements:
+
+Shelf Type = Distribution
+
+OR
+
+Parabolic Risk = True
+
+AND
+
+Demand Return Score < 60
+
+Label:
+
+Distribution Risk
+
+Priority:
+
+High
+
+========================================================
+PATTERN:
+DEAD-CAT BOUNCE
+========================================================
+
+Purpose:
+
+Warn of likely failed recovery.
+
+Requirements:
+
+Shelf Type = Dead-Cat
+
+AND
+
+Demand Return Score < 50
+
+AND
+
+Downtrend
+
+Label:
+
+Dead-Cat Bounce
+
+Priority:
+
+Highest Warning
+
+========================================================
+PATTERN:
+CONSOLIDATION BREAKOUT
+========================================================
+
+Purpose:
+
+Identify coins that have spent time consolidating before beginning a potential expansion phase.
+
+Requirements:
+
+Shelf Type = Accumulation
+
+OR
+
+Shelf Type = Neutral Consolidation
+
+AND
+
+Acceptance Score ≥ 75
+
+AND
+
+Demand Return Score ≥ 65
+
+AND
+
+Breakout Efficiency ≥ 60
+
+AND
+
+Overhead Supply ≠ High
+
+AND
+
+Compression Detected
+
+(ATR Compression OR SD Compression)
+
+Confidence Boost:
+
+Demand Expansion Score ≥ 70
+
+Display:
+
+Pattern:
+Consolidation Breakout
+
+Meaning:
+
+Price has consolidated and built acceptance.
+Demand is returning while resistance appears to be weakening.
+
+========================================================
+PATTERN:
+DOUBLE BOTTOM RECOVERY
+========================================================
+
+Purpose:
+
+Identify support levels that have been successfully defended twice.
+
+Requirements:
+
+Two significant lows detected.
+
+Conditions:
+
+Difference between Low #1 and Low #2 ≤ 3%
+
+AND
+
+Low #2 does not significantly undercut Low #1
+
+AND
+
+Demand Return Score improving
+
+AND
+
+Demand Expansion Score improving
+
+AND
+
+Bounce Velocity Score ≥ 50
+
+Confirmation:
+
+Breakout Efficiency ≥ 60
+
+OR
+
+Neckline Break detected
+
+Display:
+
+Pattern:
+Double Bottom Recovery
+
+Meaning:
+
+Market has tested support twice and buyers appear to be defending the same area successfully.
+
+========================================================
+PATTERN:
+FAILED BREAKOUT RISK
+========================================================
+
+Purpose:
+
+Identify continuation attempts that are likely failing.
+
+Requirements:
+
+Breakout Efficiency < 40
+
+AND
+
+Demand Return Score declining
+
+AND
+
+One of:
+
+High Overhead Supply
+
+OR
+
+Repeated Resistance Rejections
+
+OR
+
+Demand Expansion Score < 50
+
+Display:
+
+Pattern:
+Failed Breakout Risk
+
+Meaning:
+
+Buyers are struggling to maintain moves above resistance.
+Continuation probability is weakening.
+
+Priority:
+
+High Warning
+
+========================================================
+PATTERN PRIORITY SYSTEM
+========================================================
+
+Bullish Patterns:
+
+1. Accumulation Breakout
+
+2. Consolidation Breakout
+
+3. Re-Accumulation Continuation
+
+4. Second Pump Leg
+
+5. Dev Sell Absorption
+
+6. Double Bottom Recovery
+
+7. Floor Bounce
+
+8. V-Reversal
+
+Bearish / Warning Patterns:
+
+1. Distribution Risk
+
+2. Failed Breakout Risk
+
+3. Dead-Cat Bounce
+
+
+========================================================
+PATTERN CONFIDENCE
+========================================================
+
+Each pattern should display:
+
+High Confidence
+
+Medium Confidence
+
+Low Confidence
+
+based on:
+
+Acceptance Score
+Demand Return Score
+Demand Expansion Score
+Pattern Criteria Match %
+
+========================================================
+MULTI-PATTERN DETECTION
+========================================================
+
+Instead of stopping at the first matching pattern:
+
+Evaluate all patterns.
+
+Display:
+
+Primary Pattern
+
+and
+
+Secondary Pattern (if applicable)
+
+Examples:
+
+Primary Pattern:
+Re-Accumulation Continuation
+
+Secondary Pattern:
+Dev Sell Absorption
+
+Or: 
+
+Primary Pattern:
+Consolidation Breakout
+
+Secondary Pattern:
+Dev Sell Absorption
+
+Or:
+
+Primary Pattern:
+Re-Accumulation Continuation
+
+Secondary Pattern:
+Double Bottom Recovery
+
+This prevents broad categories from absorbing all classifications.
+
+
+NOTE: Don't allow more than two displayed patterns at once. If the engine starts showing 4–5 patterns simultaneously, the labels lose meaning. A Primary Pattern + Secondary Pattern model is usually the sweet spot for trading decisions.
+
+
+========================================================
+PATTERN EXPLANATION
+========================================================
+Every detected pattern must display the reasons it was selected.
+
+Display:
+
+Why this pattern was selected.
+
+Example:
+
+Pattern:
+Second Pump Leg
+
+Reasons:
+
+✓ Re-Accumulation Shelf
+
+✓ Demand Return 82
+
+✓ Demand Expansion 77
+
+✓ Breakout Efficiency 85%
+
+✓ Uptrend → Shelf Structure
+
+Or: 
+
+Pattern:
+Consolidation Breakout
+
+Reasons:
+
+✓ Acceptance Score = 84
+
+✓ Demand Return Score = 78
+
+✓ Breakout Efficiency = 82%
+
+✓ Compression Detected
+
+✓ Low Overhead Supply
+
+
+This improves transparency and makes pattern classification easier to trust.
+

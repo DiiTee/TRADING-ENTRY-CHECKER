@@ -1399,12 +1399,17 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
           <label>Entry Pattern</label>
           <select id="fPattern">
             <option value="">-- Select --</option>
+            <option value="accum_breakout">Accumulation Breakout</option>
             <option value="consolidation">Consolidation Breakout</option>
-            <option value="dev_sell">Dev Sell Absorption</option>
+            <option value="reaccum_cont">Re-Accumulation Continuation</option>
             <option value="second_pump">Second Pump Leg</option>
+            <option value="dev_sell">Dev Sell Absorption</option>
+            <option value="double_bottom">Double Bottom Recovery</option>
             <option value="floor_bounce">Floor Bounce</option>
             <option value="v_reversal">V-Reversal</option>
-            <option value="double_bottom">Double Bottom</option>
+            <option value="distribution">Distribution Risk</option>
+            <option value="failed_breakout">Failed Breakout Risk</option>
+            <option value="dead_cat">Dead-Cat Bounce</option>
             <option value="none">None / Unknown</option>
           </select>
         </div>
@@ -2749,7 +2754,8 @@ async function fetchFromCA(ca) {
 
   /* ── Populate form + auto-detect pattern ─────────────────────────────── */
   fillFormFromData(fetched);
-  detectAndFillPattern(fetched, true); /* force=true — Fetch Data always wins over stale parse */
+  var _saForPattern = (window._tecCandles && window._tecCandles.structuralAnalysis) || null;
+  detectAndFillPattern(fetched, _saForPattern, true); /* force=true — Fetch Data always wins over stale parse */
 
   /* ── Render badges ───────────────────────────────────────────────────── */
   apiStatusRow.innerHTML = apiResults.join('');
@@ -4968,23 +4974,21 @@ function buildEntryBriefingHTML(d, analysis) {
   else if (lmcR < 8) bigPicture += ' Thin liquidity (' + lmcR.toFixed(1) + '% L/MC) — expect sharp candles and slippage on entries. Size down accordingly.';
   else bigPicture += ' Deep liquidity relative to MC (' + lmcR.toFixed(1) + '%) — coin may be slow to move but gaps are unlikely.';
 
-  var patternMap = { consolidation: 'Consolidation Breakout', dev_sell: 'Dev Sell Absorption', second_pump: 'Second Pump Leg', floor_bounce: 'Floor Bounce', v_reversal: 'V-Reversal', double_bottom: 'Double Bottom', none: 'No Clear Pattern' };
-  var patName = patternMap[d.pattern] || 'Unspecified';
-  var patDesc = '';
-  if (d.pattern === 'consolidation') patDesc = 'Price is compressing under resistance. The ' + d.buyPercent.toFixed(0) + '% buy ratio and ' + d.buyVolPct.toFixed(0) + '% buy volume suggest accumulation under the surface — a volume-confirmed breakout would signal momentum entry.';
-  else if (d.pattern === 'dev_sell') patDesc = 'Dev distributed into strength. With buys at ' + d.buyPercent.toFixed(0) + '%, the market is absorbing the sell pressure — a clean absorption sets an organic floor defined by real buyers.';
-  else if (d.pattern === 'second_pump') patDesc = 'Second leg developing after the initial run. For confirmation, current volume (' + formatUSD(d.volume) + ') needs to sustain or exceed the first pump peak. Buy dominance at ' + d.buyPercent.toFixed(0) + '% supports continuation.';
-  else if (d.pattern === 'floor_bounce') patDesc = 'Price is tapping a defined floor level. The risk/reward here is among the cleanest setups — your stop sits just below the floor and your upside is the prior high or beyond.';
-  else if (d.pattern === 'v_reversal') patDesc = 'Sharp V-shaped recovery in motion. Momentum is aggressive (' + d.perf5m.toFixed(0) + '% on 5m) — only enter on a confirmed hold above the reversal point, never mid-wick. Speed over precision.';
-  else if (d.pattern === 'double_bottom') patDesc = 'Two confirmed price touches at support — a textbook reversal signal. The second bottom invalidates the initial breakdown and invites buyers back in with structural backing.';
-  else patDesc = 'No identifiable entry pattern at this time. Trading without a defined pattern elevates timing risk significantly. Wait for structure to emerge before committing capital.';
+  var patternMap = { accum_breakout: 'Accumulation Breakout', consolidation: 'Consolidation Breakout', reaccum_cont: 'Re-Accumulation Continuation', second_pump: 'Second Pump Leg', dev_sell: 'Dev Sell Absorption', double_bottom: 'Double Bottom Recovery', floor_bounce: 'Floor Bounce', v_reversal: 'V-Reversal', distribution: 'Distribution Risk', failed_breakout: 'Failed Breakout Risk', dead_cat: 'Dead-Cat Bounce', none: 'No Clear Pattern' };
+  var _tpr = window._tecPatternResult || null;
+  var _patPrimary   = _tpr ? _tpr.primary   : null;
+  var _patSecondary = _tpr ? _tpr.secondary : null;
+  var patName = _patPrimary ? _patPrimary.name : (patternMap[d.pattern] || 'Unspecified');
+  var patDesc = _patPrimary ? _patPrimary.desc : 'No identifiable entry pattern at this time. Trading without a defined pattern elevates timing risk significantly. Wait for structure to emerge before committing capital.';
 
   var triggers = '';
   var exitTrig = 'Exit when sell% exceeds 50% on a confirmed 5-min close, or if MC breaches the floor. Take first partial at 2x, second at 3x, trail remainder.';
-  if (d.pattern === 'consolidation') triggers = 'Entry: Volume spike beyond ' + formatUSD((d.volume || 0) * 1.3) + ' with price closing above the 5-min high. Avoid chasing — wait for the candle close.';
+  if (_patPrimary) {
+    triggers = _patPrimary.triggers;
+  } else if (d.pattern === 'consolidation') triggers = 'Entry: Volume spike beyond ' + formatUSD((d.volume || 0) * 1.3) + ' with price closing above the 5-min high. Avoid chasing — wait for the candle close.';
   else if (d.pattern === 'floor_bounce') triggers = 'Entry: A green 5-min candle closing at or above floor MC with buy vol% > 60% confirms the bounce. Do not enter on the initial wick down.';
-  else if (d.pattern === 'v_reversal') triggers = 'Entry: First green close above the V-reversal mid-point with volume expansion. The 5m perf (' + d.perf5m.toFixed(0) + '%) confirms momentum is live.';
-  else if (d.pattern === 'second_pump') triggers = 'Entry: Buy vol% holding above 63% with volume sustaining above ' + formatUSD(d.volume || 0) + '. Avoid entries on a declining volume second leg — confirmation is everything.';
+  else if (d.pattern === 'v_reversal') triggers = 'Entry: First green close above the V-reversal mid-point with volume expansion. Momentum is live.';
+  else if (d.pattern === 'second_pump') triggers = 'Entry: Buy vol% holding above 63% with volume sustaining above ' + formatUSD(d.volume || 0) + '. Avoid entries on a declining volume second leg.';
   else if (d.pattern === 'double_bottom') triggers = 'Entry: Break above the neckline (the high between the two bottoms) on expanding volume. This is the structural trigger — not the second touch itself.';
   else triggers = 'Entry: Confirmed green 5-min close with volume expansion and buy% above 65%. Do not FOMO in — wait for the candle to close.';
 
@@ -5125,7 +5129,47 @@ function buildEntryBriefingHTML(d, analysis) {
 
   var entryRows = [
     { num: '01', label: 'The Big Picture', text: bigPicture },
-    { num: '02', label: 'Pattern — ' + patName, text: patDesc },
+    { num: '02', label: 'Pattern Detection', text: (function() {
+        if (!_patPrimary) {
+          return '<span style="color:var(--text-muted);">No identifiable entry pattern at this time. Trading without a defined pattern elevates timing risk significantly. Wait for structure to emerge before committing capital.</span>';
+        }
+        var isWarning = _patPrimary.isWarning;
+        var pColor = _patPrimary.color || (isWarning ? '#ff4757' : '#00e676');
+        var confColor = _patPrimary.confidence === 'High' ? '#00e676' : _patPrimary.confidence === 'Medium' ? '#ffeb3b' : '#aaa';
+        var t = '';
+        /* Primary Pattern */
+        t += '<div style="margin-bottom:10px;padding:8px 10px;border-left:3px solid ' + pColor + ';background:rgba(0,0,0,0.18);border-radius:3px;">';
+        t += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+        t += '<span style="color:var(--text-muted);font-size:0.62rem;font-weight:700;letter-spacing:0.5px;">PRIMARY PATTERN</span>';
+        t += '<strong style="color:' + pColor + ';font-size:0.95rem;">' + _patPrimary.name + '</strong>';
+        t += '<span style="padding:1px 6px;border-radius:3px;font-size:0.60rem;font-weight:700;color:#111;background:' + confColor + ';">' + _patPrimary.confidence + ' Confidence</span>';
+        t += '</div>';
+        t += '<div style="color:var(--text-secondary);font-size:0.75rem;margin-bottom:6px;">' + _patPrimary.desc + '</div>';
+        t += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+        (_patPrimary.reasons || []).forEach(function(r) {
+          var isPos = r.charAt(0) === '✓';
+          t += '<span style="font-size:0.67rem;color:' + (isPos ? '#00e676' : '#ff4757') + ';">' + r + '</span>';
+        });
+        t += '</div></div>';
+        /* Secondary Pattern */
+        if (_patSecondary) {
+          var sColor = _patSecondary.color || (_patSecondary.isWarning ? '#ff9800' : '#00e676');
+          var sConfColor = _patSecondary.confidence === 'High' ? '#00e676' : _patSecondary.confidence === 'Medium' ? '#ffeb3b' : '#aaa';
+          t += '<div style="padding:7px 10px;border-left:3px solid ' + sColor + ';background:rgba(0,0,0,0.13);border-radius:3px;opacity:0.88;">';
+          t += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">';
+          t += '<span style="color:var(--text-muted);font-size:0.62rem;font-weight:700;letter-spacing:0.5px;">SECONDARY PATTERN</span>';
+          t += '<strong style="color:' + sColor + ';font-size:0.88rem;">' + _patSecondary.name + '</strong>';
+          t += '<span style="padding:1px 6px;border-radius:3px;font-size:0.60rem;font-weight:700;color:#111;background:' + sConfColor + ';">' + _patSecondary.confidence + ' Confidence</span>';
+          t += '</div>';
+          t += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+          (_patSecondary.reasons || []).forEach(function(r) {
+            var isPos = r.charAt(0) === '✓';
+            t += '<span style="font-size:0.67rem;color:' + (isPos ? '#00e676' : '#ff4757') + ';">' + r + '</span>';
+          });
+          t += '</div></div>';
+        }
+        return t;
+      })() },
     { num: '03', label: 'Entry / Exit Triggers', text: triggers + '<br><span style="color:var(--text-muted);font-size:0.72rem;">' + exitTrig + '</span>' },
     { num: '04', label: 'Support Structure', text: (function() {
         var line = 'Ceiling: <strong style="color:var(--caution);">' + ceilStr + '</strong> MC';
@@ -5482,36 +5526,254 @@ function buildEntryBriefingHTML(d, analysis) {
     '</div>';
 }
 
-/* ── Auto-detect Entry Pattern from Dexscreener price change data ────── */
-/* force=true: called after Fetch Data — overrides any prior value.
+/* ── Structure-Based Entry Pattern Engine ──────────────────────────────
+   computeEntryPattern(fetched, sa) — evaluates ALL patterns using SA as
+   primary signal. Returns { primary, secondary } each being an object:
+   { key, name, color, confidence, isWarning, reasons[], desc, triggers }
+   or null if nothing qualifies.
+   ──────────────────────────────────────────────────────────────────── */
+function computeEntryPattern(fetched, sa) {
+  /* ── Price change signals (supporting only) */
+  var m5    = (!isNaN(fetched.perf5m))  ? fetched.perf5m  : null;
+  var h1    = (!isNaN(fetched.perf1h))  ? fetched.perf1h  : null;
+  var h6    = (!isNaN(fetched.perf6h))  ? fetched.perf6h  : null;
+  var h24   = (!isNaN(fetched.perf24h)) ? fetched.perf24h : null;
+  var short  = h1  !== null ? h1  : m5;
+  var medium = h6  !== null ? h6  : short;
+  var long_  = h24 !== null ? h24 : medium;
+  var devSold = fetched.devSold === 'Yes';
+
+  /* ── Structural Analysis signals */
+  var hasSA     = !!sa;
+  var shelfType = hasSA ? (sa.shelfType             || '') : '';
+  var seq       = hasSA ? (sa.structureSequence      || '') : '';
+  var dr        = hasSA ? (sa.demandReturnScore      || 0) : 0;
+  var de        = hasSA ? (sa.demandExpansionScore   || 0) : 0;
+  var acc       = hasSA ? (sa.acceptanceScore        || 0) : 0;
+  var beff      = hasSA ? (sa.breakoutEfficiency     || 0) : 0;
+  var bvs       = hasSA ? (sa.bounceVelocityScore    || 0) : 0;
+  var ovhRisk   = hasSA ? (sa.overheadRisk           || '') : '';
+  var ovhHigh   = ovhRisk.indexOf('High') !== -1;
+  var dblAcc    = hasSA ? !!sa.doubleAccumulation : false;
+  var atrPct    = hasSA ? parseFloat(sa.atrPct) : NaN;
+  var sdPct     = hasSA ? parseFloat(sa.sdPct)  : NaN;
+  var compressionDetected = (!isNaN(atrPct) && atrPct < 5) || (!isNaN(sdPct) && sdPct < 3);
+
+  var isReAcc   = shelfType.indexOf('Re-Accum') !== -1;
+  var isAcc     = shelfType.indexOf('Accumulation') !== -1 && !isReAcc;
+  var isNeutral = shelfType.indexOf('Neutral') !== -1;
+  var isDist    = shelfType.indexOf('Distribution') !== -1;
+  var isDead    = shelfType.indexOf('Dead') !== -1;
+  var downtrend = seq.indexOf('Downtrend') !== -1;
+  var drImproving = dr >= 55; /* proxy for "demand returning" */
+
+  /* ── Confidence helper: how far above thresholds are the scores? */
+  function confLevel(pairs) {
+    var sum = 0, total = 0;
+    pairs.forEach(function(p) {
+      if (p.threshold == null || p.actual == null) return;
+      sum += (p.actual - p.threshold) / Math.max(p.threshold, 1) * (p.weight || 1);
+      total += (p.weight || 1);
+    });
+    if (total === 0) return 'Medium';
+    var avg = sum / total;
+    return avg >= 0.15 ? 'High' : avg >= 0 ? 'Medium' : 'Low';
+  }
+
+  var candidates = [];
+
+  /* ════════════════════════════════════════
+     WARNING PATTERNS  (negative priority)
+     ════════════════════════════════════════ */
+
+  /* Dead-Cat Bounce — highest warning */
+  if (hasSA && isDead && dr < 50 && downtrend) {
+    candidates.push({ priority: -3, isWarning: true,
+      key: 'dead_cat', name: 'Dead-Cat Bounce', color: '#ff4757',
+      confidence: 'High',
+      reasons: ['✗ Shelf Type: Dead-Cat', '✗ Demand Return: ' + dr + '/100', '✗ Downtrend structure'],
+      desc: 'Dead-cat bounce in progress. The initial recovery is likely exhausting — sellers are expected to reassert control. This is not a buyable setup without significant structural improvement.',
+      triggers: 'Avoid entry. Monitor for a new shelf forming below current price — re-evaluate only if Demand Return recovers above 65 and shelf type changes.'
+    });
+  }
+
+  /* Distribution Risk */
+  if (hasSA && (isDist || sa.parabolicRisk) && dr < 60) {
+    candidates.push({ priority: -2, isWarning: true,
+      key: 'distribution', name: 'Distribution Risk', color: '#ff4757',
+      confidence: confLevel([{actual: 60, threshold: dr}]),
+      reasons: [isDist ? '✗ Shelf Type: Distribution' : '✗ Parabolic risk detected', '✗ Demand Return low: ' + dr + '/100'],
+      desc: 'Distribution pattern detected. Smart money appears to be rotating out. Entering here is fighting the trend — exhaustion or reversal is the more probable outcome.',
+      triggers: 'Do not enter. If already holding, tighten stop to recent local floor and scale out into any strength.'
+    });
+  }
+
+  /* Failed Breakout Risk */
+  if (hasSA && beff < 40 && !drImproving && (ovhHigh || de < 50)) {
+    candidates.push({ priority: -1, isWarning: true,
+      key: 'failed_breakout', name: 'Failed Breakout Risk', color: '#ff9800',
+      confidence: 'Medium',
+      reasons: ['✗ Breakout Efficiency: ' + beff + '% (sub-40)', '✗ Demand Return declining: ' + dr + '/100', ovhHigh ? '✗ High Overhead Supply' : '✗ Demand Expansion weak: ' + de + '/100'],
+      desc: 'Buyers are struggling to sustain moves above resistance. Multiple continuation attempts are failing — continuation probability is weakening.',
+      triggers: 'Wait for Breakout Efficiency to recover above 50% and overhead supply to clear before re-evaluating.'
+    });
+  }
+
+  /* ════════════════════════════════════════
+     BULLISH PATTERNS  (positive priority)
+     ════════════════════════════════════════ */
+
+  if (hasSA) {
+    /* 1. Accumulation Breakout */
+    if (isAcc && acc >= 75 && dr >= 65 && beff >= 60 && !ovhHigh) {
+      var squeezeNote = sa.preBreakoutSqueeze && sa.preBreakoutSqueeze !== 'Weak' ? '✓ Pre-Breakout Squeeze: ' + sa.preBreakoutSqueeze : null;
+      candidates.push({ priority: 1, isWarning: false,
+        key: 'accum_breakout', name: 'Accumulation Breakout', color: '#00ffcc',
+        confidence: confLevel([{actual:acc,threshold:75},{actual:dr,threshold:65},{actual:beff,threshold:60}]),
+        reasons: ['✓ Shelf Type: Accumulation', '✓ Acceptance Score: ' + acc + '/100', '✓ Demand Return: ' + dr + '/100', '✓ Breakout Efficiency: ' + beff + '%', '✓ Overhead Supply: Clear', squeezeNote].filter(Boolean),
+        desc: 'Early-stage accumulation with breakout signals firing. Demand is building quietly while the shelf holds — this is the setup that precedes significant expansion phases.',
+        triggers: 'Entry: Volume spike with close above 15m resistance. Buy on the breakout candle close, not the wick. Initial target: prior swing high.'
+      });
+    }
+
+    /* 2. Consolidation Breakout */
+    if ((isAcc || isNeutral) && acc >= 75 && dr >= 65 && beff >= 60 && !ovhHigh && compressionDetected) {
+      var deboost = de >= 70 ? '✓ Demand Expansion: ' + de + '/100 (boost)' : null;
+      candidates.push({ priority: 2, isWarning: false,
+        key: 'consolidation', name: 'Consolidation Breakout', color: '#00e676',
+        confidence: confLevel([{actual:acc,threshold:75},{actual:dr,threshold:65},{actual:beff,threshold:60},{actual:de,threshold:70}]),
+        reasons: ['✓ Acceptance Score: ' + acc + '/100', '✓ Demand Return: ' + dr + '/100', '✓ Breakout Efficiency: ' + beff + '%', '✓ Compression Detected' + (!isNaN(atrPct) ? ' (ATR ' + atrPct + '%)' : ''), '✓ Low Overhead Supply', deboost].filter(Boolean),
+        desc: 'Price has consolidated and built acceptance. Demand is returning while resistance appears to be weakening. A coiled spring setup — breakouts from compressed ranges tend to be sustained.',
+        triggers: 'Entry: Confirmed breakout above consolidation range on volume expansion. Wait for the candle close above resistance, not the initial wick.'
+      });
+    }
+
+    /* 3. Re-Accumulation Continuation */
+    if (isReAcc && acc >= 70 && dr >= 70 && de >= 60) {
+      candidates.push({ priority: 3, isWarning: false,
+        key: 'reaccum_cont', name: 'Re-Accumulation Continuation', color: '#00e676',
+        confidence: confLevel([{actual:acc,threshold:70},{actual:dr,threshold:70},{actual:de,threshold:60}]),
+        reasons: ['✓ Shelf Type: Re-Accumulation', '✓ Acceptance Score: ' + acc + '/100', '✓ Demand Return: ' + dr + '/100', '✓ Demand Expansion: ' + de + '/100', seq ? '✓ Structure: ' + seq : null].filter(Boolean),
+        desc: 'Established trend pausing to rebuild demand before the next leg. Re-accumulation shelves are the foundation of multi-leg moves — the market is digesting gains and recharging.',
+        triggers: 'Entry: Buy on shelf retests or on confirmed break above consolidation high. Scale into strength — this pattern favors layered entries.'
+      });
+    }
+
+    /* 4. Second Pump Leg */
+    var seqMatchSPL = (seq.indexOf('Uptrend') !== -1 && seq.indexOf('Shelf') !== -1) ||
+                      (seq.indexOf('Pullback') !== -1 && seq.indexOf('Shelf') !== -1);
+    if (isReAcc && seqMatchSPL && dr >= 70 && de >= 65 && beff >= 60) {
+      var h24boost = (h24 !== null && h24 > 50) ? '✓ 24h gain > 50% (momentum boost)' : null;
+      candidates.push({ priority: 4, isWarning: false,
+        key: 'second_pump', name: 'Second Pump Leg', color: '#00e676',
+        confidence: confLevel([{actual:dr,threshold:70},{actual:de,threshold:65},{actual:beff,threshold:60}]),
+        reasons: ['✓ Shelf Type: Re-Accumulation', '✓ Structure: ' + seq, '✓ Demand Return: ' + dr + '/100', '✓ Demand Expansion: ' + de + '/100', '✓ Breakout Efficiency: ' + beff + '%', h24boost].filter(Boolean),
+        desc: 'Genuine continuation after consolidation. Second legs on validated re-accumulation shelves tend to be the strongest moves — this is the pattern that produces the most significant gains.',
+        triggers: 'Entry: Buy on shelf retest with buy vol% above 62% or on breakout close above prior high. Volume must confirm — a second leg on declining volume is a false start.'
+      });
+    }
+
+    /* 5. Dev Sell Absorption */
+    if (devSold && dr >= 65 && de >= 65 && acc >= 70 && !isDist && !isDead) {
+      candidates.push({ priority: 5, isWarning: false,
+        key: 'dev_sell', name: 'Dev Sell Absorption', color: '#00e676',
+        confidence: confLevel([{actual:dr,threshold:65},{actual:de,threshold:65},{actual:acc,threshold:70}]),
+        reasons: ['✓ Developer sold position', '✓ Demand Return: ' + dr + '/100', '✓ Demand Expansion: ' + de + '/100', '✓ Acceptance Score: ' + acc + '/100', '✓ No distribution pattern'],
+        desc: 'Developer selling has been fully absorbed by organic demand. The chart is now in organic buyer hands — one of the cleanest setups when paired with strong structure.',
+        triggers: 'Entry: Confirm absorption with buy volume dominance above 60%. Enter on shelf hold with stop below floor.'
+      });
+    }
+
+    /* 6. Double Bottom Recovery */
+    if (dblAcc && bvs >= 50 && drImproving) {
+      candidates.push({ priority: 6, isWarning: false,
+        key: 'double_bottom', name: 'Double Bottom Recovery', color: '#00e676',
+        confidence: confLevel([{actual:bvs,threshold:50},{actual:dr,threshold:55},{actual:beff,threshold:60}]),
+        reasons: ['✓ Double accumulation detected', '✓ Bounce Velocity: ' + bvs + '/100', '✓ Demand Return improving (' + dr + '/100)', beff >= 60 ? '✓ Breakout Efficiency: ' + beff + '%' : null, de >= 60 ? '✓ Demand Expansion: ' + de + '/100' : null].filter(Boolean),
+        desc: 'Market has tested support twice and buyers have defended the same area successfully. Each retest that holds adds structural credibility — the second test validates the demand level.',
+        triggers: 'Entry: Break above the neckline (the high between the two bottoms) on expanding volume. The second touch is not the entry — the neckline break is.'
+      });
+    }
+
+    /* 7. Floor Bounce */
+    if (drImproving && acc >= 55 && acc <= 80 && !isDead) {
+      candidates.push({ priority: 7, isWarning: false,
+        key: 'floor_bounce', name: 'Floor Bounce', color: '#ffeb3b',
+        confidence: confLevel([{actual:dr,threshold:55},{actual:acc,threshold:55}]),
+        reasons: ['✓ Demand Return improving (' + dr + '/100)', '✓ Acceptance Score: ' + acc + '/100', '✓ Not a dead-cat pattern', seq ? '✓ Structure: ' + seq : null].filter(Boolean),
+        desc: 'Price recovering from weakness. The floor is providing support and buyers are beginning to return. Risk/reward improves significantly if the shelf holds on retest.',
+        triggers: 'Entry: Green 5m candle closing at or above floor MC with buy vol% > 60%. Do not enter on the initial wick down — wait for the candle close.'
+      });
+    }
+
+    /* 8. V-Reversal */
+    if (bvs >= 75 && de >= 75 && drImproving) {
+      var sharpNote = (long_ !== null && long_ < -15 && short !== null && short > 30) ? '✓ Sharp reversal from significant decline' : null;
+      candidates.push({ priority: 8, isWarning: false,
+        key: 'v_reversal', name: 'V-Reversal', color: '#ffeb3b',
+        confidence: confLevel([{actual:bvs,threshold:75},{actual:de,threshold:75}]),
+        reasons: ['✓ Bounce Velocity: ' + bvs + '/100', '✓ Demand Expansion: ' + de + '/100', '✓ Demand Return improving (' + dr + '/100)', sharpNote].filter(Boolean),
+        desc: 'Sharp V-shaped recovery underway. Momentum is aggressive — only enter on a confirmed hold above the reversal point. Speed over precision, but never mid-wick.',
+        triggers: 'Entry: First green close above the V-reversal mid-point with volume expansion. Momentum is live but fragile — confirm the hold before sizing up.'
+      });
+    }
+
+  } else {
+    /* ── Fallback: no SA — price-change only (low confidence) ── */
+    if (devSold && short !== null && short >= 0) {
+      candidates.push({ priority: 5, isWarning: false, key: 'dev_sell', name: 'Dev Sell Absorption', color: '#00e676', confidence: 'Low',
+        reasons: ['✓ Developer sold position', '✓ Price recovering'], desc: 'Developer selling absorbed — price recovering. Low confidence without candle data.', triggers: 'Confirm absorption on buy volume dominance above 60%.' });
+    }
+    if (long_ !== null && long_ < -20 && short !== null && short > 50) {
+      candidates.push({ priority: 8, isWarning: false, key: 'v_reversal', name: 'V-Reversal', color: '#ffeb3b', confidence: 'Low',
+        reasons: ['✓ Significant decline (' + long_.toFixed(0) + '%)', '✓ Sharp recovery (' + short.toFixed(0) + '%)'], desc: 'Sharp reversal from significant weakness. Low confidence without candle data.', triggers: 'Enter on confirmed hold above reversal mid-point.' });
+    } else if (long_ !== null && long_ < -10 && short !== null && short > 15) {
+      candidates.push({ priority: 7, isWarning: false, key: 'floor_bounce', name: 'Floor Bounce', color: '#ffeb3b', confidence: 'Low',
+        reasons: ['✓ Decline then recovery from price data'], desc: 'Floor bounce pattern detected from price changes. Low confidence without candle data.', triggers: 'Wait for floor hold confirmation on volume.' });
+    }
+    if (long_ !== null && long_ > 100 && short !== null && short > 20) {
+      candidates.push({ priority: 4, isWarning: false, key: 'second_pump', name: 'Second Pump Leg', color: '#00e676', confidence: 'Low',
+        reasons: ['✓ Strong 24h gain (' + long_.toFixed(0) + '%)', '✓ Continued momentum (' + short.toFixed(0) + '%)'], desc: 'Second leg developing from price data. Low confidence without candle structure.', triggers: 'Volume confirmation required — avoid entries on declining volume.' });
+    } else if (long_ !== null && long_ > 20 && medium !== null && medium < 15 && short !== null && short > 20) {
+      candidates.push({ priority: 2, isWarning: false, key: 'consolidation', name: 'Consolidation Breakout', color: '#00e676', confidence: 'Low',
+        reasons: ['✓ Medium-term consolidation then breakout (price data)'], desc: 'Consolidation breakout from price changes. Low confidence without candle structure.', triggers: 'Confirm on volume breakout above resistance.' });
+    }
+  }
+
+  /* ── Sort & pick top 2 ── */
+  var warnings = candidates.filter(function(c) { return c.isWarning;  }).sort(function(a, b) { return a.priority - b.priority; });
+  var bullish  = candidates.filter(function(c) { return !c.isWarning; }).sort(function(a, b) { return a.priority - b.priority; });
+  var ordered  = warnings.length > 0 ? warnings.concat(bullish) : bullish;
+
+  var primary   = ordered[0] || null;
+  var secondary = ordered.length > 1 ? ordered[1] : null;
+  /* Don't pair two warning patterns together — one warning is enough */
+  if (secondary && primary && secondary.isWarning && primary.isWarning) secondary = null;
+
+  return { primary: primary, secondary: secondary };
+}
+
+/* ── detectAndFillPattern — public entry point ──────────────────────────
+   force=true: called after Fetch Data — overrides any prior value.
    force=false/undefined: called after Parse & Fill — only fills if blank. */
-function detectAndFillPattern(fetched, force) {
+function detectAndFillPattern(fetched, sa, force) {
   var patEl = el('fPattern');
   if (!patEl) return;
-  /* Only skip if already set AND this is a non-forced (parse-time) call */
   if (!force && patEl.value && patEl.value !== 'none') return;
-  var m5  = fetched.perf5m  !== undefined && !isNaN(fetched.perf5m)  ? fetched.perf5m  : null;
-  var h1  = fetched.perf1h  !== undefined && !isNaN(fetched.perf1h)  ? fetched.perf1h  : null;
-  var h6  = fetched.perf6h  !== undefined && !isNaN(fetched.perf6h)  ? fetched.perf6h  : null;
-  var h24 = fetched.perf24h !== undefined && !isNaN(fetched.perf24h) ? fetched.perf24h : null;
-  if (m5 === null && h1 === null) return;
-  var short  = h1  !== null ? h1  : m5;
-  var medium = h6  !== null ? h6  : (h1 !== null ? h1 : m5);
-  var long_  = h24 !== null ? h24 : medium;
-  /* Dev Sell Absorption: dev sold and price recovering */
-  if (fetched.devSold === 'Yes' && short >= 0) { patEl.value = 'dev_sell'; return; }
-  /* V-Reversal: big drop then sharp recovery */
-  if ((long_ < -20 && short > 50) || (medium < -15 && short > 40)) { patEl.value = 'v_reversal'; return; }
-  /* Floor Bounce: moderate drop, moderate recovery */
-  if ((long_ < -10 && short > 15) || (medium < -8 && short > 10)) { patEl.value = 'floor_bounce'; return; }
-  /* Second Pump: already substantially up, running again */
-  if (long_ > 100 && short > 20) { patEl.value = 'second_pump'; return; }
-  if (h1 !== null && h1 > 50 && m5 !== null && m5 > 15 && long_ > 50) { patEl.value = 'second_pump'; return; }
-  /* Consolidation Breakout: medium-term flat then breakout */
-  if (long_ > 20 && medium < 15 && short > 25) { patEl.value = 'consolidation'; return; }
-  if (medium < 10 && short > 20) { patEl.value = 'consolidation'; return; }
-  /* Fallback: price data is available but no specific pattern matched — mark explicitly */
-  if (short !== null) patEl.value = 'none';
+
+  var result = computeEntryPattern(fetched, sa || null);
+  window._tecPatternResult = result;
+
+  /* Set legacy select value for checklist scoring backward compatibility */
+  if (result.primary) {
+    patEl.value = result.primary.key;
+    /* If the key isn't a recognized option, fall back to none */
+    if (patEl.value !== result.primary.key) patEl.value = 'none';
+  } else {
+    var m5  = !isNaN(fetched.perf5m) ? fetched.perf5m : null;
+    var h1  = !isNaN(fetched.perf1h) ? fetched.perf1h : null;
+    if (m5 !== null || h1 !== null) patEl.value = 'none';
+  }
 }
 
 function parseTelegramText(text) {
@@ -6798,9 +7060,17 @@ function buildSetupText(d, analysis) {
   else bigPicture += ' Deep liquidity (' + lmcR.toFixed(1) + '% L/MC).';
   lines.push('01. The Big Picture: ' + bigPicture);
 
-  var patternMap = { consolidation: 'Consolidation Breakout', dev_sell: 'Dev Sell Absorption', second_pump: 'Second Pump Leg', floor_bounce: 'Floor Bounce', v_reversal: 'V-Reversal', double_bottom: 'Double Bottom', none: 'No Clear Pattern' };
-  var patName = patternMap[d.pattern] || (d.pattern || 'Unspecified');
-  lines.push('02. Pattern — ' + patName);
+  var patternMap = { accum_breakout: 'Accumulation Breakout', consolidation: 'Consolidation Breakout', reaccum_cont: 'Re-Accumulation Continuation', second_pump: 'Second Pump Leg', dev_sell: 'Dev Sell Absorption', double_bottom: 'Double Bottom Recovery', floor_bounce: 'Floor Bounce', v_reversal: 'V-Reversal', distribution: 'Distribution Risk', failed_breakout: 'Failed Breakout Risk', dead_cat: 'Dead-Cat Bounce', none: 'No Clear Pattern' };
+  var _tprExport = window._tecPatternResult || null;
+  var _patExportPrimary = _tprExport ? _tprExport.primary : null;
+  var _patExportSecondary = _tprExport ? _tprExport.secondary : null;
+  var patName = _patExportPrimary ? _patExportPrimary.name : (patternMap[d.pattern] || (d.pattern || 'Unspecified'));
+  var patLine = '02. Pattern — ' + patName;
+  if (_patExportPrimary) {
+    patLine += ' [' + _patExportPrimary.confidence + ' Confidence]';
+    if (_patExportSecondary) patLine += ' + Secondary: ' + _patExportSecondary.name + ' [' + _patExportSecondary.confidence + ']';
+  }
+  lines.push(patLine);
 
   var txtCurrentMC = d.marketCap || 0;
   var txtSA        = d.structuralAnalysis || null;
