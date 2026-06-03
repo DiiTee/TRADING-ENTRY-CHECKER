@@ -3985,7 +3985,26 @@ function buildSecurityBriefingHTML(d) {
   nt += '</div></div>';
 
   /* ── Dev Reputation ── */
+  var _di = window._devInfo || {};
+  var _diDep     = (d.devDeployed != null ? d.devDeployed : 0);
+  var _diBon     = (d.devBonded   != null ? d.devBonded   : 0);
+  var _diBondRt  = _di.bondRate  != null ? _di.bondRate  : (_diDep > 0 && _diBon > 0 ? (_diBon / _diDep) * 100 : null);
+  var _diRewards = _di.rewards   || 0;
+  var _diBestATH = _di.bestATH   || 0;
+  var _diAvgMult = _di.avgMultiple || 0;
+  var _diHistory = _di.launchHistory || [];
+  var _diLastLt  = _di.lastLaunchTime || '';
+  var _diHasData = _diDep > 0 || _diBon > 0 || _diRewards > 0 || _diBestATH > 0 || _diHistory.length > 0;
+
+  /* QEC-style tier for the combined score */
+  var _diTier, _diTierColor;
+  if      (devRep.score >= 70) { _diTier = 'TRUSTED';  _diTierColor = '#00e676'; }
+  else if (devRep.score >= 50) { _diTier = 'MODERATE'; _diTierColor = '#ffeb3b'; }
+  else if (devRep.score >= 30) { _diTier = 'RISKY';    _diTierColor = '#ff9800'; }
+  else                         { _diTier = 'DANGER';   _diTierColor = '#ff4757'; }
+
   nt += '<div style="margin-bottom:9px;padding:8px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+devRep.color+';">';
+  /* Header row */
   nt += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:5px;">';
   nt += '<div><span style="color:var(--text-secondary);font-size:0.60rem;font-weight:700;letter-spacing:0.8px;">DEV REPUTATION</span><br>';
   nt += '<strong style="color:'+devRep.color+';font-size:1.05em;">'+devRep.label+'</strong>';
@@ -3995,14 +4014,82 @@ function buildSecurityBriefingHTML(d) {
   nt += '<span style="color:'+confC+';font-weight:700;">'+devRep.confLabel+'</span><br>';
   nt += '<span style="color:var(--text-muted);">Coverage: '+devRep.covPct+'%</span></div>';
   nt += '</div>';
+  /* Deployer address */
   if (d.devAddress) nt += '<div style="font-size:0.61rem;color:var(--text-muted);margin-bottom:4px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;">Deployer: '+d.devAddress.slice(0,8)+'…'+d.devAddress.slice(-6)+'</div>';
-  nt += '<div style="display:flex;flex-wrap:wrap;gap:3px;">';
-  devRep.factors.forEach(function(f) {
-    var fc = f.t==='pos'?'#00e676':f.t==='neg'?'#ff4757':'#ffeb3b';
-    var fi = f.t==='pos'?'✓':f.t==='neg'?'✗':'·';
-    nt += '<div style="font-size:0.64rem;color:'+fc+';padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:3px;">'+fi+' '+f.txt+'</div>';
-  });
+  /* Deploy stats line (mirrors QEC panel) */
+  if (_diDep > 0) {
+    var _brCol = _diBondRt === null ? 'var(--text-muted)' : _diBondRt >= 12 ? 'var(--safe)' : _diBondRt >= 6 ? 'var(--caution)' : '#ff4757';
+    var _brTxt = _diBondRt !== null ? ' · <span style="color:'+_brCol+';">'+_diBondRt.toFixed(1)+'% bonded</span>' : '';
+    nt += '<div style="font-size:0.65rem;color:var(--text-muted);margin-bottom:5px;">';
+    nt += '<span style="color:var(--accent-cyan);font-weight:700;">'+_diDep+'</span> deployed';
+    if (_diBon) nt += ' · <span style="color:var(--safe);font-weight:700;">'+_diBon+'</span> bonded' + _brTxt;
+    if (_diRewards > 0) nt += ' · <span style="color:#ffd700;font-weight:700;">'+_diRewards.toFixed(0)+' SOL</span> rewards';
+    if (_diLastLt) nt += ' · Last: <span style="color:var(--text-muted);">'+_diLastLt+'</span>';
+    nt += '</div>';
+  }
+  /* Score bar + tier label */
+  nt += '<div style="margin-bottom:6px;">';
+  nt += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">';
+  nt += '<span style="font-size:0.62rem;color:var(--text-muted);">Reputation Score</span>';
+  nt += '<span style="font-size:0.78rem;font-weight:800;color:'+_diTierColor+';">'+_diTier+'&nbsp;<span style="font-weight:400;font-size:0.68rem;color:var(--text-muted);">('+devRep.score+'/100)</span></span>';
   nt += '</div>';
+  nt += '<div style="height:4px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;">';
+  nt += '<div style="height:100%;width:'+devRep.score+'%;background:'+devRep.color+';border-radius:3px;"></div>';
+  nt += '</div></div>';
+  /* Form-field factor pills */
+  if (devRep.factors.length > 0) {
+    nt += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;">';
+    devRep.factors.forEach(function(f) {
+      var fc = f.t==='pos'?'#00e676':f.t==='neg'?'#ff4757':'#ffeb3b';
+      var fi = f.t==='pos'?'✓':f.t==='neg'?'✗':'·';
+      nt += '<div style="font-size:0.64rem;color:'+fc+';padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:3px;">'+fi+' '+f.txt+'</div>';
+    });
+    nt += '</div>';
+  }
+  /* Launch history (bonus/warn lines + table — mirrors QEC panel) */
+  if (_diHasData) {
+    var _bonusLines = [], _warnLines = [];
+    if (_diBondRt !== null) {
+      if      (_diBondRt >= 20) _bonusLines.push('Strong bond rate ('+_diBondRt.toFixed(1)+'%)');
+      else if (_diBondRt >= 12) _bonusLines.push('Good bond rate ('+_diBondRt.toFixed(1)+'%)');
+      else if (_diBondRt < 2)   _warnLines.push('Very low bond rate ('+_diBondRt.toFixed(1)+'%) — serial rugger pattern');
+      else if (_diBondRt < 6)   _warnLines.push('Low bond rate ('+_diBondRt.toFixed(1)+'%) — mostly rugs');
+    }
+    if      (_diAvgMult >= 20) _bonusLines.push('Avg ATH '+_diAvgMult.toFixed(1)+'x per launch');
+    else if (_diBestATH >= 400000) _bonusLines.push('Best ATH $'+(_diBestATH/1000).toFixed(0)+'K');
+    if      (_diDep >= 200) _warnLines.push(_diDep+' total deployments — very high serial rug risk');
+    else if (_diDep >= 100) _warnLines.push(_diDep+' total deployments — high serial churn');
+    if (_diRewards >= 500) _bonusLines.push(_diRewards.toFixed(0)+' SOL rewards earned');
+    var _strong = _diHistory.filter(function(l) { return l.entryMC > 0 && l.athMC >= l.entryMC * 5; });
+    if (_strong.length >= 3) _bonusLines.push(_strong.length+' launches with 5×+ ATH');
+    if (_bonusLines.length > 0)
+      nt += '<div style="font-size:0.62rem;color:var(--safe);margin-bottom:3px;">'+_bonusLines.map(function(b){ return '✓ '+b; }).join(' &nbsp;·&nbsp; ')+'</div>';
+    if (_warnLines.length > 0)
+      nt += '<div style="font-size:0.62rem;color:#ff9800;margin-bottom:4px;">'+_warnLines.map(function(w){ return '⚠ '+w; }).join(' &nbsp;·&nbsp; ')+'</div>';
+    /* Launch history table */
+    if (_diHistory.length > 0) {
+      function _fmtMC(v) { if (!v) return '—'; if (v>=1e6) return '$'+(v/1e6).toFixed(1)+'M'; if (v>=1e3) return '$'+(v/1e3).toFixed(0)+'K'; return '$'+v.toFixed(0); }
+      var _rows = _diHistory.slice(0, 8).map(function(l) {
+        var mult   = (l.entryMC > 0 && l.athMC > 0) ? (l.athMC / l.entryMC).toFixed(1)+'x' : '';
+        var mVal   = mult ? parseFloat(mult) : 0;
+        var mColor = mVal >= 10 ? 'var(--safe)' : mVal >= 3 ? 'var(--caution)' : mVal > 0 ? '#ff9800' : 'var(--text-muted)';
+        return '<div style="display:flex;gap:5px;align-items:center;font-size:0.61rem;padding:1px 0;white-space:nowrap;">' +
+          '<span style="color:var(--text-secondary);font-weight:600;min-width:52px;overflow:hidden;text-overflow:ellipsis;">'+l.symbol+'</span>' +
+          (l.entryMC ? '<span style="color:var(--text-muted);">'+_fmtMC(l.entryMC)+'</span><span style="color:var(--text-muted);">→</span>' : '') +
+          '<span style="color:var(--accent-cyan);">'+_fmtMC(l.athMC)+'</span>' +
+          (mult ? '<span style="color:'+mColor+';font-weight:700;">'+mult+'</span>' : '') +
+          (l.ageStr ? '<span style="color:var(--text-muted);margin-left:2px;">'+l.ageStr+'</span>' : '') +
+          '</div>';
+      }).join('');
+      nt += '<div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07);">';
+      nt += '<div style="font-size:0.59rem;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.04em;">Launch history'+(_diHistory.length > 8 ? ' (top 8 of '+_diHistory.length+')' : '')+'</div>';
+      nt += _rows + '</div>';
+    }
+  } else if (!d.devAddress) {
+    nt += '<div style="font-size:0.65rem;color:var(--text-muted);padding:2px 0;">No deployer address in paste — launch history unavailable.</div>';
+  } else {
+    nt += '<div style="font-size:0.65rem;color:var(--text-muted);padding:2px 0;">Launch history not parsed — paste RugCheck dev history data to populate.</div>';
+  }
   if (devRep.covPct < 50) nt += '<div style="margin-top:5px;font-size:0.63rem;color:#ff9800;">⚠ Low data coverage — Dev Reputation is an estimate. Missing data alone does not indicate High Risk.</div>';
   nt += '</div>';
 
