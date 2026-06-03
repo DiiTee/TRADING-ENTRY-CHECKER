@@ -1798,6 +1798,7 @@ function loadSettings() {
       settings = Object.assign({}, DEFAULT_SETTINGS, parsed);
     }
   } catch(e) { settings = Object.assign({}, DEFAULT_SETTINGS); }
+  window._tecSettings = settings;
   applySettingsToUI();
 }
 
@@ -2557,6 +2558,8 @@ async function fetchFromCA(ca) {
           /* poolAttrs: GeckoTerminal native txn data (best) or DexScreener fallback */
           var saPoolAttrs = gtPoolAttrs || null;
           if (!saPoolAttrs && fetched._dexTxns) saPoolAttrs = { transactions: fetched._dexTxns };
+          window._tecHolderCount = fetched.holders || 0;
+          window._tecSettings    = settings;
           gtStructuralAnalysis = computeStructuralAnalysis(gt15mList, saPoolAttrs);
           if (gtStructuralAnalysis) {
             gtMacroFloor = gtStructuralAnalysis.macroFloorPrice || 0;
@@ -3921,7 +3924,7 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   else if (overheadDensity <= 60)                      { overheadRisk = 'Elevated Overhead'; overheadScore = 50; }
   else                                                 { overheadRisk = 'High Overhead';     overheadScore = 30; }
 
-  /* ── 11. Breakout Efficiency ── */
+  /* ── 11. Breakout Efficiency (with Attempt Confidence Modifier) ── */
   var breakoutAttempts = 0, successfulBreakouts = 0;
   var resistLevel = highs.slice(0, Math.max(1, n - 3)).reduce(function(a,b){return Math.max(a,b);}, 0);
   for (var bi = Math.max(0, n - 8); bi < n; bi++) {
@@ -3930,7 +3933,9 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
       if (closes[bi] > resistLevel) successfulBreakouts++;
     }
   }
-  var breakoutEfficiency = breakoutAttempts > 0 ? Math.round((successfulBreakouts / breakoutAttempts) * 100) : 50;
+  var rawBreakoutEfficiency = breakoutAttempts > 0 ? (successfulBreakouts / breakoutAttempts) * 100 : 100;
+  var attemptConfidenceModifier = breakoutAttempts >= 4 ? 1.00 : breakoutAttempts === 3 ? 0.85 : breakoutAttempts === 2 ? 0.75 : breakoutAttempts === 1 ? 0.60 : 0.60;
+  var breakoutEfficiency = breakoutAttempts > 0 ? Math.round(rawBreakoutEfficiency * attemptConfidenceModifier) : 50;
   var breakoutLabel;
   if      (breakoutEfficiency >= 80) breakoutLabel = 'Excellent';
   else if (breakoutEfficiency >= 60) breakoutLabel = 'Strong';
@@ -3993,8 +3998,28 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   else if (acceptanceScore >= 50) acceptanceClass = 'Neutral';
   else                            acceptanceClass = 'Weak Structure';
 
-  /* ── FIX #4: Demand Expansion Score ── */
+  /* ── Shelf Quality Score ── */
+  var recentThird = Math.max(1, Math.floor(n / 3));
+  var recentShelfTouches = candles15m.slice(-recentThird).filter(function(c){
+    return c[3] <= bestBucket.high * 1.02 && c[2] >= bestBucket.low * 0.98;
+  }).length;
+  var recencyWeightSQ = bestBucket.timeCount > 0 ? Math.min(1, recentShelfTouches / Math.max(bestBucket.timeCount, 1)) : 0;
+  var shelfQualityScore = Math.min(100, Math.max(0, Math.round(
+    DensityScore             * 0.30 +
+    DefenseScore             * 0.30 +
+    VolumeScore              * 0.25 +
+    (recencyWeightSQ * 100)  * 0.15
+  )));
+  var shelfQualityClass, shelfQualityPenalty;
+  if      (shelfQualityScore >= 85) { shelfQualityClass = 'Strong Shelf';     shelfQualityPenalty = 0;  }
+  else if (shelfQualityScore >= 70) { shelfQualityClass = 'Healthy Shelf';    shelfQualityPenalty = 0;  }
+  else if (shelfQualityScore >= 55) { shelfQualityClass = 'Developing Shelf'; shelfQualityPenalty = 5;  }
+  else if (shelfQualityScore >= 40) { shelfQualityClass = 'Weak Shelf';       shelfQualityPenalty = 10; }
+  else                               { shelfQualityClass = 'Unproven Shelf';   shelfQualityPenalty = 20; }
+
+  /* ── FIX #4: Demand Expansion Score (Short-Term + Medium-Term composite) ── */
   var demandExpansionScore, demandExpansionSource, demandExpansionQuality;
+  var shortTermExpansion, mediumTermExpansion;
   var pAttrs = poolAttrs || {};
   var paTx   = pAttrs.transactions || {};
   var txH1   = paTx.h1 || {};
@@ -4002,17 +4027,21 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   var h1Buys = parseInt(txH1.buys) || 0;
   var m5Buys = parseInt(txM5.buys) || 0;
 
-  /* Method 1: Native buy/sell data (High Confidence) */
+  /* Method 1: Native buy/sell data (High Confidence) — ST and MT equivalent */
   if (h1Buys > 0 && m5Buys > 0) {
     var prevBuysPerSlice = Math.max(0.1, (h1Buys - m5Buys) / 11);
     var buyGrowth = ((m5Buys - prevBuysPerSlice) / prevBuysPerSlice) * 100;
-    if      (buyGrowth >  50) demandExpansionScore = 100;
-    else if (buyGrowth >  25) demandExpansionScore = 85;
-    else if (buyGrowth >  10) demandExpansionScore = 70;
-    else if (buyGrowth >   0) demandExpansionScore = 55;
-    else if (buyGrowth > -10) demandExpansionScore = 40;
-    else if (buyGrowth > -25) demandExpansionScore = 25;
-    else                      demandExpansionScore = 10;
+    var _base1;
+    if      (buyGrowth >  50) _base1 = 100;
+    else if (buyGrowth >  25) _base1 = 85;
+    else if (buyGrowth >  10) _base1 = 70;
+    else if (buyGrowth >   0) _base1 = 55;
+    else if (buyGrowth > -10) _base1 = 40;
+    else if (buyGrowth > -25) _base1 = 25;
+    else                      _base1 = 10;
+    shortTermExpansion     = _base1;
+    mediumTermExpansion    = _base1;
+    demandExpansionScore   = _base1;
     demandExpansionSource  = 'Native Buy/Sell Data';
     demandExpansionQuality = 'High Confidence';
   }
@@ -4023,36 +4052,49 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
     var totalH1Tx  = h1Buys + h1Sells;
     if (totalH1Tx > 0) {
       var buyRatio = h1Buys / totalH1Tx;
-      if      (buyRatio >= 0.65) demandExpansionScore = 80;
-      else if (buyRatio >= 0.55) demandExpansionScore = 65;
-      else if (buyRatio >= 0.45) demandExpansionScore = 50;
-      else if (buyRatio >= 0.35) demandExpansionScore = 35;
-      else                       demandExpansionScore = 20;
+      var _base2;
+      if      (buyRatio >= 0.65) _base2 = 80;
+      else if (buyRatio >= 0.55) _base2 = 65;
+      else if (buyRatio >= 0.45) _base2 = 50;
+      else if (buyRatio >= 0.35) _base2 = 35;
+      else                       _base2 = 20;
+      shortTermExpansion     = _base2;
+      mediumTermExpansion    = _base2;
+      demandExpansionScore   = _base2;
       demandExpansionSource  = 'Transaction Count Ratio';
       demandExpansionQuality = 'Medium Confidence';
     }
   }
 
-  /* Method 3: Bull/Bear volume proxy from OHLCV (Proxy Estimate) */
+  /* Method 3: Bull/Bear volume proxy — ST (15 candles) + MT (30 candles) composite */
   if (demandExpansionScore === undefined) {
-    var wSz = Math.min(15, Math.floor(n / 2));
-    var recW = candles15m.slice(-wSz);
-    var preW = candles15m.slice(-wSz * 2, -wSz);
-    var bullDom = function(cands) {
+    var _bullDom = function(cands) {
       var bull = 0, bear = 0;
       cands.forEach(function(c){ var v = c[5] || 0; if (c[4] > c[1]) bull += v; else bear += v; });
       return (bull + bear) > 0 ? bull / (bull + bear) : 0.5;
     };
-    var recDom   = bullDom(recW);
-    var preDom   = preW.length >= 3 ? bullDom(preW) : 0.5;
-    var domDelta = (recDom - preDom) * 100;
-    if      (domDelta >  20) demandExpansionScore = 100;
-    else if (domDelta >  10) demandExpansionScore = 80;
-    else if (domDelta >   5) demandExpansionScore = 65;
-    else if (domDelta >  -5) demandExpansionScore = 50;
-    else if (domDelta > -15) demandExpansionScore = 30;
-    else                     demandExpansionScore = 10;
-    demandExpansionSource  = 'Bull/Bear Volume Proxy';
+    var _domScore = function(delta) {
+      if      (delta >  20) return 100;
+      else if (delta >  10) return 80;
+      else if (delta >   5) return 65;
+      else if (delta >  -5) return 50;
+      else if (delta > -15) return 30;
+      else                  return 10;
+    };
+    /* Short-Term: last 15 vs previous 15 */
+    var stSz   = Math.min(15, Math.floor(n / 2));
+    var stRec  = candles15m.slice(-stSz);
+    var stPre  = candles15m.slice(-stSz * 2, -stSz);
+    var stDelta = (_bullDom(stRec) - (stPre.length >= 3 ? _bullDom(stPre) : 0.5)) * 100;
+    shortTermExpansion = _domScore(stDelta);
+    /* Medium-Term: last 30 vs previous 30 */
+    var mtSz   = Math.min(30, Math.floor(n / 2));
+    var mtRec  = candles15m.slice(-mtSz);
+    var mtPre  = candles15m.slice(-mtSz * 2, -mtSz);
+    var mtDelta = (_bullDom(mtRec) - (mtPre.length >= 3 ? _bullDom(mtPre) : 0.5)) * 100;
+    mediumTermExpansion = _domScore(mtDelta);
+    demandExpansionScore   = Math.round(shortTermExpansion * 0.70 + mediumTermExpansion * 0.30);
+    demandExpansionSource  = 'Bull/Bear Volume Proxy (ST+MT)';
     demandExpansionQuality = 'Proxy Estimate';
   }
 
@@ -4099,6 +4141,115 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   else if (demandReturnScore >= 50) demandClass = 'Weak Demand Return';
   else                              demandClass = 'No Meaningful Demand';
 
+  /* ── Volume Expansion Pattern ── */
+  var volumeExpansionScore, volumeExpansionSignal;
+  (function() {
+    if (n < 6) { volumeExpansionScore = 50; volumeExpansionSignal = 'Neutral'; return; }
+    var veW   = Math.min(10, Math.floor(n / 3));
+    var veRec = candles15m.slice(-veW);
+    var vePre = candles15m.slice(-veW * 2, -veW);
+    var veRecVol = veRec.reduce(function(a,c){return a+(c[5]||0);},0) / veW;
+    var vePreVol = vePre.length > 0 ? vePre.reduce(function(a,c){return a+(c[5]||0);},0) / vePre.length : veRecVol;
+    var volExp = vePreVol > 0 && veRecVol > vePreVol * 1.10;
+    var redCnt = veRec.filter(function(c){return c[4] < c[1];}).length;
+    var isPull = redCnt >= Math.ceil(veW * 0.5);
+    if (volExp && isPull)  { volumeExpansionScore = 80; volumeExpansionSignal = 'Bullish'; }
+    else if (!volExp && !isPull) { volumeExpansionScore = 65; volumeExpansionSignal = 'Bullish'; }
+    else if (volExp && !isPull)  { volumeExpansionScore = 55; volumeExpansionSignal = 'Neutral'; }
+    else                         { volumeExpansionScore = 40; volumeExpansionSignal = 'Neutral'; }
+    if (volExp && redCnt >= Math.ceil(veW * 0.7)) { volumeExpansionScore = 20; volumeExpansionSignal = 'Bearish'; }
+  })();
+
+  /* ── Supply Absorption Score ── */
+  var halfVol = Math.floor(n / 2);
+  var avgVolHalf = halfVol > 0 ? volumes.slice(-halfVol).reduce(function(a,b){return a+b;},0) / halfVol : 0;
+  var avgVolPrev = halfVol > 0 ? (volumes.slice(-halfVol*2,-halfVol).reduce(function(a,b){return a+b;},0) / halfVol || avgVolHalf) : avgVolHalf;
+  var volExpProxy = avgVolPrev > 0 ? Math.min(100, (avgVolHalf / avgVolPrev) * 100) : 50;
+  var supplyAbsorptionScore = Math.min(100, Math.max(0, Math.round(
+    demandExpansionScore      * 0.30 +
+    volExpProxy               * 0.25 +
+    Math.min(100, shelfDefenses * 20) * 0.25 +
+    breakoutEfficiency        * 0.20
+  )));
+  var supplyAbsorptionLabel = supplyAbsorptionScore >= 80 ? 'Exceptional' : supplyAbsorptionScore >= 65 ? 'Strong' : supplyAbsorptionScore >= 45 ? 'Moderate' : 'Weak';
+
+  /* ── Pre-Breakout Squeeze ── */
+  var preBreakoutSqueeze;
+  if (!compressionDetected) {
+    preBreakoutSqueeze = 'Weak';
+  } else {
+    var pbConfirm = (demandReturnScore >= 65 ? 1 : 0) + (acceptanceScore >= 70 ? 1 : 0) + (overheadRisk !== 'High Overhead' ? 1 : 0);
+    preBreakoutSqueeze = pbConfirm >= 3 ? 'Strong' : pbConfirm >= 2 ? 'Moderate' : 'Weak';
+  }
+
+  /* ── Double Accumulation Pattern ── */
+  var doubleAccumulation = false, doubleAccumConfidence = 'None';
+  if (n >= 25) {
+    var avgVol = volumes.reduce(function(a,b){return a+b;},0) / n;
+    var daClusters = [];
+    for (var dai = 0; dai < n; dai++) {
+      if (volumes[dai] > avgVol * 1.5 && lows[dai] <= bestBucket.high * 1.05 && highs[dai] >= bestBucket.low * 0.95) {
+        daClusters.push({ idx: dai, price: (highs[dai] + lows[dai]) / 2 });
+      }
+    }
+    outer: for (var dci = 0; dci < daClusters.length; dci++) {
+      for (var dcj = dci + 1; dcj < daClusters.length; dcj++) {
+        var daPriceDev = Math.abs(daClusters[dci].price - daClusters[dcj].price) / daClusters[dci].price;
+        var daTimeSep  = daClusters[dcj].idx - daClusters[dci].idx;
+        if (daPriceDev <= 0.05 && daTimeSep >= 10) {
+          doubleAccumulation = true;
+          doubleAccumConfidence = daTimeSep >= 20 ? 'High' : 'Moderate';
+          break outer;
+        }
+      }
+    }
+  }
+
+  /* ── Trap Pattern Detection ── */
+  var fakeBreakoutRisk = false, perfectClimbRisk = false, exitSpikeRisk = false;
+  /* Fake Breakout */
+  if (n >= 5) {
+    var lastC = candles15m[n - 1];
+    var isBigGreen = lastC[4] > lastC[1] && (lastC[1] > 0 ? (lastC[4] - lastC[1]) / lastC[1] > 0.05 : false);
+    if (isBigGreen && breakoutEfficiency < 50 && demandExpansionScore < 50 && volumeExpansionScore < 55) fakeBreakoutRisk = true;
+  }
+  /* Perfect Climb */
+  if (n >= 10) {
+    var pcN = Math.min(10, n);
+    var pcC = candles15m.slice(-pcN);
+    var pcGreen = pcC.filter(function(c){return c[4]>c[1];}).length;
+    var pcAvgBody = pcC.reduce(function(a,c){return a+Math.abs(c[4]-c[1]);},0) / pcN;
+    var pcAvgWick = pcC.reduce(function(a,c){return a+(c[2]-c[3]);},0) / pcN;
+    var pcWickRatio = pcAvgBody > 0 ? pcAvgWick / pcAvgBody : 1;
+    if (pcGreen >= pcN * 0.85 && pcWickRatio < 0.4 && !parabolicRisk) perfectClimbRisk = true;
+  }
+  /* Exit Spike */
+  if (n >= 4) {
+    var esP = candles15m[n - 2], esL = candles15m[n - 1];
+    var esTopWick = esP[2] - Math.max(esP[1], esP[4]);
+    var esBody    = Math.abs(esP[4] - esP[1]);
+    if (esTopWick > esBody * 1.5 && esL[4] < esL[1] && demandExpansionScore < 40) exitSpikeRisk = true;
+  }
+  var trapRiskScore = Math.min(100,
+    (fakeBreakoutRisk ? 30 : 0) + (perfectClimbRisk ? 25 : 0) + (exitSpikeRisk ? 35 : 0) + (parabolicRisk ? 25 : 0)
+  );
+  var trapRiskLabel = trapRiskScore >= 75 ? 'Extreme Risk' : trapRiskScore >= 50 ? 'High Risk' : trapRiskScore >= 25 ? 'Moderate Risk' : 'Low Risk';
+  var trapRiskColor = trapRiskScore >= 75 ? '#ff4757' : trapRiskScore >= 50 ? '#ff6b35' : trapRiskScore >= 25 ? '#ffeb3b' : '#00e676';
+
+  /* ── Holder Momentum Score (from available data) ── */
+  var holderMomentumScore = 50, holderTrendClass = 'Stable', holderMomentumSource = 'Estimated';
+  (function() {
+    var hc = window._tecHolderCount || 0;
+    var minH = (window._tecSettings && window._tecSettings.minHolders) || 400;
+    if (hc <= 0) { holderMomentumScore = 50; holderTrendClass = 'Unknown'; holderMomentumSource = 'No Data'; return; }
+    holderMomentumSource = 'Current Holder Count';
+    if      (hc >= minH * 5)  { holderMomentumScore = 90; holderTrendClass = 'Rapid Growth';   }
+    else if (hc >= minH * 2)  { holderMomentumScore = 75; holderTrendClass = 'Moderate Growth'; }
+    else if (hc >= minH)      { holderMomentumScore = 60; holderTrendClass = 'Stable';          }
+    else if (hc >= minH * 0.5){ holderMomentumScore = 40; holderTrendClass = 'Slow Decline';    }
+    else                      { holderMomentumScore = 20; holderTrendClass = 'Rapid Decline';   }
+  })();
+
   /* ── FIX #6/#7: Confidence Tier (8 components; Breakout weight 10%→15%) ── */
   var distScoreForTier = Math.max(0, 100 - distFromShelf * 3);
   var tierScore =
@@ -4118,6 +4269,9 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   if (!shelfIsValid)              tierScore *= 0.90;
 
   tierScore = Math.round(Math.min(100, tierScore));
+
+  /* Shelf Quality penalty */
+  if (shelfQualityPenalty > 0) tierScore = Math.max(0, tierScore - shelfQualityPenalty);
 
   /* Data integrity: < 50 candles → reduce tier score by 15 pts (one level) */
   if (insufficientData && tierScore > 0) tierScore = Math.max(0, tierScore - 15);
@@ -4238,23 +4392,85 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
           : 'Low quality — avoid full-size position'
   });
 
+  /* Shelf Quality */
+  checklist.push({
+    label: 'Shelf Quality', value: shelfQualityScore + '/100 — ' + shelfQualityClass,
+    status: shelfQualityScore >= 70 ? 'pass' : shelfQualityScore >= 55 ? 'caution' : 'fail',
+    reason: shelfQualityScore >= 85 ? 'Strong shelf — high conviction base'
+          : shelfQualityScore >= 70 ? 'Healthy shelf — solid support'
+          : shelfQualityScore >= 55 ? 'Developing — shelf still forming, reduce size'
+          : shelfQualityScore >= 40 ? 'Weak shelf — caution on position sizing'
+          : 'Unproven shelf — insufficient evidence'
+  });
+
+  /* Volume Expansion */
+  checklist.push({
+    label: 'Volume Expansion', value: volumeExpansionScore + '/100 — ' + volumeExpansionSignal,
+    status: volumeExpansionSignal === 'Bullish' ? 'pass' : volumeExpansionSignal === 'Neutral' ? 'caution' : 'fail',
+    reason: volumeExpansionSignal === 'Bullish' ? 'Volume pattern supports buyers'
+          : volumeExpansionSignal === 'Neutral' ? 'Volume pattern inconclusive'
+          : 'Aggressive selling on expanding volume'
+  });
+
+  /* Pre-Breakout Squeeze */
+  checklist.push({
+    label: 'Pre-Breakout Squeeze', value: preBreakoutSqueeze,
+    status: preBreakoutSqueeze === 'Strong' ? 'pass' : preBreakoutSqueeze === 'Moderate' ? 'caution' : 'caution',
+    reason: preBreakoutSqueeze === 'Strong' ? 'Compression + demand confirmed — breakout setup'
+          : preBreakoutSqueeze === 'Moderate' ? 'Partial compression — watch for breakout'
+          : 'No compression detected — no squeeze setup'
+  });
+
+  /* Trap Risk */
+  checklist.push({
+    label: 'Trap Risk', value: trapRiskLabel + ' (' + trapRiskScore + ')',
+    status: trapRiskScore < 25 ? 'pass' : trapRiskScore < 50 ? 'caution' : 'fail',
+    reason: trapRiskScore < 25 ? 'Low trap risk — structure looks clean'
+          : trapRiskScore < 50 ? 'Moderate trap signals — size carefully'
+          : 'High trap risk — ' + (fakeBreakoutRisk ? 'Fake Breakout ' : '') + (exitSpikeRisk ? 'Exit Spike ' : '') + (perfectClimbRisk ? 'Perfect Climb' : '')
+  });
+
+  /* Holder Momentum */
+  checklist.push({
+    label: 'Holder Momentum', value: holderTrendClass + ' (' + holderMomentumScore + '/100)',
+    status: holderMomentumScore >= 60 ? 'pass' : holderMomentumScore >= 40 ? 'caution' : 'fail',
+    reason: holderTrendClass === 'Rapid Growth'   ? 'Strong holder growth — rising mindshare'
+          : holderTrendClass === 'Moderate Growth' ? 'Healthy adoption trend'
+          : holderTrendClass === 'Stable'          ? 'Stable holder base — no decline'
+          : holderTrendClass === 'Slow Decline'    ? 'Holders declining slowly — watch'
+          : holderTrendClass === 'Rapid Decline'   ? 'Rapid holder loss — bearish signal'
+          : 'Holder data unavailable'
+  });
+
   /* Final Decision */
   var clFailCount = checklist.filter(function(c){ return c.status === 'fail'; }).length;
   var clPassCount = checklist.filter(function(c){ return c.status === 'pass'; }).length;
+  var clTotal     = checklist.length;
   var isDeadCat   = shelfType.indexOf('Dead-Cat') !== -1;
   var isDist      = shelfType.indexOf('Distribution') !== -1;
   var isHighOH    = overheadRisk === 'High Overhead';
-  var clAutoAvoid = isDeadCat || isDist || demandReturnScore < 40 || (isHighOH && confidenceTier !== 'S');
-  var checklistResult = (clAutoAvoid || clFailCount >= 3) ? 'AVOID' : clPassCount >= 8 ? 'PASS' : clPassCount >= 5 ? 'CAUTION' : 'AVOID';
+  var clAutoAvoid = isDeadCat || isDist || demandReturnScore < 40 || (isHighOH && confidenceTier !== 'S') || (shelfQualityClass === 'Unproven Shelf') || trapRiskScore >= 75;
+  var passThresh  = Math.round(clTotal * 0.65);
+  var cautThresh  = Math.round(clTotal * 0.42);
+  var checklistResult = (clAutoAvoid || clFailCount >= 4) ? 'AVOID' : clPassCount >= passThresh ? 'PASS' : clPassCount >= cautThresh ? 'CAUTION' : 'AVOID';
   var checklistColor  = checklistResult === 'PASS' ? '#00e676' : checklistResult === 'CAUTION' ? '#ffeb3b' : '#ff4757';
   var checklistReason = clAutoAvoid
-    ? 'Override: ' + (isDeadCat ? 'Dead-Cat shelf' : isDist ? 'Distribution shelf' : isHighOH ? 'High Overhead (non-S tier)' : 'Demand Return < 40')
-    : clFailCount >= 3 ? clFailCount + ' criteria failed'
-    : clPassCount >= 8 ? clPassCount + '/11 criteria passed'
-    : clPassCount + '/11 passed · ' + clFailCount + ' failed';
+    ? 'Override: ' + (isDeadCat ? 'Dead-Cat shelf' : isDist ? 'Distribution shelf' : isHighOH ? 'High Overhead (non-S tier)' : trapRiskScore >= 75 ? 'Extreme Trap Risk' : shelfQualityClass === 'Unproven Shelf' ? 'Unproven Shelf' : 'Demand Return < 40')
+    : clFailCount >= 4 ? clFailCount + ' criteria failed'
+    : clPassCount + '/' + clTotal + ' criteria passed' + (clFailCount > 0 ? ' · ' + clFailCount + ' failed' : '');
 
-  /* ── Runner Potential ── */
-  var runnerAvg = (acceptanceScore + demandReturnScore + demandExpansionScore + breakoutEfficiency + overheadScore + shelfTypeScore) / 6;
+  /* ── Runner Potential (reweighted: Demand Return 25%, Demand Expansion 25%, Acceptance 20%, Breakout 15%, Overhead 10%, Shelf Type 5%) ── */
+  var runnerAvg = Math.round(
+    demandReturnScore    * 0.25 +
+    demandExpansionScore * 0.25 +
+    acceptanceScore      * 0.20 +
+    breakoutEfficiency   * 0.15 +
+    overheadScore        * 0.10 +
+    shelfTypeScore       * 0.05
+  );
+  /* Shelf Quality impact on Runner Potential */
+  var runnerQualityAdj = shelfQualityScore >= 70 ? 5 : shelfQualityScore >= 55 ? 0 : shelfQualityScore >= 40 ? -5 : -12;
+  runnerAvg = Math.min(100, Math.max(0, runnerAvg + runnerQualityAdj));
   var runnerPotential = runnerAvg >= 75 ? 'Very High' : runnerAvg >= 60 ? 'High' : runnerAvg >= 45 ? 'Moderate' : 'Low';
   var runnerColor     = runnerPotential === 'Very High' ? '#00ffcc' : runnerPotential === 'High' ? '#00e676' : runnerPotential === 'Moderate' ? '#ffeb3b' : '#ff9800';
 
@@ -4303,32 +4519,66 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
     /* FIX #1 — Acceptance */
     acceptanceScore:       acceptanceScore,
     acceptanceClass:       acceptanceClass,
-    /* FIX #4 — Demand Expansion */
-    demandExpansionScore:  demandExpansionScore,
-    demandExpansionSource: demandExpansionSource,
-    demandExpansionQuality:demandExpansionQuality,
+    /* FIX #4 — Demand Expansion (ST+MT composite) */
+    demandExpansionScore:    demandExpansionScore,
+    demandExpansionSource:   demandExpansionSource,
+    demandExpansionQuality:  demandExpansionQuality,
+    shortTermExpansion:      shortTermExpansion,
+    mediumTermExpansion:     mediumTermExpansion,
     /* FIX #5 — Bounce Velocity */
-    bounceVelocityScore:   bounceVelocityScore,
-    bounceMagnitude:       bounceMagnitude !== null ? bounceMagnitude.toFixed(1) : null,
-    bounceDuration:        bounceDuration,
+    bounceVelocityScore:     bounceVelocityScore,
+    bounceMagnitude:         bounceMagnitude !== null ? bounceMagnitude.toFixed(1) : null,
+    bounceDuration:          bounceDuration,
     /* FIX #2/#3 — Demand Return */
-    demandReturnScore:     demandReturnScore,
-    demandClass:           demandClass,
+    demandReturnScore:       demandReturnScore,
+    demandClass:             demandClass,
     /* FIX #6/#7 — Confidence Tier */
-    tierScore:             tierScore,
-    confidenceTier:        confidenceTier,
-    tierLabel:             tierLabel,
-    tierColor:             tierColor,
+    tierScore:               tierScore,
+    confidenceTier:          confidenceTier,
+    tierLabel:               tierLabel,
+    tierColor:               tierColor,
+    /* Shelf Quality */
+    shelfQualityScore:       shelfQualityScore,
+    shelfQualityClass:       shelfQualityClass,
+    shelfQualityPenalty:     shelfQualityPenalty,
+    /* Breakout Confidence Modifier */
+    breakoutAttempts:        breakoutAttempts,
+    successfulBreakouts:     successfulBreakouts,
+    rawBreakoutEfficiency:   Math.round(rawBreakoutEfficiency),
+    attemptConfidenceModifier: attemptConfidenceModifier,
+    /* Supply Absorption */
+    supplyAbsorptionScore:   supplyAbsorptionScore,
+    supplyAbsorptionLabel:   supplyAbsorptionLabel,
+    /* Volume Expansion */
+    volumeExpansionScore:    volumeExpansionScore,
+    volumeExpansionSignal:   volumeExpansionSignal,
+    /* Pre-Breakout Squeeze */
+    preBreakoutSqueeze:      preBreakoutSqueeze,
+    /* Double Accumulation */
+    doubleAccumulation:      doubleAccumulation,
+    doubleAccumConfidence:   doubleAccumConfidence,
+    /* Trap Patterns */
+    fakeBreakoutRisk:        fakeBreakoutRisk,
+    perfectClimbRisk:        perfectClimbRisk,
+    exitSpikeRisk:           exitSpikeRisk,
+    trapRiskScore:           trapRiskScore,
+    trapRiskLabel:           trapRiskLabel,
+    trapRiskColor:           trapRiskColor,
+    /* Holder Momentum */
+    holderMomentumScore:     holderMomentumScore,
+    holderTrendClass:        holderTrendClass,
+    holderMomentumSource:    holderMomentumSource,
     /* Entry Checklist */
-    entryChecklist:        checklist,
-    checklistResult:       checklistResult,
-    checklistColor:        checklistColor,
-    checklistReason:       checklistReason,
+    entryChecklist:          checklist,
+    checklistResult:         checklistResult,
+    checklistColor:          checklistColor,
+    checklistReason:         checklistReason,
     /* Runner Potential */
-    runnerPotential:       runnerPotential,
-    runnerColor:           runnerColor,
+    runnerPotential:         runnerPotential,
+    runnerColor:             runnerColor,
+    runnerScore:             runnerAvg,
     /* Data Integrity */
-    insufficientData:      insufficientData
+    insufficientData:        insufficientData
   };
 }
 
@@ -4640,15 +4890,45 @@ function buildEntryBriefingHTML(d, analysis) {
           if (sa.insufficientData) {
             t += '<div style="margin-bottom:6px;padding:4px 8px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.08);font-size:0.72rem;color:#ff9800;">⚠ Insufficient candle data (&lt;50 candles) — Confidence Tier reduced by one level.</div>';
           }
+
+          /* ── Confidence Tier + Shelf Quality (prominent) ── */
+          t += '<div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
+          t += '<div style="flex:1;min-width:160px;padding:6px 10px;border-left:3px solid ' + sa.tierColor + ';background:rgba(0,0,0,0.22);">';
+          t += 'Confidence Tier: <strong style="color:' + sa.tierColor + ';font-size:1.2em;letter-spacing:2px;">' + sa.confidenceTier + '</strong>';
+          t += ' <strong style="color:' + sa.tierColor + ';">' + sa.tierLabel + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(Score: ' + sa.tierScore + '/100)</span>';
+          t += '</div>';
+          var sqC = sa.shelfQualityScore >= 70 ? '#00e676' : sa.shelfQualityScore >= 55 ? '#ffeb3b' : '#ff4757';
+          t += '<div style="flex:1;min-width:160px;padding:6px 10px;border-left:3px solid ' + sqC + ';background:rgba(0,0,0,0.22);">';
+          t += 'Shelf Quality: <strong style="color:' + sqC + ';">' + sa.shelfQualityScore + '/100</strong>';
+          t += ' <span style="color:' + sqC + ';font-size:0.72rem;">' + sa.shelfQualityClass + '</span>';
+          if (sa.shelfQualityPenalty > 0) t += ' <span style="color:#ff9800;font-size:0.68rem;">−' + sa.shelfQualityPenalty + ' tier penalty</span>';
+          t += '</div>';
+          t += '</div>';
+
+          /* ── Core Scores ── */
           var asC = sa.acceptanceScore >= 80 ? 'var(--safe)' : sa.acceptanceScore >= 65 ? 'var(--caution)' : '#ff4757';
           t += 'Acceptance Score: <strong style="color:' + asC + ';">' + sa.acceptanceScore + '/100</strong> <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.acceptanceClass + ')</span><br>';
           var drC = sa.demandReturnScore >= 80 ? 'var(--safe)' : sa.demandReturnScore >= 65 ? 'var(--caution)' : '#ff4757';
           t += 'Demand Return Score: <strong style="color:' + drC + ';">' + sa.demandReturnScore + '/100</strong> <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.demandClass + ')</span><br>';
+
+          /* ── Demand Expansion (ST + MT breakdown) ── */
           var deC = sa.demandExpansionScore >= 75 ? 'var(--safe)' : sa.demandExpansionScore >= 60 ? 'var(--caution)' : '#ff4757';
           var dqB = sa.demandExpansionQuality === 'High Confidence' ? '#00e676' : sa.demandExpansionQuality === 'Medium Confidence' ? '#ffeb3b' : '#ff9800';
           t += 'Demand Expansion: <strong style="color:' + deC + ';">' + sa.demandExpansionScore + '/100</strong>';
           t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.62rem;font-weight:700;color:#111;background:' + dqB + ';">' + sa.demandExpansionQuality + '</span>';
-          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">via ' + sa.demandExpansionSource + '</span><br>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">via ' + sa.demandExpansionSource + '</span>';
+          if (sa.shortTermExpansion !== undefined && sa.mediumTermExpansion !== undefined && sa.demandExpansionQuality === 'Proxy Estimate') {
+            t += '<br><span style="color:var(--text-muted);font-size:0.68rem;padding-left:10px;">';
+            var stC = sa.shortTermExpansion >= 65 ? 'var(--safe)' : sa.shortTermExpansion >= 45 ? 'var(--caution)' : '#ff4757';
+            var mtC = sa.mediumTermExpansion >= 65 ? 'var(--safe)' : sa.mediumTermExpansion >= 45 ? 'var(--caution)' : '#ff4757';
+            t += 'Short-Term (15c): <strong style="color:' + stC + ';">' + sa.shortTermExpansion + '</strong>';
+            t += ' &nbsp;·&nbsp; Medium-Term (30c): <strong style="color:' + mtC + ';">' + sa.mediumTermExpansion + '</strong>';
+            t += ' &nbsp;·&nbsp; Final: <strong style="color:' + deC + ';">' + sa.demandExpansionScore + '</strong> (70%/30%)';
+            t += '</span>';
+          }
+          t += '<br>';
+
           if (tps) {
             var tpC = tps.score >= 80 ? 'var(--safe)' : tps.score >= 60 ? 'var(--caution)' : '#ff4757';
             t += 'Transaction Pressure: <strong style="color:' + tpC + ';">' + tps.score + '/100</strong>';
@@ -4658,24 +4938,72 @@ function buildEntryBriefingHTML(d, analysis) {
           t += 'Bounce Velocity Score: <strong style="color:' + bvC + ';">' + sa.bounceVelocityScore + '/100</strong>';
           if (sa.bounceMagnitude !== null) t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(+' + sa.bounceMagnitude + '% over ' + sa.bounceDuration + ' candle' + (sa.bounceDuration !== 1 ? 's' : '') + ')</span>';
           t += '<br>';
+
+          /* ── Breakout Efficiency (with attempt confidence breakdown) ── */
+          var boC = sa.breakoutEfficiency >= 60 ? 'var(--safe)' : sa.breakoutEfficiency >= 40 ? 'var(--caution)' : '#ff4757';
+          t += 'Breakout Efficiency: <strong style="color:' + boC + ';">' + sa.breakoutEfficiency + '%</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.breakoutLabel + ')</span>';
+          if (sa.breakoutAttempts > 0) {
+            t += '<br><span style="color:var(--text-muted);font-size:0.68rem;padding-left:10px;">';
+            t += 'Attempts: <strong>' + sa.breakoutAttempts + '</strong>';
+            t += ' &nbsp;·&nbsp; Successful: <strong>' + sa.successfulBreakouts + '</strong>';
+            t += ' &nbsp;·&nbsp; Raw: <strong>' + sa.rawBreakoutEfficiency + '%</strong>';
+            t += ' &nbsp;·&nbsp; Confidence Modifier: <strong>' + Math.round(sa.attemptConfidenceModifier * 100) + '%</strong>';
+            t += ' &nbsp;·&nbsp; Final: <strong style="color:' + boC + ';">' + sa.breakoutEfficiency + '%</strong>';
+            t += '</span>';
+          }
+          t += '<br>';
+
+          /* ── Supply Absorption ── */
+          var saC2 = sa.supplyAbsorptionScore >= 65 ? 'var(--safe)' : sa.supplyAbsorptionScore >= 45 ? 'var(--caution)' : '#ff4757';
+          t += 'Supply Absorption: <strong style="color:' + saC2 + ';">' + sa.supplyAbsorptionScore + '/100</strong>';
+          t += ' <span style="color:' + saC2 + ';font-size:0.72rem;">' + sa.supplyAbsorptionLabel + '</span><br>';
+
+          /* ── Volume Expansion ── */
+          var veC = sa.volumeExpansionSignal === 'Bullish' ? 'var(--safe)' : sa.volumeExpansionSignal === 'Neutral' ? 'var(--caution)' : '#ff4757';
+          t += 'Volume Expansion: <strong style="color:' + veC + ';">' + sa.volumeExpansionScore + '/100</strong>';
+          t += ' <span style="color:' + veC + ';font-size:0.72rem;">' + sa.volumeExpansionSignal + '</span><br>';
+
           t += 'Shelf Type: <strong style="color:var(--accent-cyan);">' + sa.shelfType + '</strong> <span style="color:var(--text-muted);font-size:0.72rem;">— ' + sa.shelfTypeDesc + '</span><br>';
           t += 'Structure Sequence: <span style="color:var(--accent-cyan);">' + sa.structureSequence + '</span><br>';
           t += 'Shelf Defenses: <strong>' + sa.defenseCount + '</strong> <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.defenseClassification + ')</span>';
           t += ' &nbsp;|&nbsp; ATR: <strong>' + sa.atrPct + '%</strong> &nbsp;|&nbsp; SD: <strong>' + sa.sdPct + '%</strong><br>';
           var ohC = sa.overheadScore >= 80 ? 'var(--safe)' : sa.overheadScore >= 65 ? 'var(--caution)' : '#ff4757';
           t += 'Overhead Supply: <strong style="color:' + ohC + ';">' + sa.overheadRisk + '</strong>';
-          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.overheadDensityPct + '% of closes above)</span>';
-          var boC = sa.breakoutEfficiency >= 60 ? 'var(--safe)' : sa.breakoutEfficiency >= 40 ? 'var(--caution)' : '#ff4757';
-          t += ' &nbsp;|&nbsp; Breakout Efficiency: <strong style="color:' + boC + ';">' + sa.breakoutEfficiency + '%</strong>';
-          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.breakoutLabel + ')</span><br>';
+          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.overheadDensityPct + '% of closes above)</span><br>';
+
+          /* ── Pre-Breakout Squeeze & Double Accumulation ── */
+          var pbsC = sa.preBreakoutSqueeze === 'Strong' ? 'var(--safe)' : sa.preBreakoutSqueeze === 'Moderate' ? 'var(--caution)' : 'var(--text-muted)';
+          t += 'Pre-Breakout Squeeze: <strong style="color:' + pbsC + ';">' + sa.preBreakoutSqueeze + '</strong>';
+          if (sa.doubleAccumulation) {
+            t += ' &nbsp;|&nbsp; Double Accumulation: <strong style="color:var(--safe);">Detected</strong>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.doubleAccumConfidence + ' confidence)</span>';
+          }
+          t += '<br>';
+
+          /* ── Trap Patterns ── */
+          var trC = sa.trapRiskColor || '#00e676';
+          t += 'Trap Risk: <strong style="color:' + trC + ';">' + sa.trapRiskLabel + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.trapRiskScore + '/100)</span>';
+          if (sa.fakeBreakoutRisk || sa.perfectClimbRisk || sa.exitSpikeRisk) {
+            t += ' <span style="color:#ff9800;font-size:0.70rem;">';
+            if (sa.fakeBreakoutRisk)  t += '⚠ Fake Breakout ';
+            if (sa.exitSpikeRisk)     t += '⚠ Exit Spike ';
+            if (sa.perfectClimbRisk)  t += '⚠ Perfect Climb Risk';
+            t += '</span>';
+          }
+          t += '<br>';
+
+          /* ── Holder Momentum ── */
+          var hmC = sa.holderMomentumScore >= 60 ? 'var(--safe)' : sa.holderMomentumScore >= 40 ? 'var(--caution)' : '#ff4757';
+          t += 'Holder Momentum: <strong style="color:' + hmC + ';">' + sa.holderTrendClass + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderMomentumScore + '/100 via ' + sa.holderMomentumSource + ')</span><br>';
+
+          /* ── Runner Potential (reweighted breakdown) ── */
           t += 'Runner Potential: <strong style="color:' + sa.runnerColor + ';">' + sa.runnerPotential + '</strong>';
-          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(ranking metric — not a statistical probability)</span><br>';
-          t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + sa.tierColor + ';background:rgba(0,0,0,0.2);">';
-          t += 'Confidence Tier: <strong style="color:' + sa.tierColor + ';font-size:1.15em;letter-spacing:2px;">' + sa.confidenceTier + '</strong>';
-          t += ' &nbsp;<strong style="color:' + sa.tierColor + ';">' + sa.tierLabel + '</strong>';
-          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(Score: ' + sa.tierScore + '/100)</span>';
-          t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">Tier reflects setup quality, not guaranteed outcome. S/A = best available — not a certainty.</span>';
-          t += '</div>';
+          t += ' <span style="color:var(--text-muted);font-size:0.68rem;">(Score: ' + sa.runnerScore + '</span>';
+          t += '<span style="color:var(--text-muted);font-size:0.68rem;"> — DR 25% · DE 25% · Acc 20% · BO 15% · OH 10% · Shelf 5%)</span><br>';
+          t += '<br><span style="color:var(--text-muted);font-size:0.68rem;">Tier reflects setup quality, not a guaranteed outcome. S/A tiers = best available — not certainties.</span>';
 
         /* ═══════════════════════════════════════════════════════
            FLOW MODE — transaction data only, no candles
