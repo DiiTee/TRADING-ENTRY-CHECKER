@@ -334,6 +334,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .rickbot-btn.disabled { opacity: 0.38; pointer-events: none; cursor: default; }
 .rickbot-btn.btn-gmgn { background: rgba(0,200,83,0.12); color: #00c853; border-color: rgba(0,200,83,0.3); }
 .rickbot-btn.btn-gmgn:hover { background: rgba(0,200,83,0.25); border-color: rgba(0,200,83,0.55); }
+.rickbot-btn.btn-dex { background: rgba(0,180,255,0.12); color: #00b4ff; border-color: rgba(0,180,255,0.3); }
+.rickbot-btn.btn-dex:hover { background: rgba(0,180,255,0.25); border-color: rgba(0,180,255,0.55); }
 .rickbot-btn.btn-defade { background: rgba(156,39,176,0.12); color: #ce93d8; border-color: rgba(156,39,176,0.3); }
 .rickbot-btn.btn-defade:hover { background: rgba(156,39,176,0.25); border-color: rgba(156,39,176,0.55); }
 .rickbot-btn.btn-soul { background: rgba(255,255,255,0.1); color: #ffffff; border-color: rgba(255,255,255,0.3); }
@@ -1246,6 +1248,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
             <div class="rickbot-label"><i class="fa-solid fa-arrow-up-right-from-square"></i> Token Pages</div>
             <div class="rickbot-links-row">
               <a id="rlGMGN"      class="rickbot-btn btn-gmgn disabled"   href="#" target="_blank"><i class="fa-solid fa-bolt"></i> GMGN</a>
+              <a id="rlDexToken"  class="rickbot-btn btn-dex disabled"    href="#" target="_blank"><i class="fa-solid fa-chart-bar"></i> DexScreener</a>
               <a id="rlDeFade"    class="rickbot-btn btn-defade disabled" href="#" target="_blank"><i class="fa-solid fa-fire"></i> DeFade</a>
               <a id="rlSoulToken" class="rickbot-btn btn-soul disabled"   href="#" target="_blank"><i class="fa-solid fa-ghost"></i> Soul Scanner</a>
             </div>
@@ -2063,7 +2066,8 @@ async function fetchFromCA(ca) {
       window._tecPoolAddress = fetched.poolAddress;
 
       /* ── LP Locked / Burned from DexScreener ── */
-      if (pair.dexId === 'pumpswap') fetched.liqLocked = 'Yes'; /* PumpSwap LP always locked by protocol */
+      /* Scan ALL pairs — PumpSwap pool may not be the highest-liquidity pair */
+      if (pairs.some(function(p) { return /pumpswap|pump_fun_amm/i.test(p.dexId || ''); })) fetched.liqLocked = 'Yes';
       if (pair.info && pair.info.liquidityLocked) fetched.liqLocked = 'Yes';
       if (Array.isArray(pair.labels)) {
         if (pair.labels.some(function(l) { return /burn/i.test(l); })) fetched.liqBurned = 'Yes';
@@ -2153,11 +2157,23 @@ async function fetchFromCA(ca) {
       var lpBurned  = false, lpLocked = false;
       markets.forEach(function(m) {
         var lp = m.lp || {};
-        var isPumpSwap = m.marketType === 'pump_fun_amm' || m.marketType === 'pumpFunAmm';
-        if (isPumpSwap) lpLocked = true;
+        /* Broad match — covers pump_fun_amm, pumpFunAmm, pumpswap, pump_fun, etc. */
+        if (/pump/i.test(m.marketType || '')) lpLocked = true;
         if (lp.lpBurned) lpBurned = true;
         if ((lp.lpLockedPct || 0) > 0) lpLocked = true;
+        if ((lp.lpLocked || 0) > 0) lpLocked = true;
       });
+      /* Cross-check risks array: RugCheck explicitly flags "LP not locked" / "LP can be removed"
+         when LP is truly unlocked — use this as a tie-breaker */
+      var lpNotLockedRisk = riskNames.some(function(r) {
+        return r.includes('lp not locked') || r.includes('lp can be removed') ||
+               r.includes('no lp lock')    || r.includes('lp unlocked');
+      });
+      var lpBurnedRisk = riskNames.some(function(r) {
+        return r.includes('lp burned') || r.includes('liquidity burned');
+      });
+      if (lpBurnedRisk) lpBurned = true;
+      if (lpNotLockedRisk) { lpBurned = false; lpLocked = false; } /* explicit unlock signal overrides */
       /* Only upgrade to 'Yes' — never overwrite a 'Yes' already set by DexScreener */
       if (lpBurned) fetched.liqBurned = 'Yes';
       else if (!fetched.liqBurned) fetched.liqBurned = 'No';
@@ -6834,6 +6850,7 @@ function updateRickbotLinks() {
   setLink('rlTwit',    twitterU ? base + 'twit-' + encodeURIComponent(twitterU) : null);
   setLink('rlMoniBtn', moniU    ? base + 'moni-' + encodeURIComponent(moniU)    : null);
   setLink('rlGMGN',      ca ? 'https://gmgn.ai/sol/token/' + ca                    : null);
+  setLink('rlDexToken',  ca ? 'https://dexscreener.com/solana/' + ca               : null);
   setLink('rlDeFade',    ca ? 'https://defade.org/token/'  + ca                    : null);
   setLink('rlSoulToken', ca ? 'https://t.me/soul_scanner_bot?start=' + ca          : null);
 }
