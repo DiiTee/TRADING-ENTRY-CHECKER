@@ -2568,6 +2568,11 @@ async function fetchFromCA(ca) {
         gtPriceM5 = (gtPoolAttrs.price_change_percentage && gtPoolAttrs.price_change_percentage.m5 !== undefined)
                   ? parseFloat(gtPoolAttrs.price_change_percentage.m5) : null;
 
+        /* Auto-fill 24h volume from GeckoTerminal pools if DexScreener didn't provide it */
+        if (!fetched.vol24h && gtPoolAttrs.volume_usd && gtPoolAttrs.volume_usd.h24 !== undefined) {
+          fetched.vol24h = parseFloat(gtPoolAttrs.volume_usd.h24) || 0;
+          if (!fetched.volume) fetched.volume = fetched.vol24h;
+        }
         /* Auto-fill 24h fees from GeckoTerminal pools if DexScreener didn't provide them */
         if (!fetched.totalFeesUSD && gtPoolAttrs.fees_24h !== undefined) {
           fetched.totalFeesUSD = parseFloat(gtPoolAttrs.fees_24h) || 0;
