@@ -2752,7 +2752,9 @@ async function fetchFromCA(ca) {
         fetched.sellTax = Math.round(parseFloat(gpToken.sell_tax) * 100 * 10) / 10;
       }
       if (gpToken.is_honeypot !== undefined) {
-        fetched.honeypot = (gpToken.is_honeypot === 1 || gpToken.is_honeypot === '1' || gpToken.is_honeypot === true) ? 'Yes' : 'No';
+        var gpHoneypot = (gpToken.is_honeypot === 1 || gpToken.is_honeypot === '1' || gpToken.is_honeypot === true) ? 'Yes' : 'No';
+        /* Only upgrade to 'Yes' — never downgrade a 'Yes' set by RugCheck (freeze authority = Solana honeypot proxy) */
+        if (gpHoneypot === 'Yes' || !fetched.honeypot) fetched.honeypot = gpHoneypot;
       }
       addBadge('GoPlus', 'ok');
       addDiag('ok', 'GoPlus', 'Filled: Sell Tax' + (fetched.sellTax !== undefined ? ' (' + fetched.sellTax + '%)' : '') + ', Honeypot (' + (fetched.honeypot || 'N/A') + ').');
