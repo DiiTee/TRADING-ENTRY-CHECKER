@@ -1,0 +1,637 @@
+
+SECURITY INTELLIGENCE FUSION ENGINE
+========================================================
+
+OBJECTIVE
+
+Improve the accuracy of:
+
+- Self-Snipe Detection
+- Bundle Analysis
+- Wallet Cluster Detection
+- Dev Reputation
+- Insider Risk Detection
+
+by combining multiple independent data sources instead of relying on a single source.
+
+========================================================
+DATA SOURCES
+========================================================
+
+Use all available sources:
+
+1. Helius API
+
+Primary use:
+
+- Funding wallet tracing
+- Wallet relationships
+- Transfer history
+- Wallet clustering
+- Deployer connections
+
+--------------------------------------------------------
+
+2. Solscan API
+
+Primary use:
+
+- Holder distribution
+- Holder concentration
+- Token transfer tracing
+- Top holder analysis
+- Wallet history review
+
+--------------------------------------------------------
+
+3. Soul Scanner Bundle Report
+(Manually pasted into Coin Input)
+
+Primary use:
+
+- Bundle detection
+- Bundle percentage
+- Bundle wallet counts
+- Launch timing analysis
+- Dev allocation
+- Airdrop allocation
+
+========================================================
+NEW SECURITY INTELLIGENCE LAYER
+========================================================
+
+Create a dedicated section:
+
+Security Intelligence
+
+This section combines information from:
+
+Helius
+Solscan
+Soul Scanner Bundle Data
+
+and produces higher-confidence conclusions.
+
+========================================================
+LAUNCH COORDINATION RISK
+========================================================
+
+Purpose:
+
+Detect coordinated launch activity.
+
+Inputs:
+
+Bundle %
+
+Bundle Wallet Count
+
+Launch Timing
+
+Bundle Synchronization
+
+Airdrop Allocation
+
+Dev Allocation
+
+========================================================
+RISK CLASSIFICATION
+========================================================
+
+Low
+
+Moderate
+
+High
+
+Extreme
+
+========================================================
+HIGH RISK EXAMPLES
+========================================================
+
+Large bundle %
+
+Many wallets
+
+Multiple bundles
+
+Near-identical launch timing
+
+Wallets acting together
+
+========================================================
+DISPLAY
+========================================================
+
+Launch Coordination Risk
+
+Score: 0–100
+
+Classification:
+
+Low
+Moderate
+High
+Extreme
+
+Show reasoning.
+
+========================================================
+SELF-SNIPE EVIDENCE ENGINE
+========================================================
+
+IMPORTANT:
+
+Never classify Self-Snipe solely from bundle data.
+
+Bundle data may increase suspicion but cannot confirm self-snipe.
+
+========================================================
+EVIDENCE TYPES
+========================================================
+
+Shared Funding Source
+
+Wallet Cluster Relationship
+
+Transfer Relationship
+
+Launch Allocation
+
+Launch Purchase Activity
+
+Known Deployer Connection
+
+========================================================
+CONFIDENCE LEVELS
+========================================================
+
+No Evidence
+
+Weak Evidence
+
+Moderate Evidence
+
+Strong Evidence
+
+========================================================
+CLASSIFICATION RULES
+========================================================
+
+Weak Evidence
+
+Single suspicious signal
+
+Examples:
+
+Large bundle
+
+Large early buy
+
+Launch participation
+
+--------------------------------------------------------
+
+Moderate Evidence
+
+Two independent signals
+
+Examples:
+
+Bundle activity
+
+PLUS
+
+Launch allocation without buying
+
+--------------------------------------------------------
+
+Strong Evidence
+
+Three or more independent signals
+
+Examples:
+
+Bundle activity
+
+PLUS
+
+Shared funding source
+
+PLUS
+
+Wallet linkage
+
+--------------------------------------------------------
+
+Very Strong Evidence
+
+Four or more independent signals
+
+Examples:
+
+Shared funding
+
+Transfer relationships
+
+Launch allocation
+
+Known deployer linkage
+
+========================================================
+DISPLAY
+========================================================
+
+Self-Snipe Evidence
+
+No Evidence
+
+Weak Evidence
+
+Moderate Evidence
+
+Strong Evidence
+
+Display all evidence used.
+
+Example:
+
+Self-Snipe Evidence:
+Strong
+
+Evidence:
+
+✓ Shared Funding Source
+
+✓ Launch Allocation
+
+✓ Wallet Cluster Relationship
+
+========================================================
+WALLET CLUSTER CONFIDENCE
+========================================================
+
+Purpose:
+
+Measure confidence that wallets are coordinated.
+
+========================================================
+CONFIDENCE LEVELS
+========================================================
+
+No Evidence
+
+Possible Cluster
+
+Likely Cluster
+
+Strong Cluster Evidence
+
+========================
+
+Confidence Score
+0–100
+
+========================================================
+EVIDENCE TYPES
+========================================================
+
+Shared Funding Source
+
+Repeated Transfer Activity
+
+Identical Trading Behavior
+
+Launch Participation Timing
+
+Bundle Participation
+
+Ownership Concentration
+
+========================================================
+DISPLAY
+========================================================
+
+Wallet Cluster Confidence:
+
+No Evidence
+
+Possible
+
+Likely
+
+Strong Evidence
+
+followed by Confidence Score
+
+
+Example:
+
+Wallet Cluster Confidence
+
+Likely Cluster
+
+Score: 72
+
+
+
+Show all supporting evidence.
+
+
+========================================================
+SECURITY CONFIDENCE SCORE
+========================================================
+
+Purpose:
+
+Tell the user how reliable the security conclusions are.
+
+========================================================
+CALCULATE USING
+========================================================
+
+Availability of:
+
+Helius Data
+
+Solscan Data
+
+Soul Scanner Bundle Data
+
+Holder Data
+
+Wallet Relationship Data
+
+========================================================
+OUTPUT
+========================================================
+
+High Confidence
+
+Medium Confidence
+
+Low Confidence
+
+========================================================
+EXAMPLES
+========================================================
+
+Security Risk:
+High
+
+Security Confidence:
+High
+
+Meaning:
+
+Strong evidence supports the conclusion.
+
+--------------------------------------------------------
+
+Security Risk:
+High
+
+Security Confidence:
+Low
+
+Meaning:
+
+Data is incomplete and conclusions should be treated cautiously.
+
+========================================================
+FINAL PRINCIPLE
+========================================================
+
+Bundle Data answers:
+
+"What happened at launch?"
+
+Helius answers:
+
+"Who is connected to whom?"
+
+Solscan answers:
+
+"Where did the tokens go?"
+
+Combine all three sources before making conclusions regarding:
+
+Self-Snipe
+
+Wallet Clusters
+
+Insider Activity
+
+Dev Reputation
+
+Security Risk
+
+
+
+=======================================================
+IMPROVE:
+
+Bundle Risk Evaluation in the Cabal/Security Briefing & Checklist 
+
+REPLACE BUNDLE FAIL WITH BUNDLE RISK
+========================================================
+
+Problem:
+
+Current logic treats bundle presence as a major fail condition.
+
+Modern Solana memecoins frequently launch with bundled participation.
+
+The existence of bundles alone should not automatically imply manipulation or invalidate a trade.
+
+========================================================
+NEW BUNDLE RISK SYSTEM
+========================================================
+
+Remove:
+
+Bundle FAIL
+
+Replace with:
+
+Bundle Risk Score
+
+Range:
+
+0–100
+
+========================================================
+BUNDLE RISK FACTORS
+========================================================
+
+Evaluate:
+
+Bundle Percentage
+
+Wallet Clustering
+
+Shared Funding Sources
+
+Ownership Concentration
+
+Early Buyer Coordination
+
+Bundle Distribution Quality
+
+========================================================
+BUNDLE RISK CLASSIFICATIONS
+========================================================
+
+0–25
+
+Low Risk
+
+26–50
+
+Moderate Risk
+
+51–75
+
+High Risk
+
+76–100
+
+Extreme Risk
+
+========================================================
+BUNDLE QUALITY ASSESSMENT
+========================================================
+
+Good Bundle Structure:
+
+Bundle allocation spread across many wallets
+
+No major wallet concentration
+
+No shared funding patterns
+
+No coordinated buying behavior
+
+Poor Bundle Structure:
+
+Heavy concentration
+
+Shared funding
+
+Wallet clusters
+
+Coordinated purchases
+
+========================================================
+SECURITY CHECKLIST INTEGRATION
+========================================================
+
+Replace:
+
+Bundle PASS / FAIL
+
+with:
+
+Bundle Risk
+
+PASS:
+Low Risk
+
+CAUTION:
+Moderate Risk
+
+FAIL:
+High Risk or Extreme Risk
+
+========================================================
+SECURITY SCORING EFFECT
+========================================================
+
+Bundle Risk affects:
+
+Security Checklist Score
+
+Security Confidence
+
+Security Advisory
+
+Bundle Risk does NOT directly affect:
+
+Acceptance Score
+
+Demand Return Score
+
+Demand Expansion Score
+
+Structural Analysis Scores
+
+Entry Pattern Detection
+
+========================================================
+CRITICAL SECURITY OVERRIDES
+========================================================
+
+Keep automatic overrides only for:
+
+Mint Authority Active
+
+LP Unlocked 
+
+Strong Self-Snipe Evidence
++
+High Security Confidence
+
+These remain Critical FAIL conditions.
+
+========================
+GUIDING PRINCIPLE
+========================================================
+
+Bundle presence alone is not a red flag.
+
+Bundle quality and concentration determine risk.
+
+Holder count measures adoption size.
+
+Holder momentum measures adoption growth.
+
+These are separate metrics and should remain separate throughout the system.
+
+NOTE: In the Security Checklist, rename "Bundle Risk" to "Bundle Concentration Risk". That makes it immediately clear that I'm evaluating how the bundles are distributed, not simply punishing a token for having bundles.
+
+=======================
+IMPORTANT: 
+IN ORDER TO AVOID DOUBLE-COUNTING as a result of 
+Bundle Risk evaluating:
+Wallet Clustering
+Shared Funding Sources
+and then Wallet Cluster Confidence also evaluating:
+Shared Funding Sources
+Bundle Participation
+
+Assign responsibilities thusly:
+Bundle Concentration Risk
+Measures:
+Bundle %
+Bundle Wallet Count
+Bundle Distribution
+Launch Concentration
+
+Wallet Cluster Confidence
+Measures:
+Shared Funding
+Transfer Relationships
+Behavior Similarity
+
+Self-Snipe Evidence
+Measures:
+Deployer Connections
+Funding Relationships
+Transfer Relationships
+Launch Allocations
+
+This reduces overlap.
+
+
+

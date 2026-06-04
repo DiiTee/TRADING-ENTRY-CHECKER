@@ -3617,41 +3617,229 @@ function computeDevReputation(d) {
   return { score:score, label:label, color:color, factors:factors, covPct:covPct, confScore:confScore, confLabel:confLabel };
 }
 
-/* ─── Self-Snipe Detection ─── */
+/* ─── Self-Snipe Evidence Engine ───────────────────────────────────────────
+   Evidence-based. Bundle data alone NEVER confirms self-snipe.
+   Evidence types: Launch Purchase Activity, Launch Allocation,
+                   Known Deployer Connection, Large Early Buy, Bundle Context
+   Levels: No Evidence (0) / Weak (1) / Moderate (2) / Strong (3) / Very Strong (4+)
+   ─────────────────────────────────────────────────────────────────────────── */
 function computeSelfSniperRisk(d) {
-  var signals = [];
-  if ((d.snipers||0) >= 8)                              signals.push('High sniper count at launch ('+( d.snipers||0)+')');
-  else if ((d.snipers||0) >= 4)                         signals.push('Moderate sniper presence at launch ('+(d.snipers||0)+')');
-  if ((d.bundleClusterPct||0) >= 20)                    signals.push('High bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'% supply coordinated)');
-  else if ((d.bundleClusterPct||0) >= 12)               signals.push('Moderate bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'%)');
-  if ((d.devWallet||0) >= 5 && d.devSold !== 'Yes')    signals.push('Dev holds '+(d.devWallet||0).toFixed(1)+'% unsold');
-  if ((d.fakeVol||0) >= 20)                             signals.push('Heavy fake volume ('+(d.fakeVol||0).toFixed(1)+'%) — artificial pump indicator');
-  else if ((d.fakeVol||0) >= 12)                        signals.push('Moderate fake volume ('+(d.fakeVol||0).toFixed(1)+'%)');
-  if ((d.bots||0) >= 30)                                signals.push('Heavy bot activity at launch ('+(d.bots||0)+' bots)');
+  var evidence = [];
 
-  var count = signals.length;
+  /* 1. Launch Purchase Activity — snipers are direct evidence of coordinated buying */
+  if ((d.snipers||0) >= 8)
+    evidence.push({ type:'Launch Purchase Activity', note:'High sniper count at launch ('+( d.snipers||0)+') — coordinated buy-in' });
+  else if ((d.snipers||0) >= 4)
+    evidence.push({ type:'Launch Purchase Activity', note:'Moderate snipers at launch ('+(d.snipers||0)+') — possible coordinated entry' });
+
+  /* 2. Launch Allocation — concentrated first-wave wallets */
+  if ((d.first20||0) >= 20)
+    evidence.push({ type:'Launch Allocation', note:'First 20 wallets hold '+(d.first20||0).toFixed(1)+'% — high launch concentration' });
+  else if ((d.first20||0) >= 12)
+    evidence.push({ type:'Launch Allocation', note:'First 20 wallets hold '+(d.first20||0).toFixed(1)+'% — notable early allocation' });
+
+  /* 3. Known Deployer Connection — dev still holds large unsold position */
+  if ((d.devWallet||0) >= 5 && d.devSold !== 'Yes')
+    evidence.push({ type:'Known Deployer Connection', note:'Dev holds '+(d.devWallet||0).toFixed(1)+'% unsold — possible retained position from launch' });
+
+  /* 4. Large Early Buy — heavy bot farming, typically funded by dev */
+  if ((d.bots||0) >= 30)
+    evidence.push({ type:'Large Early Buy', note:'Heavy bot activity ('+(d.bots||0)+' bots) — artificial buy pressure at launch' });
+  else if ((d.bots||0) >= 15)
+    evidence.push({ type:'Large Early Buy', note:'Significant bot activity ('+(d.bots||0)+' bots) — potential coordinated inflation' });
+
+  /* 5. Bundle Context — supporting only (cannot confirm alone) */
+  if ((d.bundleClusterPct||0) >= 20)
+    evidence.push({ type:'Bundle Context', note:'High bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'%) — coordinated multi-wallet buying at launch (supporting signal only)' });
+  else if ((d.bundleClusterPct||0) >= 12)
+    evidence.push({ type:'Bundle Context', note:'Moderate bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'%) — possible organized entry (supporting signal only)' });
+
+  /* ── Bundle-only guard: if bundle context is the only signal, strip it and keep No Evidence */
+  var nonBundleCount = evidence.filter(function(e){ return e.type !== 'Bundle Context'; }).length;
+  var bundleOnly = nonBundleCount === 0 && evidence.length > 0;
+  if (bundleOnly) evidence = [];  /* bundle alone cannot confirm — per spec */
+
+  var count = evidence.length;
   var verdict, color;
-  if (count === 0)      { verdict = 'No Evidence'; color = '#00e676'; }
-  else if (count === 1) { verdict = 'Possible';    color = '#ffeb3b'; }
-  else if (count === 2) { verdict = 'Likely';      color = '#ff9800'; }
-  else                  { verdict = 'Confirmed';   color = '#ff4757'; }
+  if (count === 0)      { verdict = 'No Evidence';      color = '#00e676'; }
+  else if (count === 1) { verdict = 'Weak Evidence';    color = '#ffeb3b'; }
+  else if (count === 2) { verdict = 'Moderate Evidence';color = '#ff9800'; }
+  else if (count === 3) { verdict = 'Strong Evidence';  color = '#ff4757'; }
+  else                  { verdict = 'Very Strong Evidence'; color = '#ff4757'; }
 
-  return { verdict:verdict, color:color, signals:signals, count:count };
+  var signals = evidence.map(function(e){ return e.type + ': ' + e.note; });
+  return { verdict:verdict, color:color, evidence:evidence, signals:signals, count:count };
 }
 
-/* ─── Wallet Cluster Risk ─── */
+/* ─── Wallet Cluster Confidence ─────────────────────────────────────────────
+   Measures confidence that wallets are coordinated. Separate from bundle %.
+   Evaluates: Shared Funding (inferred), Transfer Relationships (inferred),
+              Identical Trading Behavior, Launch Participation Timing,
+              Ownership Concentration.
+   Levels: No Evidence / Possible Cluster / Likely Cluster / Strong Cluster Evidence
+   ─────────────────────────────────────────────────────────────────────────── */
 function computeWalletClusterRisk(d) {
-  var bc = d.bundleClusterPct || 0, t10 = d.top10 || 0, sn = d.snipers || 0, sb = d.singleBundlePct || 0;
-  var rs = 0;
-  if (bc > 20) rs += 3; else if (bc > 10) rs += 2; else if (bc > 5) rs += 1;
-  if (t10 > 40) rs += 2; else if (t10 > 28) rs += 1;
-  if (sn > 10) rs += 2; else if (sn > 5) rs += 1;
-  if (sb > 15) rs += 2; else if (sb > 8) rs += 1;
+  var bc = d.bundleClusterPct || 0, t10 = d.top10 || 0;
+  var sn = d.snipers || 0, sb = d.singleBundlePct || 0;
+  var evidence = [], confScore = 0;
+
+  /* Shared Funding (inferred from coordinated sniper+bot combo) */
+  if (sn >= 8 && (d.bots||0) >= 15) {
+    evidence.push('Shared Funding (inferred): sniper + bot combo suggests coordinated funding source');
+    confScore += 25;
+  } else if (sn >= 4 && (d.bots||0) >= 8) {
+    evidence.push('Shared Funding (possible): moderate sniper + bot overlap');
+    confScore += 12;
+  }
+
+  /* Transfer Relationships (inferred from single bundle dominance) */
+  if (sb >= 15) {
+    evidence.push('Transfer Relationships: single bundle entity controls '+sb.toFixed(1)+'% — multi-wallet controlled by one actor');
+    confScore += 22;
+  } else if (sb >= 8) {
+    evidence.push('Transfer Relationships: notable single bundle stake ('+sb.toFixed(1)+'%)');
+    confScore += 10;
+  }
+
+  /* Identical Trading Behavior (snipers all acting at the same block) */
+  if (sn >= 6) {
+    evidence.push('Identical Trading Behavior: '+sn+' snipers acting simultaneously at launch');
+    confScore += 18;
+  }
+
+  /* Launch Participation Timing (first20 concentration) */
+  if ((d.first20||0) >= 18) {
+    evidence.push('Launch Participation Timing: first 20 wallets own '+(d.first20||0).toFixed(1)+'% — near-simultaneous entry');
+    confScore += 20;
+  } else if ((d.first20||0) >= 10) {
+    evidence.push('Launch Participation Timing: first 20 wallets own '+(d.first20||0).toFixed(1)+'%');
+    confScore += 10;
+  }
+
+  /* Ownership Concentration (top10 holders) */
+  if (t10 >= 45) {
+    evidence.push('Ownership Concentration: top 10 wallets hold '+t10.toFixed(1)+'% — extreme concentration');
+    confScore += 20;
+  } else if (t10 >= 30) {
+    evidence.push('Ownership Concentration: top 10 hold '+t10.toFixed(1)+'% — notable bloc control');
+    confScore += 10;
+  }
+
+  confScore = Math.min(100, confScore);
   var level, color;
-  if (rs >= 5) { level = 'High'; color = '#ff4757'; }
-  else if (rs >= 2) { level = 'Medium'; color = '#ff9800'; }
-  else { level = 'Low'; color = '#00e676'; }
-  return { level:level, color:color, score:rs, bundleClust:bc, top10:t10, snipers:sn };
+  if (confScore >= 75)      { level = 'Strong Cluster Evidence'; color = '#ff4757'; }
+  else if (confScore >= 50) { level = 'Likely Cluster';          color = '#ff9800'; }
+  else if (confScore >= 25) { level = 'Possible Cluster';        color = '#ffeb3b'; }
+  else                      { level = 'No Evidence';             color = '#00e676'; }
+
+  return { level:level, color:color, score:confScore, evidence:evidence, bundleClust:bc, top10:t10, snipers:sn };
+}
+
+/* ─── Bundle Concentration Risk ─────────────────────────────────────────────
+   Measures how the bundles are distributed — not punishing bundles for existing.
+   Evaluates: Bundle %, Bundle Wallet Count, Launch Concentration, Distribution Quality.
+   Score: 0–100  Low(0-25) / Moderate(26-50) / High(51-75) / Extreme(76-100)
+   ─────────────────────────────────────────────────────────────────────────── */
+function computeBundleConcentrationRisk(d) {
+  var bc  = d.bundleClusterPct || 0;
+  var bn  = d.bundle  || 0;
+  var sb  = d.singleBundlePct || 0;
+  var t10 = d.top10   || 0;
+  var score = 0, evidence = [], quality = 'Good';
+
+  /* Bundle percentage weight */
+  if (bc === 0)       { /* no bundles — stays at 0 */ }
+  else if (bc <= 5)   { score += 8;  evidence.push('Minimal bundle exposure ('+bc.toFixed(1)+'%)'); }
+  else if (bc <= 12)  { score += 20; evidence.push('Moderate bundle presence ('+bc.toFixed(1)+'%)'); }
+  else if (bc <= 25)  { score += 38; evidence.push('Notable bundle cluster ('+bc.toFixed(1)+'%)'); quality = 'Poor'; }
+  else                { score += 58; evidence.push('High bundle cluster ('+bc.toFixed(1)+'% — significant coordinated supply)'); quality = 'Poor'; }
+
+  /* Wallet count — many wallets with large combined % = worse than few wallets */
+  if (bn >= 20 && bc >= 15)  { score += 20; evidence.push(bn+' bundle wallets — mass coordinated entry'); quality = 'Poor'; }
+  else if (bn >= 10)         { score += 12; evidence.push(bn+' bundle wallets detected'); }
+  else if (bn >= 3)          { score += 5;  evidence.push(bn+' bundle wallets — limited spread'); }
+
+  /* Single-entity concentration (one bundle wallet dominates) */
+  if (sb >= 20)      { score += 20; evidence.push('Single bundle entity: '+sb.toFixed(1)+'% — extreme concentration'); quality = 'Poor'; }
+  else if (sb >= 10) { score += 10; evidence.push('Largest bundle actor: '+sb.toFixed(1)+'%'); }
+
+  /* Distribution quality: if top10 is very high AND bundles exist, amplify */
+  if (bc > 0 && t10 >= 40)   { score += 8; evidence.push('Launch concentration amplified by top-10 concentration ('+t10.toFixed(1)+'%)'); quality = 'Poor'; }
+
+  score = Math.min(100, score);
+  var classification, color;
+  if (score <= 25)      { classification = 'Low Risk';     color = '#00e676'; }
+  else if (score <= 50) { classification = 'Moderate Risk';color = '#ffeb3b'; }
+  else if (score <= 75) { classification = 'High Risk';    color = '#ff9800'; }
+  else                  { classification = 'Extreme Risk'; color = '#ff4757'; }
+
+  return { score:score, classification:classification, quality:quality, evidence:evidence, color:color, bundlePct:bc, walletCount:bn, singlePct:sb };
+}
+
+/* ─── Launch Coordination Risk ──────────────────────────────────────────────
+   Detects coordinated launch activity by combining bundle timing, dev allocation,
+   sniper synchronization, and airdrop distribution.
+   Score: 0–100  Low / Moderate / High / Extreme
+   ─────────────────────────────────────────────────────────────────────────── */
+function computeLaunchCoordinationRisk(d) {
+  var bc  = d.bundleClusterPct || 0;
+  var bn  = d.bundle  || 0;
+  var sb  = d.singleBundlePct || 0;
+  var sn  = d.snipers || 0;
+  var dw  = d.devWallet || 0;
+  var f20 = d.first20 || 0;
+  var score = 0, reasons = [];
+
+  /* Bundle % as coordination signal */
+  if (bc >= 25)      { score += 30; reasons.push('High bundle % ('+bc.toFixed(1)+'%) — multi-wallet synchronized launch'); }
+  else if (bc >= 12) { score += 15; reasons.push('Moderate bundle cluster ('+bc.toFixed(1)+'%)'); }
+  else if (bc >= 5)  { score += 5;  reasons.push('Minor bundle presence ('+bc.toFixed(1)+'%)'); }
+
+  /* Many wallets acting together */
+  if (bn >= 15)      { score += 20; reasons.push(bn+' wallets acting in bundle — coordinated deployment'); }
+  else if (bn >= 6)  { score += 10; reasons.push(bn+' bundle wallets at launch'); }
+
+  /* Near-identical timing (snipers all entered same block) */
+  if (sn >= 10)      { score += 20; reasons.push(sn+' snipers — near-identical launch timing'); }
+  else if (sn >= 5)  { score += 10; reasons.push(sn+' snipers at launch'); }
+
+  /* Dev allocation at launch */
+  if (dw >= 8 && d.devSold !== 'Yes')  { score += 15; reasons.push('Dev allocation: '+dw.toFixed(1)+'% unsold — retained launch position'); }
+  else if (dw >= 3 && d.devSold !== 'Yes') { score += 5; reasons.push('Dev holds '+dw.toFixed(1)+'%'); }
+
+  /* First-20 concentration (simultaneous launch buying) */
+  if (f20 >= 20)     { score += 15; reasons.push('First 20 wallets: '+f20.toFixed(1)+'% — highly concentrated launch buyers'); }
+  else if (f20 >= 10){ score += 8;  reasons.push('First 20 wallets: '+f20.toFixed(1)+'%'); }
+
+  score = Math.min(100, score);
+  var classification, color;
+  if (score <= 25)      { classification = 'Low';     color = '#00e676'; }
+  else if (score <= 50) { classification = 'Moderate';color = '#ffeb3b'; }
+  else if (score <= 75) { classification = 'High';    color = '#ff9800'; }
+  else                  { classification = 'Extreme'; color = '#ff4757'; }
+
+  return { score:score, classification:classification, reasons:reasons, color:color };
+}
+
+/* ─── Security Confidence Score ─────────────────────────────────────────────
+   Measures how reliable the security conclusions are, based on data availability.
+   ─────────────────────────────────────────────────────────────────────────── */
+function computeSecurityConfidence(d) {
+  var score = 0, sources = [];
+  /* Helius data (wallet relationships, top holders from Helius scan) */
+  if ((d.topHolder > 0 || d.top10 > 0) && d.holders > 0) { score++; sources.push('Helius'); }
+  /* Holder data */
+  if (d.holders > 0) { score++; sources.push('Holder Data'); }
+  /* Soul Scanner bundle data (from paste or DeFade) */
+  if ((d.bundle||0) > 0 || (d.bundleClusterPct||0) > 0 || (d.snipers||0) > 0 || (d.bots||0) > 0) { score++; sources.push('Bundle/Launch Data'); }
+  /* Dev / contract data */
+  if (d.rugScore || (d.devWallet !== undefined && d.devWallet !== null)) { score++; sources.push('Dev Data'); }
+  /* Wallet relationship data (top holder + top10 both populated) */
+  if (d.topHolder > 0 && d.top10 > 0) { score++; sources.push('Wallet Distribution'); }
+  var pct   = (score / 5) * 100;
+  var level = pct >= 70 ? 'High Confidence' : pct >= 40 ? 'Medium Confidence' : 'Low Confidence';
+  var color = pct >= 70 ? '#00e676' : pct >= 40 ? '#ffeb3b' : '#ff9800';
+  return { score:score, total:5, pct:pct, level:level, color:color, sources:sources };
 }
 
 /* ─── Early Buyer Health ─── */
@@ -3711,11 +3899,14 @@ function buildSecurityBriefingHTML(d) {
   else if (bundleClust > 12 || top10 > 28 || singleB > 8 || topH > 8) cabRisk = 'MEDIUM';
   var riskCls = cabRisk.toLowerCase();
 
-  /* ── New analysis modules ── */
-  var devRep     = computeDevReputation(d);
-  var selfSnipe  = computeSelfSniperRisk(d);
-  var clusterRisk= computeWalletClusterRisk(d);
-  var ebHealth   = computeEarlyBuyerHealth(d);
+  /* ── Analysis modules ── */
+  var devRep       = computeDevReputation(d);
+  var selfSnipe    = computeSelfSniperRisk(d);
+  var clusterRisk  = computeWalletClusterRisk(d);
+  var ebHealth     = computeEarlyBuyerHealth(d);
+  var bundleConc   = computeBundleConcentrationRisk(d);
+  var launchCoord  = computeLaunchCoordinationRisk(d);
+  var secConf      = computeSecurityConfidence(d);
 
   /* ══ Security Checklist — 14 items, PASS=2 CAUTION=1 FAIL=0 ══ */
   var SEC = [];
@@ -3763,11 +3954,11 @@ function buildSecurityBriefingHTML(d) {
     pts: thS==='PASS'?2:thS==='CAUTION'?1:0, status:thS,
     note: topH<5?'Single-wallet exposure is low':topH<9?'Notable stake — monitor for exits':'Outsized single-wallet position — extreme dump risk' });
 
-  /* 8 — Bundle Risk */
-  var brS = bundleClust < 10 ? 'PASS' : bundleClust < 20 ? 'CAUTION' : 'FAIL';
-  SEC.push({ label:'Bundle Risk', val: (d.bundle||0)+' wallets ('+bundleClust.toFixed(1)+'%)',
+  /* 8 — Bundle Concentration Risk */
+  var brS = bundleConc.score <= 25 ? 'PASS' : bundleConc.score <= 50 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Bundle Concentration Risk', val: bundleConc.classification+' ('+bundleConc.score+')',
     pts: brS==='PASS'?2:brS==='CAUTION'?1:0, status:brS,
-    note: bundleClust<10?'Bundle concentration within acceptable range':bundleClust<20?'Notable bundle exposure — watch for coordinated exits':'High bundle concentration — coordinated dump risk is real' });
+    note: bundleConc.quality==='Good'?'Bundle distribution within acceptable concentration range':'High concentration — see Security Intelligence for detail' });
 
   /* 9 — Volume Authenticity */
   var vaS = (d.fakeVol||0) < 8 ? 'PASS' : (d.fakeVol||0) < 18 ? 'CAUTION' : 'FAIL';
@@ -3791,11 +3982,11 @@ function buildSecurityBriefingHTML(d) {
     pts: csS==='PASS'?2:csS==='CAUTION'?1:0, status:csS,
     note: csS==='PASS'?'No critical contract risks detected':'Contract has one or more elevated risk flags' });
 
-  /* 12 — Cabal Concentration */
-  var ccS = clusterRisk.level==='Low'?'PASS':clusterRisk.level==='Medium'?'CAUTION':'FAIL';
-  SEC.push({ label:'Cabal Concentration', val: clusterRisk.level+' cluster risk',
+  /* 12 — Wallet Cluster Confidence */
+  var ccS = clusterRisk.level==='No Evidence'?'PASS':clusterRisk.level==='Possible Cluster'?'CAUTION':'FAIL';
+  SEC.push({ label:'Wallet Cluster Confidence', val: clusterRisk.level+' ('+clusterRisk.score+')',
     pts: ccS==='PASS'?2:ccS==='CAUTION'?1:0, status:ccS,
-    note: 'Bundle + top-10 + sniper composite cluster assessment' });
+    note: 'Shared funding · transfer relationships · trading behavior composite' });
 
   /* 13 — Early Buyer Health */
   var ebS = ebHealth.score >= 60 ? 'PASS' : ebHealth.score >= 38 ? 'CAUTION' : 'FAIL';
@@ -3803,11 +3994,11 @@ function buildSecurityBriefingHTML(d) {
     pts: ebS==='PASS'?2:ebS==='CAUTION'?1:0, status:ebS,
     note: ebHealth.score>=60?'Buy-in pattern appears organic':'Coordinated or artificial early accumulation detected' });
 
-  /* 14 — Self-Snipe Risk */
-  var ssS = selfSnipe.verdict==='No Evidence'?'PASS':selfSnipe.verdict==='Possible'?'CAUTION':'FAIL';
-  SEC.push({ label:'Self-Snipe Risk', val: selfSnipe.verdict,
+  /* 14 — Self-Snipe Evidence */
+  var ssS = selfSnipe.verdict==='No Evidence'?'PASS':selfSnipe.verdict==='Weak Evidence'?'CAUTION':'FAIL';
+  SEC.push({ label:'Self-Snipe Evidence', val: selfSnipe.verdict,
     pts: ssS==='PASS'?2:ssS==='CAUTION'?1:0, status:ssS,
-    note: selfSnipe.count>0?selfSnipe.signals[0]:'No self-snipe signals detected' });
+    note: selfSnipe.count>0?selfSnipe.evidence[0].type+': '+selfSnipe.evidence[0].note:'No independent self-snipe signals detected' });
 
   /* ── Security Tier scoring ── */
   var totalPts = SEC.reduce(function(s,i){ return s+i.pts; }, 0);
@@ -3816,7 +4007,7 @@ function buildSecurityBriefingHTML(d) {
   var failCnt  = SEC.filter(function(i){ return i.status==='FAIL'; }).length;
   var cautCnt  = SEC.filter(function(i){ return i.status==='CAUTION'; }).length;
   var passCnt  = SEC.filter(function(i){ return i.status==='PASS'; }).length;
-  var critFails= SEC.filter(function(i){ return i.status==='FAIL' && ['LP Status','Mint Authority','Bundle Risk','Self-Snipe Risk'].indexOf(i.label)!==-1; }).length;
+  var critFails= SEC.filter(function(i){ return i.status==='FAIL' && ['LP Status','Mint Authority','Self-Snipe Evidence'].indexOf(i.label)!==-1; }).length;
 
   var secTier, secVerdict, secTC, secVC;
   if      (secPct >= 0.82 && failCnt === 0)  { secTier='A'; secVerdict='SAFE';          secTC='#00ffcc'; secVC='#00e676'; }
@@ -4132,28 +4323,106 @@ function buildSecurityBriefingHTML(d) {
   }
   nt += '</div>';
 
-  /* ── Wallet Cluster Risk + Self-Snipe Detection ── */
-  nt += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
-  /* Cluster */
-  nt += '<div style="flex:1;min-width:160px;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+clusterRisk.color+';">';
-  nt += '<div style="color:var(--text-secondary);font-size:0.60rem;font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">WALLET CLUSTER RISK</div>';
-  nt += '<strong style="color:'+clusterRisk.color+';font-size:1.05em;">'+clusterRisk.level+'</strong>';
-  nt += '<div style="font-size:0.63rem;color:var(--text-muted);margin-top:2px;">Bundles: '+clusterRisk.bundleClust.toFixed(1)+'% &nbsp;·&nbsp; Top 10: '+clusterRisk.top10.toFixed(1)+'% &nbsp;·&nbsp; Snipers: '+clusterRisk.snipers+'</div>';
-  nt += '<div style="font-size:0.62rem;color:rgba(255,255,255,0.38);margin-top:2px;">'+(clusterRisk.level==='Low'?'Wallet interactions appear independent':'clusterRisk.level'==='Medium'?'Moderate overlap — possible shared funding':'High coordination signal — funding or cluster risk elevated')+'</div>';
+  /* ══════════════════════════════════════════════════════════
+     SECURITY INTELLIGENCE SECTION
+     Combines Helius + Solscan + Soul Scanner data sources
+     ══════════════════════════════════════════════════════════ */
+  nt += '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(0,0,0,0.25);border-radius:6px;border:1px solid rgba(255,255,255,0.07);">';
+  nt += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:8px;">';
+  nt += '<div style="color:var(--accent-cyan);font-size:0.62rem;font-weight:700;letter-spacing:1.2px;"><i class="fa-solid fa-satellite-dish" style="margin-right:6px;"></i>SECURITY INTELLIGENCE</div>';
+  /* Security Confidence badge */
+  nt += '<div style="display:flex;align-items:center;gap:5px;">';
+  nt += '<span style="font-size:0.59rem;color:var(--text-muted);">Data Confidence:</span>';
+  nt += '<span style="font-size:0.65rem;font-weight:700;color:'+secConf.color+';">'+secConf.level+'</span>';
+  nt += '<span style="font-size:0.58rem;color:rgba(255,255,255,0.28);">('+secConf.score+'/'+secConf.total+' sources)</span>';
   nt += '</div>';
-  /* Self-Snipe */
-  nt += '<div style="flex:1;min-width:160px;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+selfSnipe.color+';">';
-  nt += '<div style="color:var(--text-secondary);font-size:0.60rem;font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">SELF-SNIPE DETECTION</div>';
-  nt += '<strong style="color:'+selfSnipe.color+';font-size:1.05em;">'+selfSnipe.verdict+'</strong>';
-  nt += ' <span style="color:var(--text-muted);font-size:0.63rem;">('+selfSnipe.count+' signal'+(selfSnipe.count!==1?'s':'')+')</span>';
-  if (selfSnipe.signals.length > 0) {
-    nt += '<div style="margin-top:3px;display:flex;flex-direction:column;gap:2px;">';
-    selfSnipe.signals.forEach(function(s){ nt += '<div style="font-size:0.62rem;color:'+selfSnipe.color+';">⚑ '+s+'</div>'; });
+  nt += '</div>';
+  if (secConf.sources.length > 0) {
+    nt += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px;">';
+    secConf.sources.forEach(function(s){ nt += '<div style="font-size:0.58rem;color:var(--text-muted);padding:1px 5px;background:rgba(255,255,255,0.05);border-radius:2px;">'+s+'</div>'; });
+    nt += '</div>';
+  }
+
+  /* 2-column grid: Launch Coordination + Bundle Concentration */
+  nt += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin-bottom:6px;">';
+
+  /* Launch Coordination Risk */
+  nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+launchCoord.color+';">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:0.8px;margin-bottom:2px;">LAUNCH COORDINATION RISK</div>';
+  nt += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">';
+  nt += '<strong style="color:'+launchCoord.color+';">'+launchCoord.classification+'</strong>';
+  nt += '<span style="font-size:0.60rem;color:var(--text-muted);">Score: '+launchCoord.score+'/100</span>';
+  nt += '</div>';
+  if (launchCoord.reasons.length > 0) {
+    nt += '<div style="display:flex;flex-direction:column;gap:1px;">';
+    launchCoord.reasons.slice(0,3).forEach(function(r){ nt += '<div style="font-size:0.60rem;color:'+launchCoord.color+';">· '+r+'</div>'; });
     nt += '</div>';
   } else {
-    nt += '<div style="font-size:0.62rem;color:rgba(255,255,255,0.38);margin-top:3px;">No independent signals — launch appears clean</div>';
+    nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.3);">No coordination signals detected</div>';
   }
-  nt += '<div style="font-size:0.58rem;color:rgba(255,255,255,0.22);margin-top:4px;">Requires 2+ independent signals for Likely/Confirmed</div>';
+  nt += '</div>';
+
+  /* Bundle Concentration Risk */
+  nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+bundleConc.color+';">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:0.8px;margin-bottom:2px;">BUNDLE CONCENTRATION RISK</div>';
+  nt += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">';
+  nt += '<strong style="color:'+bundleConc.color+';">'+bundleConc.classification+'</strong>';
+  nt += '<span style="font-size:0.60rem;color:var(--text-muted);">Score: '+bundleConc.score+'/100</span>';
+  nt += '<span style="font-size:0.59rem;padding:1px 4px;border-radius:2px;background:rgba(255,255,255,0.05);color:var(--text-muted);">'+bundleConc.quality+'</span>';
+  nt += '</div>';
+  if (bundleConc.evidence.length > 0) {
+    nt += '<div style="display:flex;flex-direction:column;gap:1px;">';
+    bundleConc.evidence.slice(0,3).forEach(function(e){ nt += '<div style="font-size:0.60rem;color:'+bundleConc.color+';">· '+e+'</div>'; });
+    nt += '</div>';
+  } else {
+    nt += '<div style="font-size:0.60rem;color:#00e676;">No bundle wallets — organic distribution</div>';
+  }
+  nt += '</div>';
+
+  nt += '</div>';
+
+  /* 2-column grid: Wallet Cluster Confidence + Self-Snipe Evidence */
+  nt += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;">';
+
+  /* Wallet Cluster Confidence */
+  nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+clusterRisk.color+';">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:0.8px;margin-bottom:2px;">WALLET CLUSTER CONFIDENCE</div>';
+  nt += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">';
+  nt += '<strong style="color:'+clusterRisk.color+';">'+clusterRisk.level+'</strong>';
+  nt += '<span style="font-size:0.60rem;color:var(--text-muted);">Score: '+clusterRisk.score+'/100</span>';
+  nt += '</div>';
+  if (clusterRisk.evidence.length > 0) {
+    nt += '<div style="display:flex;flex-direction:column;gap:1px;">';
+    clusterRisk.evidence.slice(0,3).forEach(function(e){ nt += '<div style="font-size:0.60rem;color:'+clusterRisk.color+';">✓ '+e+'</div>'; });
+    nt += '</div>';
+  } else {
+    nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.3);">No wallet coordination signals — wallets appear independent</div>';
+  }
+  nt += '<div style="font-size:0.58rem;color:rgba(255,255,255,0.22);margin-top:4px;">Evaluates: shared funding · transfer relationships · trading behavior</div>';
+  nt += '</div>';
+
+  /* Self-Snipe Evidence */
+  nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+selfSnipe.color+';">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:0.8px;margin-bottom:2px;">SELF-SNIPE EVIDENCE</div>';
+  nt += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">';
+  nt += '<strong style="color:'+selfSnipe.color+';">'+selfSnipe.verdict+'</strong>';
+  nt += '<span style="font-size:0.60rem;color:var(--text-muted);">('+selfSnipe.count+' signal'+(selfSnipe.count!==1?'s':'')+')</span>';
+  nt += '</div>';
+  if (selfSnipe.evidence.length > 0) {
+    nt += '<div style="display:flex;flex-direction:column;gap:2px;">';
+    selfSnipe.evidence.forEach(function(e){
+      nt += '<div style="font-size:0.61rem;">';
+      nt += '<span style="color:'+selfSnipe.color+';font-weight:700;">✓ '+e.type+'</span>';
+      nt += '<span style="color:rgba(255,255,255,0.4);font-size:0.58rem;"> — '+e.note+'</span>';
+      nt += '</div>';
+    });
+    nt += '</div>';
+  } else {
+    nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.3);">No independent evidence — launch appears clean</div>';
+  }
+  nt += '<div style="font-size:0.58rem;color:rgba(255,255,255,0.22);margin-top:4px;">Bundle data alone cannot confirm self-snipe</div>';
+  nt += '</div>';
+
   nt += '</div>';
   nt += '</div>';
 
@@ -7242,7 +7511,6 @@ function buildSetupText(d, analysis) {
   /* ── New analysis modules ── */
   var txtDevRep      = computeDevReputation(d);
   var txtSelfSnipe   = computeSelfSniperRisk(d);
-  var txtCluster     = computeWalletClusterRisk(d);
   var txtEbHealth    = computeEarlyBuyerHealth(d);
 
   /* Security Checklist (14 items) */
@@ -7258,21 +7526,25 @@ function buildSetupText(d, analysis) {
   txtSEC.push({ label:'Holder Distribution',  status: _t10S, note: 'Top 10: ' + (d.top10 || 0).toFixed(1) + '%' });
   var _thS  = (d.topHolder || 0) <= 5 ? 'PASS' : (d.topHolder || 0) <= 10 ? 'CAUTION' : 'FAIL';
   txtSEC.push({ label:'Top Holder',           status: _thS,  note: (d.topHolder || 0).toFixed(1) + '%' });
-  var _bcS  = (d.bundleClusterPct || 0) === 0 ? 'PASS' : (d.bundleClusterPct || 0) <= 12 ? 'CAUTION' : 'FAIL';
-  txtSEC.push({ label:'Bundle Risk',          status: _bcS,  note: (d.bundleClusterPct || 0).toFixed(1) + '% cluster' });
+  var txtBundleConc = computeBundleConcentrationRisk(d);
+  var _bcS  = txtBundleConc.score <= 25 ? 'PASS' : txtBundleConc.score <= 50 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Bundle Concentration Risk', status: _bcS,  note: txtBundleConc.classification + ' (' + txtBundleConc.score + ')' });
   var _fvS  = (d.fakeVol || 0) <= 5 && (d.fakeHolders || 0) <= 5 ? 'PASS' : (d.fakeVol || 0) <= 15 ? 'CAUTION' : 'FAIL';
-  txtSEC.push({ label:'Volume Authenticity',  status: _fvS,  note: 'Fake vol: ' + (d.fakeVol || 0).toFixed(1) + '%, fake holders: ' + (d.fakeHolders || 0).toFixed(1) + '%' });
+  txtSEC.push({ label:'Volume Authenticity',       status: _fvS,  note: 'Fake vol: ' + (d.fakeVol || 0).toFixed(1) + '%, fake holders: ' + (d.fakeHolders || 0).toFixed(1) + '%' });
   var _snS  = (d.snipers || 0) <= 3 ? 'PASS' : (d.snipers || 0) <= 8 ? 'CAUTION' : 'FAIL';
-  txtSEC.push({ label:'Sniper/Bot Risk',      status: _snS,  note: (d.snipers || 0) + ' snipers, ' + (d.bots || 0) + ' bots' });
+  txtSEC.push({ label:'Sniper/Bot Risk',           status: _snS,  note: (d.snipers || 0) + ' snipers, ' + (d.bots || 0) + ' bots' });
   var _rugS = !d.rugScore ? 'CAUTION' : parseInt(d.rugScore) >= 70 ? 'PASS' : parseInt(d.rugScore) >= 40 ? 'CAUTION' : 'FAIL';
-  txtSEC.push({ label:'Contract Security',    status: _rugS, note: 'RugCheck: ' + (d.rugScore || 'N/A') });
-  txtSEC.push({ label:'Cabal Concentration',  status: cabRisk === 'LOW' ? 'PASS' : cabRisk === 'MEDIUM' ? 'CAUTION' : 'FAIL', note: 'Cabal risk: ' + cabRisk });
-  txtSEC.push({ label:'Early Buyer Health',   status: txtEbHealth.score >= 65 ? 'PASS' : txtEbHealth.score >= 45 ? 'CAUTION' : 'FAIL', note: txtEbHealth.label + ' (' + txtEbHealth.score + '/100)' });
-  txtSEC.push({ label:'Self-Snipe Risk',      status: txtSelfSnipe.verdict === 'No Evidence' ? 'PASS' : txtSelfSnipe.verdict === 'Possible' ? 'CAUTION' : 'FAIL', note: txtSelfSnipe.verdict });
+  txtSEC.push({ label:'Contract Security',         status: _rugS, note: 'RugCheck: ' + (d.rugScore || 'N/A') });
+  var txtClusterConf = computeWalletClusterRisk(d);
+  var _ccS = txtClusterConf.level === 'No Evidence' ? 'PASS' : txtClusterConf.level === 'Possible Cluster' ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Wallet Cluster Confidence', status: _ccS,  note: txtClusterConf.level + ' (score ' + txtClusterConf.score + ')' });
+  txtSEC.push({ label:'Early Buyer Health',        status: txtEbHealth.score >= 65 ? 'PASS' : txtEbHealth.score >= 45 ? 'CAUTION' : 'FAIL', note: txtEbHealth.label + ' (' + txtEbHealth.score + '/100)' });
+  var _ssS = txtSelfSnipe.verdict === 'No Evidence' ? 'PASS' : txtSelfSnipe.verdict === 'Weak Evidence' ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Self-Snipe Evidence',       status: _ssS,  note: txtSelfSnipe.verdict });
   var txtSecPts = txtSEC.reduce(function(s,i){ return s + (i.status==='PASS'?2:i.status==='CAUTION'?1:0); }, 0);
   var txtSecMax = txtSEC.length * 2;
   var txtSecPct = Math.round((txtSecPts / txtSecMax) * 100);
-  var criticalFail = txtSEC.some(function(i){ return i.status === 'FAIL' && ['LP Status','Mint Authority','Bundle Risk','Self-Snipe Risk'].indexOf(i.label) >= 0; });
+  var criticalFail = txtSEC.some(function(i){ return i.status === 'FAIL' && ['LP Status','Mint Authority','Self-Snipe Evidence'].indexOf(i.label) >= 0; });
   var txtSecTier = (txtSecPct >= 82 && !criticalFail) ? 'A' : (txtSecPct >= 64 && !criticalFail) ? 'B' : txtSecPct >= 43 ? 'C' : 'D';
   var txtFinalVerdict = txtSecTier === 'A' ? 'SAFE' : txtSecTier === 'B' ? 'MODERATE RISK' : txtSecTier === 'C' ? 'HIGH RISK' : 'AVOID';
 
@@ -7294,8 +7566,18 @@ function buildSetupText(d, analysis) {
       lines.push(icon + ' ' + f.txt);
     });
   }
-  lines.push('Self-Snipe Risk: ' + txtSelfSnipe.verdict + (txtSelfSnipe.signals.length > 0 ? ' — ' + txtSelfSnipe.signals.join('; ') : ''));
-  lines.push('Wallet Cluster Risk: ' + txtCluster.level + ' (score ' + txtCluster.score + '/9) — Bundle: ' + txtCluster.bundleClust.toFixed(1) + '%, Top10: ' + txtCluster.top10.toFixed(1) + '%, Snipers: ' + txtCluster.snipers);
+  lines.push('Self-Snipe Evidence: ' + txtSelfSnipe.verdict + (txtSelfSnipe.evidence && txtSelfSnipe.evidence.length > 0 ? ' — ' + txtSelfSnipe.evidence.map(function(e){ return e.type; }).join(', ') : ''));
+  if (txtSelfSnipe.evidence && txtSelfSnipe.evidence.length > 0) {
+    txtSelfSnipe.evidence.forEach(function(e){ lines.push('  · ' + e.type + ': ' + e.note); });
+  }
+  lines.push('Wallet Cluster Confidence: ' + txtClusterConf.level + ' (score ' + txtClusterConf.score + '/100) — Bundle: ' + txtClusterConf.bundleClust.toFixed(1) + '%, Top10: ' + txtClusterConf.top10.toFixed(1) + '%, Snipers: ' + txtClusterConf.snipers);
+  if (txtClusterConf.evidence && txtClusterConf.evidence.length > 0) {
+    txtClusterConf.evidence.slice(0,3).forEach(function(e){ lines.push('  · ' + e); });
+  }
+  var txtLaunchCoord = computeLaunchCoordinationRisk(d);
+  lines.push('Launch Coordination Risk: ' + txtLaunchCoord.classification + ' (score ' + txtLaunchCoord.score + '/100)' + (txtLaunchCoord.reasons.length > 0 ? ' — ' + txtLaunchCoord.reasons.slice(0,2).join('; ') : ''));
+  var txtBundleConc2 = computeBundleConcentrationRisk(d);
+  lines.push('Bundle Concentration Risk: ' + txtBundleConc2.classification + ' (score ' + txtBundleConc2.score + '/100, quality: ' + txtBundleConc2.quality + ')' + (txtBundleConc2.evidence.length > 0 ? ' — ' + txtBundleConc2.evidence[0] : ''));
   lines.push('Early Buyer Health: ' + txtEbHealth.label + ' (' + txtEbHealth.score + '/100)');
   if (txtEbHealth.goodSignals.length > 0) lines.push('  Healthy: ' + txtEbHealth.goodSignals.join('; '));
   if (txtEbHealth.badSignals.length > 0)  lines.push('  Danger:  ' + txtEbHealth.badSignals.join('; '));
