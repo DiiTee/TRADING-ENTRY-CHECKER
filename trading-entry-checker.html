@@ -4961,7 +4961,9 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   else if (hcMcap < 10000000)     { hcExpLow = 3500; hcExpHigh = 5000; }
   else                            { hcExpLow = 5000; hcExpHigh = 10000; }
   var hcExpMid = (hcExpLow + hcExpHigh) / 2;
-  var holderExpectedRange = hcExpLow.toLocaleString() + '–' + hcExpHigh.toLocaleString();
+  var holderExpectedRange = (hcMcap >= 10000000)
+    ? '5,000+'
+    : hcExpLow.toLocaleString() + '–' + hcExpHigh.toLocaleString();
   var holderCountQualityScore, holderCountQualityClass;
   if (hcHld <= 0) {
     holderCountQualityScore = 0;  holderCountQualityClass = 'No Data';
