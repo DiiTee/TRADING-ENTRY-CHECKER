@@ -5832,9 +5832,11 @@ function buildEntryBriefingHTML(d, analysis) {
           t += '<br>';
 
           /* ── Holder Analysis ── */
-          var hcqC = sa.holderCountQualityScore >= 65 ? 'var(--safe)' : sa.holderCountQualityScore >= 45 ? 'var(--caution)' : '#ff4757';
-          t += 'Holder Count Quality: <strong style="color:' + hcqC + ';">' + sa.holderCountQualityClass + '</strong>';
-          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderCountQualityScore + '/100 · ' + (window._tecHolderCount || 0) + ' holders)</span><br>';
+          t += 'Holder Count: <strong>' + (window._tecHolderCount || 0).toLocaleString() + '</strong><br>';
+          t += 'Expected Range: <span style="color:var(--text-muted);">' + (sa.holderExpectedRange || '—') + '</span><br>';
+          var hcqC = sa.holderCountQualityScore >= 70 ? 'var(--safe)' : sa.holderCountQualityScore >= 55 ? 'var(--caution)' : '#ff4757';
+          t += 'Holder Count Quality Score: <strong style="color:' + hcqC + ';">' + sa.holderCountQualityClass + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderCountQualityScore + '/100)</span><br>';
           if (!sa.holderHistoryAvailable) {
             t += 'Holder Momentum: <span style="color:var(--text-muted);font-size:0.70rem;">Historical holder data unavailable. Enter 1h / 6h / 24h counts in the form.</span><br>';
           } else {
@@ -5848,6 +5850,8 @@ function buildEntryBriefingHTML(d, analysis) {
             var hdHint = sa.holderDivergenceType === 'bullish' ? 'Bullish — new holders entering despite price weakness' : 'Bearish — participation shrinking despite price rise';
             t += 'Holder Divergence: <strong style="color:' + hdC + ';">' + hdIcon + ' ' + sa.holderDivergence + '</strong>';
             t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + hdHint + ')</span><br>';
+          } else {
+            t += 'Holder Divergence: <span style="color:var(--text-muted);">None</span><br>';
           }
 
           /* ── Runner Potential (reweighted breakdown) ── */
@@ -7726,15 +7730,15 @@ function buildSetupText(d, analysis) {
     lines.push('    Demand Return Score: ' + txtSA.demandReturnScore + '/100 (' + (txtSA.demandClass || '—') + ')');
     lines.push('    Demand Expansion Score: ' + (txtSA.demandExpansionScore || 0) + '/100 (' + (txtSA.demandExpansionClass || '—') + ')');
     lines.push('    Bounce Velocity Score: ' + (txtSA.bounceVelocityScore || 0) + '/100');
-    lines.push('    Holder Count Quality: ' + (txtSA.holderCountQualityScore || 0) + '/100 (' + (txtSA.holderCountQualityClass || '—') + ')');
+    lines.push('    Holder Count: ' + (window._tecHolderCount || 0).toLocaleString());
+    lines.push('    Expected Range: ' + (txtSA.holderExpectedRange || '—'));
+    lines.push('    Holder Count Quality Score: ' + (txtSA.holderCountQualityScore || 0) + '/100 (' + (txtSA.holderCountQualityClass || '—') + ')');
     if (!txtSA.holderHistoryAvailable) {
       lines.push('    Holder Momentum: Historical holder data unavailable.');
     } else {
       lines.push('    Holder Momentum: ' + txtSA.holderTrendClass + ' (' + txtSA.holderMomentumScore + '/100)');
     }
-    if (txtSA.holderDivergence && txtSA.holderDivergence !== 'None' && txtSA.holderDivergence !== 'No Divergence') {
-      lines.push('    Holder Divergence: ' + txtSA.holderDivergence + (txtSA.holderDivergenceType === 'bullish' ? ' — Bullish' : txtSA.holderDivergenceType === 'bearish' ? ' — Bearish' : ''));
-    }
+    lines.push('    Holder Divergence: ' + ((txtSA.holderDivergence && txtSA.holderDivergence !== 'None' && txtSA.holderDivergence !== 'No Divergence') ? txtSA.holderDivergence + (txtSA.holderDivergenceType === 'bullish' ? ' — Bullish' : txtSA.holderDivergenceType === 'bearish' ? ' — Bearish' : '') : 'None'));
     lines.push('    Shelf Type: ' + txtSA.shelfType + ' — ' + txtSA.shelfTypeDesc);
     lines.push('    Structure Sequence: ' + txtSA.structureSequence);
     lines.push('    Trend: ' + txtSA.trendState + ' | VWAP: ' + txtSA.vwapPosition + ' | Vol Regime: ' + txtSA.volRegime + (txtSA.compressionDetected ? ' | COMPRESSION DETECTED' : '') + (txtSA.parabolicRisk ? ' | PARABOLIC RISK' : ''));
