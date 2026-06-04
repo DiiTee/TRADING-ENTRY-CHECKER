@@ -2062,6 +2062,14 @@ async function fetchFromCA(ca) {
       fetched.poolAddress = pair.pairAddress || '';
       window._tecPoolAddress = fetched.poolAddress;
 
+      /* ── LP Locked / Burned from DexScreener ── */
+      if (pair.dexId === 'pumpswap') fetched.liqLocked = 'Yes'; /* PumpSwap LP always locked by protocol */
+      if (pair.info && pair.info.liquidityLocked) fetched.liqLocked = 'Yes';
+      if (Array.isArray(pair.labels)) {
+        if (pair.labels.some(function(l) { return /burn/i.test(l); })) fetched.liqBurned = 'Yes';
+        if (pair.labels.some(function(l) { return /lock/i.test(l); })) fetched.liqLocked = 'Yes';
+      }
+
       if (pair.pairCreatedAt) {
         var ageMs  = Date.now() - pair.pairCreatedAt;
         var ageMin = Math.floor(ageMs / 60000);
@@ -2145,11 +2153,16 @@ async function fetchFromCA(ca) {
       var lpBurned  = false, lpLocked = false;
       markets.forEach(function(m) {
         var lp = m.lp || {};
-        if (lp.lpBurned === true) lpBurned = true;
+        var isPumpSwap = m.marketType === 'pump_fun_amm' || m.marketType === 'pumpFunAmm';
+        if (isPumpSwap) lpLocked = true;
+        if (lp.lpBurned) lpBurned = true;
         if ((lp.lpLockedPct || 0) > 0) lpLocked = true;
       });
-      fetched.liqBurned = lpBurned ? 'Yes' : 'No';
-      fetched.liqLocked = lpLocked ? 'Yes' : 'No';
+      /* Only upgrade to 'Yes' — never overwrite a 'Yes' already set by DexScreener */
+      if (lpBurned) fetched.liqBurned = 'Yes';
+      else if (!fetched.liqBurned) fetched.liqBurned = 'No';
+      if (lpLocked) fetched.liqLocked = 'Yes';
+      else if (!fetched.liqLocked) fetched.liqLocked = 'No';
 
       var topHolders = rugData.topHolders || [];
       if (topHolders.length > 0) {
