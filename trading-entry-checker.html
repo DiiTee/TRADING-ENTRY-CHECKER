@@ -1177,6 +1177,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
           <option value="alpha_asc">Alphabetical A–Z</option>
           <option value="alpha_desc">Alphabetical Z–A</option>
         </select>
+        <button class="btn btn-secondary btn-sm" onclick="wlExport()"><i class="fa-solid fa-file-export"></i> Export</button>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;" title="Import watchlist from JSON file"><i class="fa-solid fa-file-import"></i> Import<input type="file" id="wlImportInput" accept=".json" style="display:none;" onchange="wlImportProcess(this)"></label>
         <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="wlClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
       </div>
       <div id="wlEmpty" class="wl-empty">
@@ -7123,6 +7125,67 @@ function buildSetupText(d, analysis) {
 
   lines.push('• ' + (d.snipers || 0) + ' snipers and ' + (d.bots || 0) + ' bots detected at launch.');
 
+  /* ── New analysis modules ── */
+  var txtDevRep      = computeDevReputation(d);
+  var txtSelfSnipe   = computeSelfSniperRisk(d);
+  var txtCluster     = computeWalletClusterRisk(d);
+  var txtEbHealth    = computeEarlyBuyerHealth(d);
+
+  /* Security Checklist (14 items) */
+  var txtSEC = [];
+  var _lpOk = d.liqBurned === 'Yes' || d.liqLocked === 'Yes';
+  txtSEC.push({ label:'LP Status',           status: _lpOk ? 'PASS' : 'FAIL',       note: d.liqBurned === 'Yes' ? 'LP burned' : d.liqLocked === 'Yes' ? 'LP locked' : 'Unprotected' });
+  txtSEC.push({ label:'Mint Authority',       status: d.mintable  === 'No' ? 'PASS' : d.mintable  === 'Yes' ? 'FAIL' : 'CAUTION', note: d.mintable  || 'Unknown' });
+  txtSEC.push({ label:'Freeze Authority',     status: d.freezable === 'No' ? 'PASS' : d.freezable === 'Yes' ? 'FAIL' : 'CAUTION', note: d.freezable || 'Unknown' });
+  txtSEC.push({ label:'Dev Reputation',       status: txtDevRep.score >= 70 ? 'PASS' : txtDevRep.score >= 45 ? 'CAUTION' : 'FAIL', note: txtDevRep.label + ' (' + txtDevRep.score + '/100)' });
+  var _dwS = d.devSold === 'Yes' ? 'PASS' : (d.devWallet || 0) > 5 ? 'FAIL' : 'CAUTION';
+  txtSEC.push({ label:'Dev Wallet',           status: _dwS,  note: d.devSold === 'Yes' ? 'Sold' : (d.devWallet || 0).toFixed(1) + '% held' });
+  var _t10S = (d.top10 || 0) <= 25 ? 'PASS' : (d.top10 || 0) <= 40 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Holder Distribution',  status: _t10S, note: 'Top 10: ' + (d.top10 || 0).toFixed(1) + '%' });
+  var _thS  = (d.topHolder || 0) <= 5 ? 'PASS' : (d.topHolder || 0) <= 10 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Top Holder',           status: _thS,  note: (d.topHolder || 0).toFixed(1) + '%' });
+  var _bcS  = (d.bundleClusterPct || 0) === 0 ? 'PASS' : (d.bundleClusterPct || 0) <= 12 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Bundle Risk',          status: _bcS,  note: (d.bundleClusterPct || 0).toFixed(1) + '% cluster' });
+  var _fvS  = (d.fakeVol || 0) <= 5 && (d.fakeHolders || 0) <= 5 ? 'PASS' : (d.fakeVol || 0) <= 15 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Volume Authenticity',  status: _fvS,  note: 'Fake vol: ' + (d.fakeVol || 0).toFixed(1) + '%, fake holders: ' + (d.fakeHolders || 0).toFixed(1) + '%' });
+  var _snS  = (d.snipers || 0) <= 3 ? 'PASS' : (d.snipers || 0) <= 8 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Sniper/Bot Risk',      status: _snS,  note: (d.snipers || 0) + ' snipers, ' + (d.bots || 0) + ' bots' });
+  var _rugS = !d.rugScore ? 'CAUTION' : parseInt(d.rugScore) >= 70 ? 'PASS' : parseInt(d.rugScore) >= 40 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Contract Security',    status: _rugS, note: 'RugCheck: ' + (d.rugScore || 'N/A') });
+  txtSEC.push({ label:'Cabal Concentration',  status: cabRisk === 'LOW' ? 'PASS' : cabRisk === 'MEDIUM' ? 'CAUTION' : 'FAIL', note: 'Cabal risk: ' + cabRisk });
+  txtSEC.push({ label:'Early Buyer Health',   status: txtEbHealth.score >= 65 ? 'PASS' : txtEbHealth.score >= 45 ? 'CAUTION' : 'FAIL', note: txtEbHealth.label + ' (' + txtEbHealth.score + '/100)' });
+  txtSEC.push({ label:'Self-Snipe Risk',      status: txtSelfSnipe.verdict === 'No Evidence' ? 'PASS' : txtSelfSnipe.verdict === 'Possible' ? 'CAUTION' : 'FAIL', note: txtSelfSnipe.verdict });
+  var txtSecPts = txtSEC.reduce(function(s,i){ return s + (i.status==='PASS'?2:i.status==='CAUTION'?1:0); }, 0);
+  var txtSecMax = txtSEC.length * 2;
+  var txtSecPct = Math.round((txtSecPts / txtSecMax) * 100);
+  var criticalFail = txtSEC.some(function(i){ return i.status === 'FAIL' && ['LP Status','Mint Authority','Bundle Risk','Self-Snipe Risk'].indexOf(i.label) >= 0; });
+  var txtSecTier = (txtSecPct >= 82 && !criticalFail) ? 'A' : (txtSecPct >= 64 && !criticalFail) ? 'B' : txtSecPct >= 43 ? 'C' : 'D';
+  var txtFinalVerdict = txtSecTier === 'A' ? 'SAFE' : txtSecTier === 'B' ? 'MODERATE RISK' : txtSecTier === 'C' ? 'HIGH RISK' : 'AVOID';
+
+  lines.push('');
+  lines.push('Security Tier: ' + txtSecTier + '  |  Score: ' + txtSecPts + '/' + txtSecMax + ' (' + txtSecPct + '%)  |  Verdict: ' + txtFinalVerdict);
+  lines.push('');
+  lines.push('Security Checklist:');
+  txtSEC.forEach(function(item) {
+    var icon = item.status === 'PASS' ? '✓' : item.status === 'CAUTION' ? '·' : '✗';
+    var pad  = item.label.length < 22 ? new Array(22 - item.label.length).join('.') : ' ';
+    lines.push('  ' + icon + ' ' + item.label + ' ' + pad + ' ' + item.status + ' — ' + item.note);
+  });
+
+  lines.push('');
+  lines.push('Dev Reputation: ' + txtDevRep.label + ' (' + txtDevRep.score + '/100) — ' + txtDevRep.confLabel + ' (Coverage: ' + txtDevRep.covPct + '%)');
+  if (txtDevRep.factors.length > 0) {
+    txtDevRep.factors.forEach(function(f) {
+      var icon = f.t === 'pos' ? '  ✓' : f.t === 'neg' ? '  ✗' : '  ·';
+      lines.push(icon + ' ' + f.txt);
+    });
+  }
+  lines.push('Self-Snipe Risk: ' + txtSelfSnipe.verdict + (txtSelfSnipe.signals.length > 0 ? ' — ' + txtSelfSnipe.signals.join('; ') : ''));
+  lines.push('Wallet Cluster Risk: ' + txtCluster.level + ' (score ' + txtCluster.score + '/9) — Bundle: ' + txtCluster.bundleClust.toFixed(1) + '%, Top10: ' + txtCluster.top10.toFixed(1) + '%, Snipers: ' + txtCluster.snipers);
+  lines.push('Early Buyer Health: ' + txtEbHealth.label + ' (' + txtEbHealth.score + '/100)');
+  if (txtEbHealth.goodSignals.length > 0) lines.push('  Healthy: ' + txtEbHealth.goodSignals.join('; '));
+  if (txtEbHealth.badSignals.length > 0)  lines.push('  Danger:  ' + txtEbHealth.badSignals.join('; '));
+
   var adviceMap = {
     HIGH:   'CAUTION: Multiple red flags present. Keep size under 0.5% of portfolio and set a hard stop at -25%. Watch bundle wallet exits in real time.',
     MEDIUM: 'Trade with reduced size (1–2% of portfolio max). Set a firm stop at the identified floor and monitor large-wallet transactions before adding.',
@@ -7158,6 +7221,22 @@ function buildSetupText(d, analysis) {
     if (_patExportSecondary) patLine += ' + Secondary: ' + _patExportSecondary.name + ' [' + _patExportSecondary.confidence + ']';
   }
   lines.push(patLine);
+  /* Pattern reasons */
+  if (_patExportPrimary && (_patExportPrimary.reasons || []).length > 0) {
+    _patExportPrimary.reasons.forEach(function(r) { lines.push('    ' + r); });
+  }
+  if (_patExportPrimary && _patExportPrimary.desc) {
+    lines.push('    → ' + _patExportPrimary.desc);
+  }
+  if (_patExportSecondary && (_patExportSecondary.reasons || []).length > 0) {
+    lines.push('    Secondary reasons:');
+    _patExportSecondary.reasons.forEach(function(r) { lines.push('      ' + r); });
+  }
+  /* Entry / exit triggers */
+  if (_patExportPrimary && _patExportPrimary.triggers) {
+    lines.push('    Triggers: ' + _patExportPrimary.triggers);
+  }
+  lines.push('    Exit: Exit when sell% exceeds 50% on confirmed 5-min close, or MC breaches the floor. TP1 at 2x, TP2 at 3x, trail remainder.');
 
   var txtCurrentMC = d.marketCap || 0;
   var txtSA        = d.structuralAnalysis || null;
@@ -7233,13 +7312,18 @@ function buildSetupText(d, analysis) {
   if (txtSA) {
     lines.push('05. Structural Analysis:');
     lines.push('    Acceptance Score: ' + txtSA.acceptanceScore + '/100 (' + txtSA.acceptanceClass + ')');
-    lines.push('    Demand Return Score: ' + txtSA.demandReturnScore + '/100 (' + txtSA.demandClass + ')');
+    lines.push('    Demand Return Score: ' + txtSA.demandReturnScore + '/100 (' + (txtSA.demandClass || '—') + ')');
+    lines.push('    Demand Expansion Score: ' + (txtSA.demandExpansionScore || 0) + '/100 (' + (txtSA.demandExpansionClass || '—') + ')');
+    lines.push('    Bounce Velocity Score: ' + (txtSA.bounceVelocityScore || 0) + '/100');
     lines.push('    Shelf Type: ' + txtSA.shelfType + ' — ' + txtSA.shelfTypeDesc);
     lines.push('    Structure Sequence: ' + txtSA.structureSequence);
     lines.push('    Trend: ' + txtSA.trendState + ' | VWAP: ' + txtSA.vwapPosition + ' | Vol Regime: ' + txtSA.volRegime + (txtSA.compressionDetected ? ' | COMPRESSION DETECTED' : '') + (txtSA.parabolicRisk ? ' | PARABOLIC RISK' : ''));
     lines.push('    Shelf Defenses: ' + txtSA.defenseCount + ' (' + txtSA.defenseClassification + ') | ATR: ' + txtSA.atrPct + '% | SD: ' + txtSA.sdPct + '%');
+    if (txtSA.shelfQualityScore !== undefined) lines.push('    Shelf Quality Score: ' + txtSA.shelfQualityScore + '/100' + (txtSA.shelfQualityDesc ? ' (' + txtSA.shelfQualityDesc + ')' : ''));
+    lines.push('    Pre-Breakout Squeeze: ' + (txtSA.preBreakoutSqueeze || 'Weak') + (txtSA.doubleAccumulation ? ' | Double Accumulation Detected' : ''));
     lines.push('    Overhead Supply: ' + txtSA.overheadRisk + ' (' + txtSA.overheadDensityPct + '% closes above)');
-    lines.push('    Breakout Efficiency: ' + txtSA.breakoutEfficiency + '% (' + txtSA.breakoutLabel + ')');
+    lines.push('    Breakout Efficiency: ' + txtSA.breakoutEfficiency + '% (' + txtSA.breakoutLabel + ')' + (txtSA.breakoutConfidenceScore !== undefined ? ' | Breakout Confidence: ' + txtSA.breakoutConfidenceScore + '/100' : ''));
+    if (txtSA.runnerPotential) lines.push('    Runner Potential: ' + txtSA.runnerPotential);
     lines.push('    Confidence Tier: ' + txtSA.confidenceTier + ' — ' + txtSA.tierLabel + ' (Score: ' + txtSA.tierScore + '/100)');
   } else {
     lines.push('05. Distance from Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  ⚠ POOR RISK/REWARD' : ''));
@@ -8780,6 +8864,93 @@ function wlClearAll() {
   watchlist = [];
   wlSave(); wlRender();
   showToast('Watchlist cleared', 'info');
+}
+
+/* ── Watchlist Export — download as JSON ── */
+function wlExport() {
+  if (!watchlist.length) { showToast('Watchlist is empty — nothing to export', 'error'); return; }
+  var payload = JSON.stringify({ version: 1, exported: new Date().toISOString(), entries: watchlist }, null, 2);
+  var blob = new Blob([payload], { type: 'application/json' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  var date = new Date().toISOString().slice(0, 10);
+  a.href     = url;
+  a.download = 'tec-watchlist-' + date + '.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() { URL.revokeObjectURL(url); document.body.removeChild(a); }, 500);
+  showToast('Exported ' + watchlist.length + ' entr' + (watchlist.length === 1 ? 'y' : 'ies'), 'success');
+}
+
+/* ── Watchlist Import — read JSON file ── */
+function wlImportProcess(input) {
+  var file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var raw = JSON.parse(e.target.result);
+      /* Support both bare array and { version, entries } wrapper */
+      var incoming = Array.isArray(raw) ? raw : (raw.entries && Array.isArray(raw.entries) ? raw.entries : null);
+      if (!incoming) { showToast('Invalid watchlist file — no entries found', 'error'); return; }
+      if (!incoming.length) { showToast('File contains an empty watchlist', 'error'); return; }
+      /* Validate each entry has minimum required fields */
+      var valid = incoming.filter(function(e) { return e && typeof e === 'object' && (e.id || e.ca || e.name); });
+      if (!valid.length) { showToast('No valid entries found in file', 'error'); return; }
+      /* Ask: merge or replace? */
+      var choice;
+      if (watchlist.length === 0) {
+        choice = 'replace';
+      } else {
+        var answer = confirm(
+          'Import ' + valid.length + ' entr' + (valid.length === 1 ? 'y' : 'ies') + ' from file.\n\n' +
+          'Click OK to MERGE with your current ' + watchlist.length + ' entr' + (watchlist.length === 1 ? 'y' : 'ies') + ' (duplicates by CA are skipped).\n' +
+          'Click Cancel to REPLACE your current watchlist entirely.'
+        );
+        choice = answer ? 'merge' : 'replace';
+        if (choice === 'replace' && !confirm('This will delete your current ' + watchlist.length + ' entr' + (watchlist.length === 1 ? 'y' : 'ies') + '. Are you sure?')) return;
+      }
+      var added = 0, skipped = 0;
+      if (choice === 'replace') {
+        watchlist = valid;
+        added = valid.length;
+      } else {
+        var existingCAs = {};
+        watchlist.forEach(function(e) { if (e.ca) existingCAs[e.ca] = true; });
+        var existingIDs = {};
+        watchlist.forEach(function(e) { if (e.id) existingIDs[e.id] = true; });
+        valid.forEach(function(entry) {
+          /* Deduplicate by CA (primary) or by ID (fallback) */
+          if (entry.ca && existingCAs[entry.ca]) { skipped++; return; }
+          if (entry.id && existingIDs[entry.id]) { skipped++; return; }
+          /* Ensure a fresh unique ID if there would be a collision */
+          if (entry.id && existingIDs[entry.id]) {
+            entry = Object.assign({}, entry, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) });
+          }
+          watchlist.push(entry);
+          if (entry.ca) existingCAs[entry.ca] = true;
+          if (entry.id) existingIDs[entry.id] = true;
+          added++;
+        });
+      }
+      wlSave(); wlRender();
+      var msg = choice === 'replace'
+        ? 'Replaced watchlist with ' + added + ' entr' + (added === 1 ? 'y' : 'ies')
+        : 'Merged: ' + added + ' added' + (skipped ? ', ' + skipped + ' duplicate' + (skipped === 1 ? '' : 's') + ' skipped' : '');
+      showToast(msg, 'success');
+      /* Auto-expand watchlist card */
+      var body = el('watchlistBody'), tog = el('watchlistToggle');
+      if (body && body.classList.contains('collapsed')) {
+        body.classList.remove('collapsed');
+        body.style.maxHeight = (body.scrollHeight + 2000) + 'px';
+        if (tog) tog.classList.remove('collapsed');
+      }
+    } catch(err) {
+      showToast('Failed to parse file — make sure it is a valid TEC watchlist JSON', 'error');
+    }
+  };
+  reader.readAsText(file);
 }
 
 function wlLoadCoin(id) {
