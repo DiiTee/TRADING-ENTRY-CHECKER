@@ -4945,20 +4945,34 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   var hldH6  = window._tecHolderH6  || 0;
   var hldH24 = window._tecHolderH24 || 0;
 
-  /* Holder Count Quality — measures adoption size independently of momentum */
+  /* Holder Count Quality — market-cap-relative ratio scoring */
+  var hcMcap = (fetched && fetched.marketCap) ? fetched.marketCap : 0;
+  /* Expected holder range lookup by market cap */
+  var hcExpLow, hcExpHigh;
+  if      (hcMcap <= 0)           { hcExpLow =   25; hcExpHigh =    50; }
+  else if (hcMcap <   25000)      { hcExpLow =   25; hcExpHigh =    50; }
+  else if (hcMcap <   50000)      { hcExpLow =   50; hcExpHigh =   100; }
+  else if (hcMcap <  100000)      { hcExpLow =  100; hcExpHigh =   150; }
+  else if (hcMcap <  250000)      { hcExpLow =  150; hcExpHigh =   300; }
+  else if (hcMcap <  500000)      { hcExpLow =  300; hcExpHigh =   500; }
+  else if (hcMcap < 1000000)      { hcExpLow =  500; hcExpHigh = 1000; }
+  else if (hcMcap < 2500000)      { hcExpLow = 1000; hcExpHigh = 2000; }
+  else if (hcMcap < 5000000)      { hcExpLow = 2000; hcExpHigh = 3500; }
+  else if (hcMcap < 10000000)     { hcExpLow = 3500; hcExpHigh = 5000; }
+  else                            { hcExpLow = 5000; hcExpHigh = 10000; }
+  var hcExpMid = (hcExpLow + hcExpHigh) / 2;
+  var holderExpectedRange = hcExpLow.toLocaleString() + '–' + hcExpHigh.toLocaleString();
   var holderCountQualityScore, holderCountQualityClass;
   if (hcHld <= 0) {
     holderCountQualityScore = 0;  holderCountQualityClass = 'No Data';
-  } else if (hcHld >= minH * 5) {
-    holderCountQualityScore = 95; holderCountQualityClass = 'Excellent';
-  } else if (hcHld >= minH * 2.5) {
-    holderCountQualityScore = 80; holderCountQualityClass = 'Strong';
-  } else if (hcHld >= minH) {
-    holderCountQualityScore = 65; holderCountQualityClass = 'Adequate';
-  } else if (hcHld >= minH * 0.5) {
-    holderCountQualityScore = 45; holderCountQualityClass = 'Weak';
   } else {
-    holderCountQualityScore = 20; holderCountQualityClass = 'Insufficient';
+    var hcRatio = hcHld / hcExpMid;
+    if      (hcRatio >= 2.0)  { holderCountQualityScore = 100; holderCountQualityClass = 'Exceptional'; }
+    else if (hcRatio >= 1.5)  { holderCountQualityScore =  85; holderCountQualityClass = 'Strong'; }
+    else if (hcRatio >= 1.0)  { holderCountQualityScore =  70; holderCountQualityClass = 'Healthy'; }
+    else if (hcRatio >= 0.75) { holderCountQualityScore =  55; holderCountQualityClass = 'Fair'; }
+    else if (hcRatio >= 0.50) { holderCountQualityScore =  35; holderCountQualityClass = 'Weak'; }
+    else                      { holderCountQualityScore =  15; holderCountQualityClass = 'Poor'; }
   }
 
   /* Holder Momentum — measures growth/decline over time using historical counts */
@@ -5346,6 +5360,7 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
     /* Holder Analysis */
     holderCountQualityScore: holderCountQualityScore,
     holderCountQualityClass: holderCountQualityClass,
+    holderExpectedRange:     holderExpectedRange,
     holderHistoryAvailable:  holderHistoryAvailable,
     holderMomentumScore:     holderMomentumScore,
     holderTrendClass:        holderTrendClass,
