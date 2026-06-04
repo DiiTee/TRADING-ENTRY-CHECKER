@@ -7727,11 +7727,17 @@ function buildSetupText(d, analysis) {
     + '  |  Position: ' + txtDistClass + ' (' + txtDistShelf.toFixed(1) + '% from shelf)');
   /* ── Structural Analysis Scores ── */
   if (txtSA) {
+    var txtTps = computeTransactionPressureScore(d);
     lines.push('05. Structural Analysis:');
     lines.push('    Acceptance Score: ' + txtSA.acceptanceScore + '/100 (' + txtSA.acceptanceClass + ')');
     lines.push('    Demand Return Score: ' + txtSA.demandReturnScore + '/100 (' + (txtSA.demandClass || '—') + ')');
-    lines.push('    Demand Expansion Score: ' + (txtSA.demandExpansionScore || 0) + '/100 (' + (txtSA.demandExpansionClass || '—') + ')');
-    lines.push('    Bounce Velocity Score: ' + (txtSA.bounceVelocityScore || 0) + '/100');
+    lines.push('    Demand Expansion: ' + (txtSA.demandExpansionScore || 0) + '/100 (' + (txtSA.demandExpansionQuality || '—') + ' via ' + (txtSA.demandExpansionSource || '—') + ')' + (txtSA.shortTermExpansion !== undefined && txtSA.mediumTermExpansion !== undefined ? ' [ST: ' + txtSA.shortTermExpansion + ' · MT: ' + txtSA.mediumTermExpansion + ']' : ''));
+    if (txtTps) lines.push('    Transaction Pressure: ' + txtTps.score + '/100 (' + txtTps.label + ' — ' + txtTps.pct + '% buy dominance via ' + txtTps.source + ')');
+    lines.push('    Bounce Velocity Score: ' + (txtSA.bounceVelocityScore || 0) + '/100' + (txtSA.bounceMagnitude !== null && txtSA.bounceMagnitude !== undefined ? ' (+' + txtSA.bounceMagnitude + '% over ' + txtSA.bounceDuration + ' candle' + (txtSA.bounceDuration !== 1 ? 's' : '') + ')' : ''));
+    lines.push('    Supply Absorption: ' + (txtSA.supplyAbsorptionScore || 0) + '/100 (' + (txtSA.supplyAbsorptionLabel || '—') + ')');
+    lines.push('    Volume Expansion: ' + (txtSA.volumeExpansionScore || 0) + '/100 (' + (txtSA.volumeExpansionSignal || '—') + ')');
+    lines.push('    Breakout Efficiency: ' + txtSA.breakoutEfficiency + '% (' + txtSA.breakoutLabel + ')' + (txtSA.breakoutAttempts > 0 ? ' | Attempts: ' + txtSA.breakoutAttempts + ' · Success: ' + txtSA.successfulBreakouts + ' · Confidence Modifier: ' + Math.round(txtSA.attemptConfidenceModifier * 100) + '%' : ''));
+    lines.push('    Trap Risk: ' + (txtSA.trapRiskLabel || '—') + ' (' + (txtSA.trapRiskScore || 0) + '/100)' + (txtSA.fakeBreakoutRisk ? ' ⚠ Fake Breakout' : '') + (txtSA.exitSpikeRisk ? ' ⚠ Exit Spike' : '') + (txtSA.perfectClimbRisk ? ' ⚠ Perfect Climb Risk' : ''));
     lines.push('    Holder Count: ' + (window._tecHolderCount || 0).toLocaleString());
     lines.push('    Expected Range: ' + (txtSA.holderExpectedRange || '—'));
     lines.push('    Holder Count Quality Score: ' + (txtSA.holderCountQualityScore || 0) + '/100 (' + (txtSA.holderCountQualityClass || '—') + ')');
@@ -7745,11 +7751,10 @@ function buildSetupText(d, analysis) {
     lines.push('    Structure Sequence: ' + txtSA.structureSequence);
     lines.push('    Trend: ' + txtSA.trendState + ' | VWAP: ' + txtSA.vwapPosition + ' | Vol Regime: ' + txtSA.volRegime + (txtSA.compressionDetected ? ' | COMPRESSION DETECTED' : '') + (txtSA.parabolicRisk ? ' | PARABOLIC RISK' : ''));
     lines.push('    Shelf Defenses: ' + txtSA.defenseCount + ' (' + txtSA.defenseClassification + ') | ATR: ' + txtSA.atrPct + '% | SD: ' + txtSA.sdPct + '%');
-    if (txtSA.shelfQualityScore !== undefined) lines.push('    Shelf Quality Score: ' + txtSA.shelfQualityScore + '/100' + (txtSA.shelfQualityDesc ? ' (' + txtSA.shelfQualityDesc + ')' : ''));
-    lines.push('    Pre-Breakout Squeeze: ' + (txtSA.preBreakoutSqueeze || 'Weak') + (txtSA.doubleAccumulation ? ' | Double Accumulation Detected' : ''));
+    if (txtSA.shelfQualityScore !== undefined) lines.push('    Shelf Quality: ' + txtSA.shelfQualityScore + '/100 (' + (txtSA.shelfQualityClass || '—') + ')' + (txtSA.shelfQualityPenalty > 0 ? ' — −' + txtSA.shelfQualityPenalty + ' tier penalty' : ''));
+    lines.push('    Pre-Breakout Squeeze: ' + (txtSA.preBreakoutSqueeze || 'Weak') + (txtSA.doubleAccumulation ? ' | Double Accumulation: ' + (txtSA.doubleAccumConfidence || '') + ' Confidence' : ''));
     lines.push('    Overhead Supply: ' + txtSA.overheadRisk + ' (' + txtSA.overheadDensityPct + '% closes above)');
-    lines.push('    Breakout Efficiency: ' + txtSA.breakoutEfficiency + '% (' + txtSA.breakoutLabel + ')' + (txtSA.breakoutConfidenceScore !== undefined ? ' | Breakout Confidence: ' + txtSA.breakoutConfidenceScore + '/100' : ''));
-    if (txtSA.runnerPotential) lines.push('    Runner Potential: ' + txtSA.runnerPotential);
+    if (txtSA.runnerPotential) lines.push('    Runner Potential: ' + txtSA.runnerPotential + ' (Score: ' + (txtSA.runnerScore || '—') + ')');
     lines.push('    Confidence Tier: ' + txtSA.confidenceTier + ' — ' + txtSA.tierLabel + ' (Score: ' + txtSA.tierScore + '/100)');
   } else {
     lines.push('05. Distance from Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  ⚠ POOR RISK/REWARD' : ''));
