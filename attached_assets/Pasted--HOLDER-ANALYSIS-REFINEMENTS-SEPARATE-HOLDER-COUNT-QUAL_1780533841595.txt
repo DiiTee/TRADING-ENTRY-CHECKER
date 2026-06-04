@@ -1,0 +1,243 @@
+
+HOLDER ANALYSIS REFINEMENTS
+======================
+SEPARATE HOLDER COUNT QUALITY FROM HOLDER MOMENTUM
+========================================================
+
+Problem:
+
+Current Holder Momentum is based primarily on current holder count versus a threshold.
+
+This measures adoption size.
+
+It does NOT measure momentum.
+
+========================================================
+NEW HOLDER COUNT QUALITY
+========================================================
+
+Purpose:
+
+Measure current adoption size.
+
+Inputs:
+
+Current Holder Count
+
+Minimum Holder Threshold
+
+Output:
+
+Holder Count Quality
+
+Range:
+
+0–100
+
+Classifications:
+
+Excellent
+
+Strong
+
+Adequate
+
+Weak
+
+Insufficient
+
+Question Answered:
+
+"Does the token have enough holders?"
+
+========================================================
+NEW HOLDER MOMENTUM
+========================================================
+
+Purpose:
+
+Measure holder growth or decline over time.
+
+Preferred Data Sources:
+
+1. Helius
+
+2. Solscan
+
+3. Any available holder-history endpoint
+
+========================================================
+TRACK
+========================================================
+
+Current Holders
+
+1 Hour Ago Holders
+
+6 Hours Ago Holders
+
+24 Hours Ago Holders
+
+========================================================
+CALCULATE
+========================================================
+
+1H Holder Change %
+
+6H Holder Change %
+
+24H Holder Change %
+
+Weighted Formula:
+
+HolderMomentumScore =
+
+(1H Change × 0.50)
+
++
+
+(6H Change × 0.30)
+
++
+
+(24H Change × 0.20)
+
+Normalize to:
+
+0–100
+
+========================================================
+HOLDER MOMENTUM CLASSIFICATIONS
+========================================================
+
+90–100
+
+Explosive Growth
+
+75–89
+
+Strong Growth
+
+60–74
+
+Steady Growth
+
+45–59
+
+Stable
+
+30–44
+
+Distribution
+
+0–29
+
+Holder Exodus
+
+========================================================
+ADD HOLDER DIVERGENCE
+========================================================
+
+Purpose:
+
+Detect hidden accumulation or distribution.
+
+========================================================
+ACCUMULATION DIVERGENCE
+========================================================
+
+Condition:
+
+Price Falling
+
+AND
+
+Holder Count Rising
+
+Display:
+
+Accumulation Divergence
+
+Meaning:
+
+New holders continue entering despite price weakness.
+
+Bullish signal.
+
+========================================================
+DISTRIBUTION DIVERGENCE
+========================================================
+
+Condition:
+
+Price Rising
+
+AND
+
+Holder Count Falling
+
+Display:
+
+Distribution Divergence
+
+Meaning:
+
+Participation is shrinking despite price appreciation.
+
+Bearish signal.
+
+========================================================
+STRUCTURAL ANALYSIS INTEGRATION
+========================================================
+
+Add:
+
+Holder Count Quality
+
+Holder Momentum
+
+Holder Divergence
+
+to Structural Analysis.
+
+========================================================
+ENTRY CHECKLIST INTEGRATION
+========================================================
+
+Add:
+
+Holder Momentum
+
+Holder Divergence
+
+to Entry Combat Checklist.
+
+Examples:
+
+✓ Strong Holder Growth
+
+✓ Accumulation Divergence
+
+⚠ Stable Holder Growth
+
+✗ Holder Exodus
+
+✗ Distribution Divergence
+
+========================================================
+DATA AVAILABILITY RULE
+========================================================
+
+If holder history cannot be obtained:
+
+Display:
+
+"Historical holder data unavailable."
+
+Show:
+
+Holder Count Quality only.
+
+Do not estimate or fabricate Holder Momentum.
+
+Reduce Holder Momentum confidence accordingly.

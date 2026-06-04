@@ -1328,8 +1328,20 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
           <input type="number" id="fFirst20" placeholder="e.g. 5" min="0" step="0.1">
         </div>
         <div class="form-group">
-          <label>Holders</label>
+          <label>Holders (current)</label>
           <input type="number" id="fHolders" placeholder="e.g. 500" min="0" step="1">
+        </div>
+        <div class="form-group">
+          <label>Holders 1h ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
+          <input type="number" id="fHoldersH1" placeholder="e.g. 420" min="0" step="1">
+        </div>
+        <div class="form-group">
+          <label>Holders 6h ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
+          <input type="number" id="fHoldersH6" placeholder="e.g. 310" min="0" step="1">
+        </div>
+        <div class="form-group">
+          <label>Holders 24h ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
+          <input type="number" id="fHoldersH24" placeholder="e.g. 150" min="0" step="1">
         </div>
         <div class="form-group">
           <label>Fake Holders %</label>
@@ -2565,7 +2577,10 @@ async function fetchFromCA(ca) {
           /* poolAttrs: GeckoTerminal native txn data (best) or DexScreener fallback */
           var saPoolAttrs = gtPoolAttrs || null;
           if (!saPoolAttrs && fetched._dexTxns) saPoolAttrs = { transactions: fetched._dexTxns };
-          window._tecHolderCount = fetched.holders || 0;
+          window._tecHolderCount = fetched.holders    || 0;
+          window._tecHolderH1    = fetched.holdersH1  || 0;
+          window._tecHolderH6    = fetched.holdersH6  || 0;
+          window._tecHolderH24   = fetched.holdersH24 || 0;
           window._tecSettings    = settings;
           gtStructuralAnalysis = computeStructuralAnalysis(gt15mList, saPoolAttrs);
           if (gtStructuralAnalysis) {
@@ -4654,19 +4669,74 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   var trapRiskLabel = trapRiskScore >= 75 ? 'Extreme Risk' : trapRiskScore >= 50 ? 'High Risk' : trapRiskScore >= 25 ? 'Moderate Risk' : 'Low Risk';
   var trapRiskColor = trapRiskScore >= 75 ? '#ff4757' : trapRiskScore >= 50 ? '#ff6b35' : trapRiskScore >= 25 ? '#ffeb3b' : '#00e676';
 
-  /* ── Holder Momentum Score (from available data) ── */
-  var holderMomentumScore = 50, holderTrendClass = 'Stable', holderMomentumSource = 'Estimated';
-  (function() {
-    var hc = window._tecHolderCount || 0;
-    var minH = (window._tecSettings && window._tecSettings.minHolders) || 400;
-    if (hc <= 0) { holderMomentumScore = 50; holderTrendClass = 'Unknown'; holderMomentumSource = 'No Data'; return; }
-    holderMomentumSource = 'Current Holder Count';
-    if      (hc >= minH * 5)  { holderMomentumScore = 90; holderTrendClass = 'Rapid Growth';   }
-    else if (hc >= minH * 2)  { holderMomentumScore = 75; holderTrendClass = 'Moderate Growth'; }
-    else if (hc >= minH)      { holderMomentumScore = 60; holderTrendClass = 'Stable';          }
-    else if (hc >= minH * 0.5){ holderMomentumScore = 40; holderTrendClass = 'Slow Decline';    }
-    else                      { holderMomentumScore = 20; holderTrendClass = 'Rapid Decline';   }
-  })();
+  /* ── Holder Count Quality + Holder Momentum (time-based) + Holder Divergence ── */
+  var hcHld  = window._tecHolderCount || 0;
+  var minH   = (window._tecSettings && window._tecSettings.minHolders) || 400;
+  var hldH1  = window._tecHolderH1  || 0;
+  var hldH6  = window._tecHolderH6  || 0;
+  var hldH24 = window._tecHolderH24 || 0;
+
+  /* Holder Count Quality — measures adoption size independently of momentum */
+  var holderCountQualityScore, holderCountQualityClass;
+  if (hcHld <= 0) {
+    holderCountQualityScore = 0;  holderCountQualityClass = 'No Data';
+  } else if (hcHld >= minH * 5) {
+    holderCountQualityScore = 95; holderCountQualityClass = 'Excellent';
+  } else if (hcHld >= minH * 2.5) {
+    holderCountQualityScore = 80; holderCountQualityClass = 'Strong';
+  } else if (hcHld >= minH) {
+    holderCountQualityScore = 65; holderCountQualityClass = 'Adequate';
+  } else if (hcHld >= minH * 0.5) {
+    holderCountQualityScore = 45; holderCountQualityClass = 'Weak';
+  } else {
+    holderCountQualityScore = 20; holderCountQualityClass = 'Insufficient';
+  }
+
+  /* Holder Momentum — measures growth/decline over time using historical counts */
+  var holderMomentumScore = 50, holderTrendClass = 'No History', holderMomentumSource = 'Historical data unavailable';
+  var holderHistoryAvailable = (hldH1 > 0 || hldH6 > 0 || hldH24 > 0) && hcHld > 0;
+  if (hcHld <= 0) {
+    holderMomentumScore  = 0;
+    holderTrendClass     = 'Unknown';
+    holderMomentumSource = 'No Data';
+  } else if (!holderHistoryAvailable) {
+    holderMomentumScore  = 50;
+    holderTrendClass     = 'No History';
+    holderMomentumSource = 'Historical data unavailable';
+  } else {
+    /* Per-period % change (positive = growth, negative = decline) */
+    var hldCh1  = hldH1  > 0 ? ((hcHld - hldH1)  / hldH1)  * 100 : null;
+    var hldCh6  = hldH6  > 0 ? ((hcHld - hldH6)  / hldH6)  * 100 : null;
+    var hldCh24 = hldH24 > 0 ? ((hcHld - hldH24) / hldH24) * 100 : null;
+    /* Weighted composite; re-normalise weights for available periods */
+    var hldWsum = (hldCh1 !== null ? 0.50 : 0) + (hldCh6 !== null ? 0.30 : 0) + (hldCh24 !== null ? 0.20 : 0);
+    var hldRaw  = hldWsum > 0
+      ? ((hldCh1  !== null ? hldCh1  * 0.50 : 0) +
+         (hldCh6  !== null ? hldCh6  * 0.30 : 0) +
+         (hldCh24 !== null ? hldCh24 * 0.20 : 0)) / hldWsum
+      : 0;
+    /* Normalise: raw -30% → 0, 0% → 50, +30% → 100 */
+    holderMomentumScore  = Math.round(Math.min(100, Math.max(0, ((hldRaw + 30) / 60) * 100)));
+    holderMomentumSource = 'Holder History';
+    if      (holderMomentumScore >= 90) holderTrendClass = 'Explosive Growth';
+    else if (holderMomentumScore >= 75) holderTrendClass = 'Strong Growth';
+    else if (holderMomentumScore >= 60) holderTrendClass = 'Steady Growth';
+    else if (holderMomentumScore >= 45) holderTrendClass = 'Stable';
+    else if (holderMomentumScore >= 30) holderTrendClass = 'Distribution';
+    else                                holderTrendClass = 'Holder Exodus';
+  }
+
+  /* Holder Divergence — detect hidden accumulation or distribution */
+  var holderDivergence = 'None', holderDivergenceType = null;
+  if (holderHistoryAvailable && hldH1 > 0) {
+    var hldRising  = hcHld > hldH1;
+    var hldFalling = hcHld < hldH1;
+    var hldPriceDown = trendState === 'Downtrend';
+    var hldPriceUp   = trendState === 'Uptrend';
+    if      (hldPriceDown && hldRising)  { holderDivergence = 'Accumulation Divergence'; holderDivergenceType = 'bullish'; }
+    else if (hldPriceUp   && hldFalling) { holderDivergence = 'Distribution Divergence'; holderDivergenceType = 'bearish'; }
+    else                                 { holderDivergence = 'No Divergence';            holderDivergenceType = null;     }
+  }
 
   /* ── FIX #6/#7: Confidence Tier (8 components; Breakout weight 10%→15%) ── */
   var distScoreForTier = Math.max(0, 100 - distFromShelf * 3);
@@ -4849,16 +4919,38 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   });
 
   /* Holder Momentum */
-  checklist.push({
-    label: 'Holder Momentum', value: holderTrendClass + ' (' + holderMomentumScore + '/100)',
-    status: holderMomentumScore >= 60 ? 'pass' : holderMomentumScore >= 40 ? 'caution' : 'fail',
-    reason: holderTrendClass === 'Rapid Growth'   ? 'Strong holder growth — rising mindshare'
-          : holderTrendClass === 'Moderate Growth' ? 'Healthy adoption trend'
-          : holderTrendClass === 'Stable'          ? 'Stable holder base — no decline'
-          : holderTrendClass === 'Slow Decline'    ? 'Holders declining slowly — watch'
-          : holderTrendClass === 'Rapid Decline'   ? 'Rapid holder loss — bearish signal'
-          : 'Holder data unavailable'
-  });
+  if (!holderHistoryAvailable) {
+    checklist.push({
+      label: 'Holder Momentum', value: 'No History',
+      status: 'caution',
+      reason: 'Historical holder data unavailable — enter 1h / 6h / 24h holder counts for momentum tracking'
+    });
+  } else {
+    checklist.push({
+      label: 'Holder Momentum', value: holderTrendClass + ' (' + holderMomentumScore + '/100)',
+      status: holderMomentumScore >= 60 ? 'pass' : holderMomentumScore >= 45 ? 'caution' : 'fail',
+      reason: holderTrendClass === 'Explosive Growth' ? 'Explosive holder growth — surging mindshare'
+            : holderTrendClass === 'Strong Growth'    ? 'Strong holder growth — rising mindshare'
+            : holderTrendClass === 'Steady Growth'    ? 'Steady growth — healthy adoption trend'
+            : holderTrendClass === 'Stable'           ? 'Stable holder base — no meaningful decline'
+            : holderTrendClass === 'Distribution'     ? 'Holder distribution phase — declining participation'
+            : holderTrendClass === 'Holder Exodus'    ? 'Rapid holder loss — bearish signal'
+            : 'Holder data unavailable'
+    });
+  }
+
+  /* Holder Divergence */
+  if (holderHistoryAvailable && holderDivergence !== 'None') {
+    checklist.push({
+      label: 'Holder Divergence', value: holderDivergence,
+      status: holderDivergenceType === 'bullish' ? 'pass' : holderDivergenceType === 'bearish' ? 'fail' : 'caution',
+      reason: holderDivergenceType === 'bullish'
+        ? '✓ Accumulation Divergence — new holders entering despite price weakness (bullish)'
+        : holderDivergenceType === 'bearish'
+        ? '✗ Distribution Divergence — participation shrinking despite price rise (bearish)'
+        : 'No meaningful divergence between price and holder trend'
+    });
+  }
 
   /* Final Decision */
   var clFailCount = checklist.filter(function(c){ return c.status === 'fail'; }).length;
@@ -4982,10 +5074,15 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
     trapRiskScore:           trapRiskScore,
     trapRiskLabel:           trapRiskLabel,
     trapRiskColor:           trapRiskColor,
-    /* Holder Momentum */
+    /* Holder Analysis */
+    holderCountQualityScore: holderCountQualityScore,
+    holderCountQualityClass: holderCountQualityClass,
+    holderHistoryAvailable:  holderHistoryAvailable,
     holderMomentumScore:     holderMomentumScore,
     holderTrendClass:        holderTrendClass,
     holderMomentumSource:    holderMomentumSource,
+    holderDivergence:        holderDivergence,
+    holderDivergenceType:    holderDivergenceType,
     /* Entry Checklist */
     entryChecklist:          checklist,
     checklistResult:         checklistResult,
@@ -5450,10 +5547,24 @@ function buildEntryBriefingHTML(d, analysis) {
           }
           t += '<br>';
 
-          /* ── Holder Momentum ── */
-          var hmC = sa.holderMomentumScore >= 60 ? 'var(--safe)' : sa.holderMomentumScore >= 40 ? 'var(--caution)' : '#ff4757';
-          t += 'Holder Momentum: <strong style="color:' + hmC + ';">' + sa.holderTrendClass + '</strong>';
-          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderMomentumScore + '/100 via ' + sa.holderMomentumSource + ')</span><br>';
+          /* ── Holder Analysis ── */
+          var hcqC = sa.holderCountQualityScore >= 65 ? 'var(--safe)' : sa.holderCountQualityScore >= 45 ? 'var(--caution)' : '#ff4757';
+          t += 'Holder Count Quality: <strong style="color:' + hcqC + ';">' + sa.holderCountQualityClass + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderCountQualityScore + '/100 · ' + (window._tecHolderCount || 0) + ' holders)</span><br>';
+          if (!sa.holderHistoryAvailable) {
+            t += 'Holder Momentum: <span style="color:var(--text-muted);font-size:0.70rem;">Historical holder data unavailable. Enter 1h / 6h / 24h counts in the form.</span><br>';
+          } else {
+            var hmC = sa.holderMomentumScore >= 60 ? 'var(--safe)' : sa.holderMomentumScore >= 45 ? 'var(--caution)' : '#ff4757';
+            t += 'Holder Momentum: <strong style="color:' + hmC + ';">' + sa.holderTrendClass + '</strong>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderMomentumScore + '/100 via Holder History)</span><br>';
+          }
+          if (sa.holderDivergence && sa.holderDivergence !== 'None' && sa.holderDivergence !== 'No Divergence') {
+            var hdC    = sa.holderDivergenceType === 'bullish' ? 'var(--safe)' : '#ff4757';
+            var hdIcon = sa.holderDivergenceType === 'bullish' ? '↑' : '↓';
+            var hdHint = sa.holderDivergenceType === 'bullish' ? 'Bullish — new holders entering despite price weakness' : 'Bearish — participation shrinking despite price rise';
+            t += 'Holder Divergence: <strong style="color:' + hdC + ';">' + hdIcon + ' ' + sa.holderDivergence + '</strong>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + hdHint + ')</span><br>';
+          }
 
           /* ── Runner Potential (reweighted breakdown) ── */
           t += 'Runner Potential: <strong style="color:' + sa.runnerColor + ';">' + sa.runnerPotential + '</strong>';
@@ -6476,7 +6587,10 @@ function analyzeCoin() {
     bots: parseInt(el('fBots').value) || 0,
     snipers: parseInt(el('fSnipers').value) || 0,
     first20: parseFloat(el('fFirst20').value) || 0,
-    holders: parseInt(el('fHolders').value) || 0,
+    holders:    parseInt(el('fHolders').value)    || 0,
+    holdersH1:  parseInt(el('fHoldersH1') ? el('fHoldersH1').value : '') || 0,
+    holdersH6:  parseInt(el('fHoldersH6') ? el('fHoldersH6').value : '') || 0,
+    holdersH24: parseInt(el('fHoldersH24') ? el('fHoldersH24').value : '') || 0,
     fakeHolders: parseFloat(el('fFakeHolders').value) || 0,
     fakeVol: parseFloat(el('fFakeVol').value) || 0,
     perf5m: parseFloat(el('fPerf5m').value) || 0,
@@ -7315,6 +7429,15 @@ function buildSetupText(d, analysis) {
     lines.push('    Demand Return Score: ' + txtSA.demandReturnScore + '/100 (' + (txtSA.demandClass || '—') + ')');
     lines.push('    Demand Expansion Score: ' + (txtSA.demandExpansionScore || 0) + '/100 (' + (txtSA.demandExpansionClass || '—') + ')');
     lines.push('    Bounce Velocity Score: ' + (txtSA.bounceVelocityScore || 0) + '/100');
+    lines.push('    Holder Count Quality: ' + (txtSA.holderCountQualityScore || 0) + '/100 (' + (txtSA.holderCountQualityClass || '—') + ')');
+    if (!txtSA.holderHistoryAvailable) {
+      lines.push('    Holder Momentum: Historical holder data unavailable.');
+    } else {
+      lines.push('    Holder Momentum: ' + txtSA.holderTrendClass + ' (' + txtSA.holderMomentumScore + '/100)');
+    }
+    if (txtSA.holderDivergence && txtSA.holderDivergence !== 'None' && txtSA.holderDivergence !== 'No Divergence') {
+      lines.push('    Holder Divergence: ' + txtSA.holderDivergence + (txtSA.holderDivergenceType === 'bullish' ? ' — Bullish' : txtSA.holderDivergenceType === 'bearish' ? ' — Bearish' : ''));
+    }
     lines.push('    Shelf Type: ' + txtSA.shelfType + ' — ' + txtSA.shelfTypeDesc);
     lines.push('    Structure Sequence: ' + txtSA.structureSequence);
     lines.push('    Trend: ' + txtSA.trendState + ' | VWAP: ' + txtSA.vwapPosition + ' | Vol Regime: ' + txtSA.volRegime + (txtSA.compressionDetected ? ' | COMPRESSION DETECTED' : '') + (txtSA.parabolicRisk ? ' | PARABOLIC RISK' : ''));
