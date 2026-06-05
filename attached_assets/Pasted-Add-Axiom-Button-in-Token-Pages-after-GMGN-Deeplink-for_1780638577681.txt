@@ -1,0 +1,75 @@
+Add Axiom Button in Token Pages after GMGN: 
+
+Deeplink format:
+https://axiom.trade/meme/[CA]?chain=sol
+
+Deeplink example:
+https://axiom.trade/meme/FLRipMb22BSdj2EsBmvYDVRJarWM1gZc1gSSXBUsjRVz?chain=sol
+
+
+ALSO:
+Rename Entry Combat Briefing to Structure Briefing 
+
+Rename Recommended Entry Checklist to Structure Checklist 
+
+Put Structural Analysis Scores Confidence Tier & Verdict at the top of the Structure Briefing section, exactly like how the SECURITY TIER & FINAL SECURITY VERDICT appear at the top of the Security/Cabal Briefing section.
+
+Put Structure Checklist immediately after Structural Analysis Scores Confidence Tier & Verdict, exactly like how the SECURITY CHECKLIST appears in the Security/Cabal Briefing section.
+
+Item 06 Structural Analysis Scores in Structure Briefing will remain where and how it is, the full breakdown.
+
+The major signal for Self-Snipe (in Dev Reputation) should be the Soul Scanner bundle scan text (in Coin Input box) when it shows a bundle that holds supply without having bought it. 
+Example:
+📦 $MONEYFEST /bundle
+
+Total Stats:
+📦 Bundles: 4
+📊 Bought: 28.4%
+💎 Holding: 1.1%
+💼 Wallets: 27
+💵 Spent: 28.84 SOL
+
+🛠️ Dev: 3 SOL | 1% $MONEYFEST
+┣ Bundled: 0% 🤍
+┗ Airdrop: 0% 🤍
+
+Top 4 Bundles:
+1⃣ 14h ago • 0s after launch
+┣ 📊 Bought: 0%
+┣ 💎 Holding: 1.1%
+┣ 💼 Wallets: 1
+┗ 💵 Spent: 0.01 SOL
+
+2⃣ 14h ago • 59s after launch
+┣ 📊 Bought: 10.6%
+┣ 💎 Holding: 0%
+┣ 💼 Wallets: 11
+┗ 💵 Spent: 10.84 SOL
+
+3⃣ 14h ago • 59s after launch
+┣ 📊 Bought: 17.2%
+┣ 💎 Holding: 0%
+┣ 💼 Wallets: 13
+┗ 💵 Spent: 17.39 SOL
+
+4⃣ 11h ago • 3h after launch
+┣ 📊 Bought: 0.6%
+┣ 💎 Holding: 0%
+┣ 💼 Wallets: 2
+┗ 💵 Spent: 0.6 SOL
+
+The first bundle is most likely a Self-Snipe by the dev (it holds supply so early at launch without having bought it):
+
+1⃣ 14h ago • 0s after launch
+┣ 📊 Bought: 0%
+┣ 💎 Holding: 1.1%
+┣ 💼 Wallets: 1
+┗ 💵 Spent: 0.01 SOL
+
+Accompanying evidence: 
+🛠️ Dev: 3 SOL | 1% $MONEYFEST
+┣ Bundled: 0% 🤍
+┗ Airdrop: 0% 🤍
+
+This should be the strong evidence used to flag a Self-Snipe.
+Everything else is not a strong signal for Self-Snipe by Dev; they're likely just regular snipers (more of signals for Wallet Cluster Confidence or Launch Coordination Risk).

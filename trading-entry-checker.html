@@ -334,6 +334,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .rickbot-btn.disabled { opacity: 0.38; pointer-events: none; cursor: default; }
 .rickbot-btn.btn-gmgn { background: rgba(0,200,83,0.12); color: #00c853; border-color: rgba(0,200,83,0.3); }
 .rickbot-btn.btn-gmgn:hover { background: rgba(0,200,83,0.25); border-color: rgba(0,200,83,0.55); }
+.rickbot-btn.btn-axiom { background: rgba(255,165,0,0.12); color: #ffa500; border-color: rgba(255,165,0,0.3); }
+.rickbot-btn.btn-axiom:hover { background: rgba(255,165,0,0.25); border-color: rgba(255,165,0,0.55); }
 .rickbot-btn.btn-dex { background: rgba(0,180,255,0.12); color: #00b4ff; border-color: rgba(0,180,255,0.3); }
 .rickbot-btn.btn-dex:hover { background: rgba(0,180,255,0.25); border-color: rgba(0,180,255,0.55); }
 .rickbot-btn.btn-defade { background: rgba(156,39,176,0.12); color: #ce93d8; border-color: rgba(156,39,176,0.3); }
@@ -1248,6 +1250,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
             <div class="rickbot-label"><i class="fa-solid fa-arrow-up-right-from-square"></i> Token Pages</div>
             <div class="rickbot-links-row">
               <a id="rlGMGN"      class="rickbot-btn btn-gmgn disabled"   href="#" target="_blank"><i class="fa-solid fa-bolt"></i> GMGN</a>
+              <a id="rlAxiom"     class="rickbot-btn btn-axiom disabled"  href="#" target="_blank"><i class="fa-solid fa-atom"></i> Axiom</a>
               <a id="rlDexToken"  class="rickbot-btn btn-dex disabled"    href="#" target="_blank"><i class="fa-solid fa-chart-bar"></i> DexScreener</a>
               <a id="rlDeFade"    class="rickbot-btn btn-defade disabled" href="#" target="_blank"><i class="fa-solid fa-fire"></i> DeFade</a>
               <a id="rlSoulToken" class="rickbot-btn btn-soul disabled"   href="#" target="_blank"><i class="fa-solid fa-ghost"></i> Soul Scanner</a>
@@ -3654,57 +3657,52 @@ function computeDevReputation(d) {
 }
 
 /* ─── Self-Snipe Evidence Engine ───────────────────────────────────────────
-   Evidence-based. Bundle data alone NEVER confirms self-snipe.
-   Evidence types: Launch Purchase Activity, Launch Allocation,
-                   Known Deployer Connection, Large Early Buy, Bundle Context
-   Levels: No Evidence (0) / Weak (1) / Moderate (2) / Strong (3) / Very Strong (4+)
+   PRIMARY signal: Soul Scanner bundle text — a bundle at 0s after launch that
+   holds supply (Holding >0%) without having bought it (Bought: 0%) and spent
+   near-zero SOL is strong evidence of a pre-allocated dev self-snipe.
+   Everything else (snipers, first20, bots, bundleCluster) reflects coordinated
+   launch activity (Wallet Cluster Confidence) — NOT dev self-snipe.
    ─────────────────────────────────────────────────────────────────────────── */
+function detectSelfSniperBundle(rawText) {
+  if (!rawText) return null;
+  var bundleSectMatch = rawText.match(/Top\s+\d+\s+Bundles?:([\s\S]*)/i);
+  if (!bundleSectMatch) return null;
+  var sect = bundleSectMatch[1];
+  /* Find "0s after launch" position — only the very first block should have this */
+  var zeroIdx = sect.search(/\b0s\s+after\s+launch\b/i);
+  if (zeroIdx < 0) return null;
+  /* Check surrounding text (the bundle entry spans ~300 chars) */
+  var start = Math.max(0, zeroIdx - 60);
+  var end   = Math.min(sect.length, zeroIdx + 300);
+  var block = sect.substring(start, end);
+  /* Bought must be 0% */
+  if (!/Bought\s*:\s*0%/i.test(block)) return null;
+  /* Holding must be >0% */
+  var holdM = block.match(/Holding\s*:\s*([\d.]+)%/i);
+  if (!holdM || parseFloat(holdM[1]) <= 0) return null;
+  var walletsM = block.match(/Wallets?\s*:\s*(\d+)/i);
+  return {
+    holdingPct: parseFloat(holdM[1]),
+    wallets:    walletsM ? parseInt(walletsM[1], 10) : 1
+  };
+}
+
 function computeSelfSniperRisk(d) {
   var evidence = [];
-
-  /* 1. Launch Purchase Activity — snipers are direct evidence of coordinated buying */
-  if ((d.snipers||0) >= 8)
-    evidence.push({ type:'Launch Purchase Activity', note:'High sniper count at launch ('+( d.snipers||0)+') — coordinated buy-in' });
-  else if ((d.snipers||0) >= 4)
-    evidence.push({ type:'Launch Purchase Activity', note:'Moderate snipers at launch ('+(d.snipers||0)+') — possible coordinated entry' });
-
-  /* 2. Launch Allocation — concentrated first-wave wallets */
-  if ((d.first20||0) >= 20)
-    evidence.push({ type:'Launch Allocation', note:'First 20 wallets hold '+(d.first20||0).toFixed(1)+'% — high launch concentration' });
-  else if ((d.first20||0) >= 12)
-    evidence.push({ type:'Launch Allocation', note:'First 20 wallets hold '+(d.first20||0).toFixed(1)+'% — notable early allocation' });
-
-  /* 3. Known Deployer Connection — dev still holds large unsold position */
-  if ((d.devWallet||0) >= 5 && d.devSold !== 'Yes')
-    evidence.push({ type:'Known Deployer Connection', note:'Dev holds '+(d.devWallet||0).toFixed(1)+'% unsold — possible retained position from launch' });
-
-  /* 4. Large Early Buy — heavy bot farming, typically funded by dev */
-  if ((d.bots||0) >= 30)
-    evidence.push({ type:'Large Early Buy', note:'Heavy bot activity ('+(d.bots||0)+' bots) — artificial buy pressure at launch' });
-  else if ((d.bots||0) >= 15)
-    evidence.push({ type:'Large Early Buy', note:'Significant bot activity ('+(d.bots||0)+' bots) — potential coordinated inflation' });
-
-  /* 5. Bundle Context — supporting only (cannot confirm alone) */
-  if ((d.bundleClusterPct||0) >= 20)
-    evidence.push({ type:'Bundle Context', note:'High bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'%) — coordinated multi-wallet buying at launch (supporting signal only)' });
-  else if ((d.bundleClusterPct||0) >= 12)
-    evidence.push({ type:'Bundle Context', note:'Moderate bundle cluster ('+(d.bundleClusterPct||0).toFixed(1)+'%) — possible organized entry (supporting signal only)' });
-
-  /* ── Bundle-only guard: if bundle context is the only signal, strip it and keep No Evidence */
-  var nonBundleCount = evidence.filter(function(e){ return e.type !== 'Bundle Context'; }).length;
-  var bundleOnly = nonBundleCount === 0 && evidence.length > 0;
-  if (bundleOnly) evidence = [];  /* bundle alone cannot confirm — per spec */
-
-  var count = evidence.length;
-  var verdict, color;
-  if (count === 0)      { verdict = 'No Evidence';      color = '#00e676'; }
-  else if (count === 1) { verdict = 'Weak Evidence';    color = '#ffeb3b'; }
-  else if (count === 2) { verdict = 'Moderate Evidence';color = '#ff9800'; }
-  else if (count === 3) { verdict = 'Strong Evidence';  color = '#ff4757'; }
-  else                  { verdict = 'Very Strong Evidence'; color = '#ff4757'; }
-
-  var signals = evidence.map(function(e){ return e.type + ': ' + e.note; });
-  return { verdict:verdict, color:color, evidence:evidence, signals:signals, count:count };
+  /* PRIMARY (and only strong) signal: Soul Scanner bundle with pre-allocated supply */
+  var rawText = (typeof el === 'function' && el('pasteArea')) ? el('pasteArea').value : '';
+  var bundleSnipe = detectSelfSniperBundle(rawText);
+  if (bundleSnipe) {
+    evidence.push({
+      type: 'Pre-Allocated Bundle',
+      note: 'First bundle at 0s after launch holds ' + bundleSnipe.holdingPct + '% supply — Bought: 0%, ~0 SOL spent. Position obtained without purchasing; consistent with dev self-snipe.'
+    });
+  }
+  var count   = evidence.length;
+  var verdict = count === 0 ? 'No Evidence' : 'Strong Evidence';
+  var color   = count === 0 ? '#00e676'     : '#ff4757';
+  var signals = evidence.map(function(e) { return e.type + ': ' + e.note; });
+  return { verdict: verdict, color: color, evidence: evidence, signals: signals, count: count };
 }
 
 /* ─── Wallet Cluster Confidence ─────────────────────────────────────────────
@@ -5985,31 +5983,6 @@ function buildEntryBriefingHTML(d, analysis) {
 
         return t;
       })() },
-    { num: '06b', label: 'Recommended Entry Checklist', text: (function() {
-        var engineMode = window._tecEngineMode || 'FLOW';
-        if (!sa || !sa.entryChecklist) {
-          if (engineMode === 'FLOW') {
-            return '<span style="color:#ff9800;font-size:0.72rem;">⚡ Flow Mode active — Entry Checklist requires OHLCV candle data. Fetch Data to attempt candle retrieval from GeckoTerminal or DEX Screener.</span>';
-          }
-          return '<span style="color:var(--text-muted);">Requires OHLCV candle data — use Fetch Data to populate.</span>';
-        }
-        var rows = sa.entryChecklist.map(function(item) {
-          var sc = item.status === 'pass' ? 'var(--safe)' : item.status === 'caution' ? 'var(--caution)' : '#ff4757';
-          var sl = item.status === 'pass' ? 'PASS' : item.status === 'caution' ? 'CAUTION' : 'FAIL';
-          return '<div style="display:flex;align-items:flex-start;gap:7px;padding:2px 0;">'
-            + '<span style="min-width:56px;font-size:0.62rem;font-weight:700;color:' + sc + ';border:1px solid ' + sc + ';padding:1px 4px;border-radius:3px;text-align:center;margin-top:1px;">' + sl + '</span>'
-            + '<span style="min-width:140px;color:var(--text-secondary);font-size:0.70rem;flex-shrink:0;">' + item.label + '</span>'
-            + '<span style="color:var(--text-muted);font-size:0.68rem;">' + item.reason
-            + ' <em style="color:rgba(255,255,255,0.3);">(' + item.value + ')</em></span>'
-            + '</div>';
-        }).join('');
-        var fc = sa.checklistColor;
-        var summary = '<div style="margin-top:8px;padding:5px 10px;border-left:3px solid ' + fc + ';background:rgba(0,0,0,0.25);">'
-          + '<strong style="color:' + fc + ';font-size:1.0em;letter-spacing:1px;">FINAL: ' + sa.checklistResult + '</strong>'
-          + ' <span style="font-size:0.70rem;color:var(--text-muted);">— ' + sa.checklistReason + '</span>'
-          + '</div>';
-        return rows + summary;
-      })() },
     { num: '07', label: 'Potential Gain &amp; Risk/Reward', text: (function() {
         var t = 'Potential Gain: <strong style="color:var(--safe);">+' + potentialGain.toFixed(1) + '%</strong>';
         t += ' &nbsp;|&nbsp; R/R Ratio: <strong style="color:' + (rrPoor ? '#ff4757' : 'var(--safe)') + ';">' + rrRatio.toFixed(2) + ':1</strong>';
@@ -6045,8 +6018,77 @@ function buildEntryBriefingHTML(d, analysis) {
     return '<div class="entry-row"><div class="entry-num">' + r.num + '</div><div class="entry-content"><span class="entry-label">' + r.label + '</span><div class="entry-text">' + r.text + '</div></div></div>';
   }).join('');
 
+  var _em = window._tecEngineMode || 'FLOW';
+
+  /* ── Confidence Tier + Structural Verdict banner (mirrors Security Tier banner) ── */
+  var confBanner = (function() {
+    var tierC, tierVal, tierSc, verdC, verdLbl, tierLbl;
+    if (sa && _em === 'STRUCTURE') {
+      tierC   = sa.tierColor;     tierVal = sa.confidenceTier; tierSc  = sa.tierScore;
+      tierLbl = sa.tierLabel;     verdC   = sa.checklistColor; verdLbl = sa.checklistResult;
+    } else {
+      tierC = '#ff4757'; tierVal = 'B'; tierSc = '—';
+      tierLbl = 'OHLCV unavailable — capped at B'; verdC = '#ff4757'; verdLbl = 'FLOW MODE';
+    }
+    var t = '<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:stretch;">';
+    t += '<div style="min-width:110px;padding:8px 14px;border-left:4px solid '+tierC+';background:rgba(0,0,0,0.28);border-radius:4px;flex-shrink:0;">';
+    t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:1px;margin-bottom:1px;">CONFIDENCE TIER</div>';
+    t += '<div style="font-size:2.4rem;font-weight:900;color:'+tierC+';letter-spacing:3px;line-height:1;">'+tierVal+'</div>';
+    t += '<div style="color:var(--text-muted);font-size:0.62rem;margin-top:2px;">'+tierSc+'/100</div>';
+    t += '</div>';
+    t += '<div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.28);border-radius:4px;border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;justify-content:center;">';
+    t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:1px;margin-bottom:3px;">STRUCTURAL VERDICT</div>';
+    t += '<div style="font-size:1.35rem;font-weight:900;color:'+verdC+';letter-spacing:2px;">'+verdLbl+'</div>';
+    t += '<div style="color:var(--text-muted);font-size:0.63rem;margin-top:3px;">'+tierLbl+'</div>';
+    t += '</div>';
+    t += '</div>';
+    return t;
+  })();
+
+  /* ── Structure Checklist (card grid, mirrors Security Checklist) ── */
+  var checklistBlock = (function() {
+    var t = '<div style="margin-bottom:10px;">';
+    t += '<div style="color:var(--text-secondary);font-size:0.62rem;font-weight:700;letter-spacing:0.8px;margin-bottom:5px;">';
+    t += '<i class="fa-solid fa-list-check" style="margin-right:5px;"></i>STRUCTURE CHECKLIST';
+    if (sa && sa.entryChecklist && _em === 'STRUCTURE') {
+      t += ' <span style="color:var(--text-muted);font-weight:400;">— PASS=2pts · CAUTION=1pt · FAIL=0pts</span>';
+    }
+    t += '</div>';
+    if (sa && sa.entryChecklist && _em === 'STRUCTURE') {
+      t += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:3px;">';
+      sa.entryChecklist.forEach(function(item) {
+        var bg = item.status==='pass'?'rgba(0,230,118,0.05)':item.status==='fail'?'rgba(255,71,87,0.08)':'rgba(255,214,0,0.05)';
+        var bc = item.status==='pass'?'rgba(0,230,118,0.2)':item.status==='fail'?'rgba(255,71,87,0.3)':'rgba(255,214,0,0.2)';
+        var sc = item.status==='pass'?'#00e676':item.status==='fail'?'#ff4757':'#ffeb3b';
+        var sl = item.status==='pass'?'PASS':item.status==='fail'?'FAIL':'CAUTION';
+        t += '<div style="padding:5px 8px;background:'+bg+';border:1px solid '+bc+';border-radius:3px;">';
+        t += '<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;">';
+        t += '<span style="font-size:0.67rem;color:var(--text-muted);">'+item.label+'</span>';
+        t += '<span style="font-size:0.60rem;font-weight:700;color:'+sc+';white-space:nowrap;">'+sl+'</span>';
+        t += '</div>';
+        t += '<div style="font-size:0.68rem;color:'+sc+';font-weight:600;line-height:1.3;">'+item.reason+'</div>';
+        t += '<div style="font-size:0.61rem;color:rgba(255,255,255,0.38);line-height:1.3;">('+item.value+')</div>';
+        t += '</div>';
+      });
+      t += '</div>';
+      var fc = sa.checklistColor;
+      t += '<div style="margin-top:6px;padding:5px 10px;border-left:3px solid '+fc+';background:rgba(0,0,0,0.25);">';
+      t += '<strong style="color:'+fc+';font-size:1.0em;letter-spacing:1px;">FINAL: '+sa.checklistResult+'</strong>';
+      t += ' <span style="font-size:0.70rem;color:var(--text-muted);">— '+sa.checklistReason+'</span>';
+      t += '</div>';
+    } else if (_em === 'FLOW') {
+      t += '<span style="color:#ff9800;font-size:0.72rem;">⚡ Flow Mode active — Structure Checklist requires OHLCV candle data. Fetch Data to attempt candle retrieval from GeckoTerminal or DEX Screener.</span>';
+    } else {
+      t += '<span style="color:var(--text-muted);">Requires OHLCV candle data — use Fetch Data to populate.</span>';
+    }
+    t += '</div>';
+    return t;
+  })();
+
   return '<div class="briefing-section">' +
-    '<div class="briefing-title"><i class="fa-solid fa-crosshairs"></i> Entry Combat Briefing</div>' +
+    '<div class="briefing-title"><i class="fa-solid fa-crosshairs"></i> Structure Briefing</div>' +
+    confBanner +
+    checklistBlock +
     rowsHTML +
     '<div class="final-verdict-box ' + sClass + '"><i class="fa-solid ' + verdictIcon + '" style="margin-right:7px;"></i>' + finalVerdict + '</div>' +
     '</div>';
@@ -6850,6 +6892,7 @@ function updateRickbotLinks() {
   setLink('rlTwit',    twitterU ? base + 'twit-' + encodeURIComponent(twitterU) : null);
   setLink('rlMoniBtn', moniU    ? base + 'moni-' + encodeURIComponent(moniU)    : null);
   setLink('rlGMGN',      ca ? 'https://gmgn.ai/sol/token/' + ca                    : null);
+  setLink('rlAxiom',     ca ? 'https://axiom.trade/meme/' + ca + '?chain=sol'      : null);
   setLink('rlDexToken',  ca ? 'https://dexscreener.com/solana/' + ca               : null);
   setLink('rlDeFade',    ca ? 'https://defade.org/token/'  + ca                    : null);
   setLink('rlSoulToken', ca ? 'https://t.me/soul_scanner_bot?start=' + ca          : null);
@@ -7649,8 +7692,8 @@ function buildSetupText(d, analysis) {
   lines.push('Advice: ' + adviceMap[cabRisk]);
   lines.push('');
 
-  /* ── Entry Combat Briefing ── */
-  lines.push('ENTRY COMBAT BRIEFING');
+  /* ── Structure Briefing ── */
+  lines.push('STRUCTURE BRIEFING');
   lines.push('');
   var ageMin = analysis.ageMinutes;
   var bigPicture = '';
