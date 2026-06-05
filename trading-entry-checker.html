@@ -4563,6 +4563,11 @@ function buildSecurityBriefingHTML(d) {
 
   nt += '</div>';
 
+  /* Expose tier for summary panel */
+  window._tecSecTier    = secTier;
+  window._tecSecVerdict = secVerdict;
+  window._tecSecScore   = Math.round(secPct * 100);
+
   return '<div class="briefing-section">' +
     '<div class="briefing-title"><i class="fa-solid fa-user-secret"></i> Security Briefing</div>' +
     nt +
@@ -6263,6 +6268,494 @@ function buildEntryBriefingHTML(d, analysis) {
     '</div>';
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ATTENTION BRIEFING ENGINE
+   Measures whether a token is gaining attention faster than the market
+   can price it in. Scoring: Narrative(0-10) + Velocity(0-10) +
+   Distribution(0-5) + Freshness(0-5) = 30 pts max.
+   ══════════════════════════════════════════════════════════════════════════ */
+function computeAttentionBriefing(d, analysis) {
+  var sa          = d.structuralAnalysis || null;
+  var coinName    = (d.coin || '').toLowerCase();
+  var narrative   = (d.narrative || '').toLowerCase();
+  var combined    = coinName + ' ' + narrative;
+  var socialBuzz  = d.socialBuzz || 0;
+  var perf5m      = !isNaN(d.perf5m)  ? d.perf5m  : 0;
+  var perf1h      = !isNaN(d.perf1h)  ? d.perf1h  : 0;
+  var perf24h     = !isNaN(d.perf24h) ? d.perf24h : 0;
+  var volM5       = d.volM5  || 0;
+  var volH1       = d.volH1  || 0;
+  var dexTxns     = window._tecDexTxns || null;
+  var holderCount = window._tecHolderCount || 0;
+  var hldH1       = window._tecHolderH1  || 0;
+  var hldH6       = window._tecHolderH6  || 0;
+  var hldH24      = window._tecHolderH24 || 0;
+  var bundleClust = d.bundleClusterPct || 0;
+
+  /* ── 1. NARRATIVE STRENGTH (0-10) ── */
+  var naScore = 0;
+  var naCategory = 'Unclassified';
+  var naNotes = [];
+
+  var animalKw   = /\b(dog|cat|frog|pepe|bear|wolf|ape|monkey|bird|rabbit|bunny|hamster|shib|doge|bonk|rat|mouse|pup|wif|goat|pig|cow|fish|shark|fox|lion|tiger|snake|crab|turtle|chicken|duck|penguin|parrot|nub|hippo|sloth|gator|croc|ferret|weasel)\b/;
+  var aiKw       = /\b(ai|gpt|neural|matrix|cyber|bot|robot|agent|llm|agi|compute|quantum|algo|neural|sentient|skynet|hal|orion|claude)\b/;
+  var politicsKw = /\b(trump|maga|biden|elon|fed|vote|election|congress|senate|president|kamala|democrat|republican|lib|musk|vivek|rfk|doge|dept)\b/;
+  var celebKw    = /\b(musk|kanye|ye|taylor|swift|katy|cardi|drake|nicki|kim|kardash|zuck|gates|bezos|rogan|portnoy|influencer|tate|adin)\b/;
+  var memeKw     = /\b(meme|moon|giga|chad|based|wojak|wen|lambo|degen|yolo|ngmi|wagmi|gm|ser|fren|anon|cope|seethe|rent|npc|rug|ded|frens|hodl|gg|ez)\b/;
+  var viralKw    = /\b(viral|trending|breaking|scandal|crash|exposed|leaked|hack|glitch|clip|moment|event|news|fire|war|ban|lawsuit|meltdown)\b/;
+
+  var isAnimal   = animalKw.test(combined);
+  var isAI       = aiKw.test(combined);
+  var isPolitics = politicsKw.test(combined);
+  var isCeleb    = celebKw.test(combined);
+  var isMeme     = memeKw.test(combined);
+  var isViral    = viralKw.test(combined);
+
+  if      (isAnimal)   { naScore += 3; naCategory = 'Animal/Creature'; naNotes.push('Animal narrative — historically strong memetic potential'); }
+  else if (isPolitics) { naScore += 3; naCategory = 'Politics'; naNotes.push('Political narrative — high emotional trigger and broad awareness'); }
+  else if (isCeleb)    { naScore += 2; naCategory = 'Celebrity'; naNotes.push('Celebrity narrative — virality dependent on attention event'); }
+  else if (isAI)       { naScore += 2; naCategory = 'AI/Tech'; naNotes.push('AI/Tech narrative — active meta sector'); }
+  else if (isMeme)     { naScore += 2; naCategory = 'Meme Culture'; naNotes.push('Meme culture — naturally shareable, community-driven'); }
+  else if (isViral)    { naScore += 1; naCategory = 'Viral Event'; naNotes.push('Viral event narrative — time-sensitive attention window'); }
+  else                 { naNotes.push('Narrative category undetected — manual review recommended'); }
+
+  var cleanName = (d.coin || '').replace(/[$\/\s]/g,'');
+  if      (cleanName.length > 0 && cleanName.length <= 5) { naScore += 2; naNotes.push('Ultra-short name (' + cleanName.length + ' chars) — instant recall and shareability'); }
+  else if (cleanName.length <= 10)                         { naScore += 1; naNotes.push('Compact name (' + cleanName.length + ' chars) — easy to reference'); }
+
+  if      (socialBuzz >= 10) { naScore += 2; naNotes.push('Elevated social engagement signal (' + socialBuzz + ')'); }
+  else if (socialBuzz >= 5)  { naScore += 1; naNotes.push('Moderate social buzz (' + socialBuzz + ')'); }
+  else if (socialBuzz > 0)   { naNotes.push('Low social signal (' + socialBuzz + ') — minimal organic spread detected'); }
+
+  if (d.narrative && d.narrative.trim()) { naScore += 1; naNotes.push('Narrative context: "' + d.narrative.trim().slice(0,45) + (d.narrative.trim().length>45?'…':'"')); }
+
+  if ([isAnimal,isAI,isPolitics,isCeleb,isViral].filter(Boolean).length >= 2) {
+    naScore += 1; naNotes.push('Multi-category narrative fusion — rare and potent combination');
+  }
+  naScore = Math.min(10, Math.max(0, naScore));
+
+  /* ── 2. ATTENTION VELOCITY (0-10) ── */
+  var velScore = 5;
+  var velClass = 'Neutral';
+  var velNotes = [];
+
+  if (volM5 > 0 && volH1 > 0) {
+    var h1Slice  = volH1 / 12;
+    var volVelR  = h1Slice > 0 ? volM5 / h1Slice : 1;
+    if      (volVelR >= 4)   { velScore += 4; velNotes.push('Volume velocity ' + volVelR.toFixed(1) + 'x 1h avg — explosive surge'); }
+    else if (volVelR >= 2.5) { velScore += 3; velNotes.push('Volume velocity ' + volVelR.toFixed(1) + 'x 1h avg — strong acceleration'); }
+    else if (volVelR >= 1.5) { velScore += 2; velNotes.push('Volume velocity ' + volVelR.toFixed(1) + 'x 1h avg — above average'); }
+    else if (volVelR >= 1.0) { velScore += 1; velNotes.push('Volume velocity ' + volVelR.toFixed(1) + 'x 1h avg — in-line'); }
+    else if (volVelR < 0.5)  { velScore -= 2; velNotes.push('Volume decelerating: ' + volVelR.toFixed(1) + 'x 1h avg — attention fading'); }
+    else                      { velScore -= 1; velNotes.push('Volume below 1h average: ' + volVelR.toFixed(1) + 'x'); }
+  }
+
+  if (dexTxns) {
+    var m5b = parseInt((dexTxns.m5||{}).buys  || 0) || 0;
+    var h1b = parseInt((dexTxns.h1||{}).buys  || 0) || 0;
+    if (m5b > 0 && h1b > 0) {
+      var h1PerP  = h1b / 12;
+      var txAccel = h1PerP > 0 ? m5b / h1PerP : 1;
+      if      (txAccel >= 3)   { velScore += 2; velNotes.push('Tx buy acceleration: ' + txAccel.toFixed(1) + 'x rate — participation surging'); }
+      else if (txAccel >= 1.8) { velScore += 1; velNotes.push('Tx buy rate: ' + txAccel.toFixed(1) + 'x — accelerating'); }
+      else if (txAccel < 0.4)  { velScore -= 1; velNotes.push('Buy tx rate decelerating: ' + txAccel.toFixed(1) + 'x'); }
+    }
+  }
+
+  if (!isNaN(d.perf5m) && d.perf5m > 5 && perf1h > 0) { velScore += 1; velNotes.push('Price accelerating short-term (+' + d.perf5m.toFixed(1) + '% 5m on positive 1h)'); }
+
+  if      (socialBuzz >= 8) { velScore += 2; velNotes.push('Social buzz elevated (' + socialBuzz + ') — attention spreading'); }
+  else if (socialBuzz >= 4) { velScore += 1; velNotes.push('Social buzz active (' + socialBuzz + ')'); }
+  else if (socialBuzz === 0){ velScore -= 1; velNotes.push('Zero social buzz recorded'); }
+
+  velScore = Math.round(Math.min(10, Math.max(0, velScore)));
+  if      (velScore >= 9) velClass = 'Explosive Velocity';
+  else if (velScore >= 7) velClass = 'Strong Velocity';
+  else if (velScore >= 5) velClass = 'Moderate Velocity';
+  else if (velScore >= 3) velClass = 'Weak Velocity';
+  else                    velClass = 'No Signal';
+
+  /* ── 3. DISTRIBUTION STRENGTH (0-5) ── */
+  var disScore = 0;
+  var disClass = 'Unknown';
+  var disNotes = [];
+
+  if      (sa && sa.holderCountQualityScore >= 85) { disScore += 2; disNotes.push('Exceptional holder density — broad organic ownership base'); }
+  else if (sa && sa.holderCountQualityScore >= 70) { disScore += 2; disNotes.push('Healthy holder density — well-distributed'); }
+  else if (sa && sa.holderCountQualityScore >= 55) { disScore += 1; disNotes.push('Fair holder density — moderate spread'); }
+  else if (holderCount > 0)                        { disNotes.push('Holder count below expected — limited natural distribution'); }
+  else                                             { disNotes.push('No holder data — enter counts for full distribution analysis'); }
+
+  if      (bundleClust <= 6)  { disScore += 2; disNotes.push('Low bundle concentration (' + bundleClust.toFixed(1) + '%) — organic spread confirmed'); }
+  else if (bundleClust <= 14) { disScore += 1; disNotes.push('Moderate bundle concentration (' + bundleClust.toFixed(1) + '%)'); }
+  else                        { disNotes.push('High bundle concentration (' + bundleClust.toFixed(1) + '%) — limits natural distribution'); }
+
+  if (dexTxns) {
+    var h6b2 = parseInt((dexTxns.h6||{}).buys || 0) || 0;
+    if      (h6b2 >= 300) { disScore += 1; disNotes.push('High 6h buy tx count (' + h6b2 + ') — broad participation'); }
+    else if (h6b2 >= 100) { disNotes.push('Moderate 6h participation (' + h6b2 + ' buys)'); }
+    else if (h6b2 > 0)    { disNotes.push('Low 6h participation (' + h6b2 + ' buys)'); }
+  }
+
+  disScore = Math.min(5, Math.max(0, disScore));
+  if      (disScore >= 5) disClass = 'Exceptional Distribution';
+  else if (disScore >= 4) disClass = 'Strong Distribution';
+  else if (disScore >= 3) disClass = 'Moderate Distribution';
+  else if (disScore >= 2) disClass = 'Weak Distribution';
+  else                    disClass = 'Very Weak Distribution';
+
+  /* ── 4. NARRATIVE FRESHNESS (0-5) ── */
+  var frScore = 3;
+  var frClass = 'Moderate';
+  var frNotes = [];
+
+  var saturKw = /\b(inu|shib|doge2|pepe2|elonx|floki|baby|mini|little|fat|big|mega|hyper|ultra|super|safe|moon2|new\s*pepe|based\s*pepe)\b/;
+  var cloneKw2= /\b(v2|v3|2\.0|3\.0|copy|clone|fork|remix|relaunch|2|ii|the\s+real|official\s+|legit)\b/;
+
+  if (cloneKw2.test(combined)) { frScore -= 2; frNotes.push('Clone/derivative pattern detected — recycled concept'); }
+  if (saturKw.test(combined))  { frScore -= 1; frNotes.push('Saturated meme archetype — narrative has run many times'); }
+
+  var novelCount2 = [isAnimal,isAI,isPolitics,isCeleb,isViral].filter(Boolean).length;
+  if      (novelCount2 >= 2)                                        { frScore += 2; frNotes.push('Multi-category narrative fusion — unusual and fresh combination'); }
+  else if (isViral)                                                 { frScore += 2; frNotes.push('Viral event tie-in — time-sensitive freshness premium'); }
+  else if (naCategory !== 'Unclassified' && !saturKw.test(combined)) { frScore += 1; frNotes.push('Clean narrative — no obvious saturation markers'); }
+
+  if (cleanName.length <= 5 && !saturKw.test(combined)) { frScore += 1; frNotes.push('Compact non-templated name — suggests original concept'); }
+
+  frScore = Math.round(Math.min(5, Math.max(0, frScore)));
+  if      (frScore >= 5) frClass = 'Very Fresh';
+  else if (frScore >= 4) frClass = 'Fresh';
+  else if (frScore >= 3) frClass = 'Moderate';
+  else if (frScore >= 2) frClass = 'Saturated';
+  else                   frClass = 'Exhausted';
+
+  /* ── CORE SCORE & TIER ── */
+  var coreScore = naScore + velScore + disScore + frScore;
+  var maxScore  = 30;
+  var corePct   = coreScore / maxScore;
+
+  var attTier, attVerdict, attTierColor, attVerdictColor;
+  if      (corePct >= 0.87) { attTier='A'; attVerdict='HIGH ATTENTION POTENTIAL';     attTierColor='#00ffcc'; attVerdictColor='#00e676'; }
+  else if (corePct >= 0.70) { attTier='B'; attVerdict='STRONG ATTENTION POTENTIAL';   attTierColor='#00e676'; attVerdictColor='#ffeb3b'; }
+  else if (corePct >= 0.50) { attTier='C'; attVerdict='MODERATE ATTENTION POTENTIAL'; attTierColor='#ffeb3b'; attVerdictColor='#ff9800'; }
+  else if (corePct >= 0.33) { attTier='D'; attVerdict='WEAK ATTENTION POTENTIAL';     attTierColor='#ff9800'; attVerdictColor='#ff9800'; }
+  else                       { attTier='F'; attVerdict='ATTENTION DEFICIT / AVOID';   attTierColor='#ff4757'; attVerdictColor='#ff4757'; }
+
+  /* ── ATTENTION LIFECYCLE ── */
+  var hldCh1pct  = (holderCount > 0 && hldH1  > 0) ? ((holderCount - hldH1)  / hldH1)  * 100 : null;
+  var hldCh6pct  = (holderCount > 0 && hldH6  > 0) ? ((holderCount - hldH6)  / hldH6)  * 100 : null;
+  var hldCh24pct = (holderCount > 0 && hldH24 > 0) ? ((holderCount - hldH24) / hldH24) * 100 : null;
+  var isGrowH  = hldCh1pct !== null && hldCh1pct > 5;
+  var isShrinkH= hldCh1pct !== null && hldCh1pct < -5;
+  var isLowAct = velScore <= 3 && socialBuzz <= 2;
+
+  var lifecycle, lifecycleColor, lifecycleDesc;
+  if (isShrinkH && socialBuzz <= 2) {
+    lifecycle='DORMANT'; lifecycleColor='#9fa8da';
+    lifecycleDesc='Very low attention. Narrative inactive. Not necessarily bearish — potential future revival candidate.';
+  } else if (isShrinkH && velScore >= 4) {
+    lifecycle='EXHAUSTING'; lifecycleColor='#ff9800';
+    lifecycleDesc='Attention plateauing. Growth slowing. Engagement weakening. Momentum fading.';
+  } else if (isLowAct && isGrowH) {
+    lifecycle='REVIVING'; lifecycleColor='#00d4ff';
+    lifecycleDesc='Dormant token regaining attention. New social activity emerging. Potential high-upside reactivation.';
+  } else if (velScore >= 8 && isGrowH) {
+    lifecycle='ACCELERATING'; lifecycleColor='#00e676';
+    lifecycleDesc='Attention growing rapidly. Mention velocity increasing. More unique participants entering. Strong momentum phase.';
+  } else if (velScore >= 8 && naScore >= 7) {
+    lifecycle='DOMINANT'; lifecycleColor='#00ffcc';
+    lifecycleDesc='Attention leader within its narrative. Broad discussion and high visibility. Strong but higher-risk phase.';
+  } else if (isLowAct) {
+    lifecycle='DORMANT'; lifecycleColor='#9fa8da';
+    lifecycleDesc='Very low attention. Narrative inactive. Potential future revival candidate.';
+  } else if (velScore >= 5 || isGrowH) {
+    lifecycle='EMERGING'; lifecycleColor='#00e676';
+    lifecycleDesc='Attention beginning to appear. Awareness still low. Early discovery phase — bullish early-stage signal.';
+  } else {
+    lifecycle='EMERGING'; lifecycleColor='#00e676';
+    lifecycleDesc='Early discovery phase. Attention beginning to appear.';
+  }
+
+  /* ── ATTENTION EFFICIENCY ── */
+  var mcChangePct = !isNaN(d.perf24h) && d.perf24h !== 0 ? d.perf24h : (!isNaN(d.perf1h) ? d.perf1h : 0);
+  var attGrowthProxy = velScore * 10;
+  var mcGrowthScore  = mcChangePct > 50 ? 100 : mcChangePct > 20 ? 80 : mcChangePct > 5 ? 60 : mcChangePct > 0 ? 40 : mcChangePct > -10 ? 20 : 0;
+  var attEfficiency, attEfficiencyColor, attEfficiencyDesc;
+  if (attGrowthProxy > 0) {
+    var effRatio = mcGrowthScore / attGrowthProxy;
+    if      (effRatio >= 1.2) { attEfficiency='HIGH';   attEfficiencyColor='#00e676'; attEfficiencyDesc='Attention is converting into buyers efficiently. Strong MC response relative to attention level.'; }
+    else if (effRatio >= 0.6) { attEfficiency='MEDIUM'; attEfficiencyColor='#ffeb3b'; attEfficiencyDesc='Attention and price growing at similar rates. Normal conversion dynamics.'; }
+    else                       { attEfficiency='LOW';    attEfficiencyColor='#ff9800'; attEfficiencyDesc='High attention but weak market response. Price not following attention — possible suppression or incoming breakout.'; }
+  } else {
+    attEfficiency='N/A'; attEfficiencyColor='var(--text-muted)'; attEfficiencyDesc='Insufficient velocity data to compute attention efficiency.';
+  }
+
+  /* ── HOLDER MOMENTUM / DIVERGENCE from structural analysis ── */
+  var hmScore = sa ? (sa.holderMomentumScore   || 50) : 50;
+  var hmClass = sa ? (sa.holderTrendClass      || 'No History') : 'No History';
+  var hmAvail = sa ? (sa.holderHistoryAvailable || false) : false;
+  var hdDiv   = sa ? (sa.holderDivergence      || 'None') : 'None';
+  var hdType  = sa ? (sa.holderDivergenceType  || null) : null;
+
+  /* ── BONUS: Attention Persistence ── */
+  var attPersistence, attPersColor;
+  if (hldCh24pct !== null && hldCh1pct !== null) {
+    if      (hldCh24pct > 10 && hldCh1pct > 3)  { attPersistence='High Persistence';     attPersColor='#00e676'; }
+    else if (hldCh24pct > 0  && hldCh1pct > 0)  { attPersistence='Moderate Persistence'; attPersColor='#ffeb3b'; }
+    else if (hldCh24pct > 0  && hldCh1pct < 0)  { attPersistence='Fading';               attPersColor='#ff9800'; }
+    else                                          { attPersistence='Declining';            attPersColor='#ff4757'; }
+  } else { attPersistence='No History'; attPersColor='var(--text-muted)'; }
+
+  /* ── BONUS: Meta Rotation ── */
+  var metaLabel, metaStrength, metaColor;
+  if      (isAI       && velScore >= 6) { metaLabel='AI/Tech';    metaStrength='Strengthening'; metaColor='#00e676'; }
+  else if (isPolitics && velScore >= 5) { metaLabel='Politics';   metaStrength='Active';        metaColor='#ffeb3b'; }
+  else if (isAnimal   && velScore >= 6) { metaLabel='Animal';     metaStrength='Active';        metaColor='#00e676'; }
+  else if (isCeleb    && velScore >= 5) { metaLabel='Celebrity';  metaStrength='Event-Driven';  metaColor='#ffeb3b'; }
+  else if (naCategory !== 'Unclassified') { metaLabel=naCategory; metaStrength='Neutral';       metaColor='var(--text-muted)'; }
+  else                                  { metaLabel='Unclassified'; metaStrength='Unknown';     metaColor='var(--text-muted)'; }
+
+  /* ── BONUS: Attention Divergence ── */
+  var attDivSignal=null, attDivColor='var(--text-muted)';
+  if (velScore >= 6 && !isNaN(d.perf1h) && d.perf1h < 2) {
+    attDivSignal='Attention rising while price flat — potential unpriced catalyst'; attDivColor='#00e676';
+  } else if (!isNaN(d.perf1h) && d.perf1h > 20 && velScore <= 4) {
+    attDivSignal='Price rising while attention declines — late-stage pump warning'; attDivColor='#ff4757';
+  }
+
+  return {
+    naScore, naCategory, naNotes,
+    velScore, velClass, velNotes,
+    disScore, disClass, disNotes,
+    frScore, frClass, frNotes,
+    coreScore, maxScore, corePct,
+    attTier, attVerdict, attTierColor, attVerdictColor,
+    lifecycle, lifecycleColor, lifecycleDesc,
+    attEfficiency, attEfficiencyColor, attEfficiencyDesc,
+    hmScore, hmClass, hmAvail,
+    hdDiv, hdType,
+    attPersistence, attPersColor,
+    metaLabel, metaStrength, metaColor,
+    attDivSignal, attDivColor,
+    hldCh1pct, hldCh6pct, hldCh24pct, hldH1, hldH6, hldH24, holderCount
+  };
+}
+
+function buildAttentionBriefingHTML(d, analysis) {
+  var ab = computeAttentionBriefing(d, analysis);
+  window._tecAttentionBriefing = ab;
+
+  var score = ab.coreScore, maxS = ab.maxScore;
+  var pct   = Math.round(ab.corePct * 100);
+
+  var nt = '';
+
+  /* ── Tier header ── */
+  nt += '<div style="padding:12px 14px;background:rgba(0,0,0,0.25);border-radius:6px;margin-bottom:10px;">';
+  nt += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">';
+  nt += '<div style="font-size:2.4rem;font-weight:900;color:'+ab.attTierColor+';letter-spacing:3px;line-height:1;">'+ab.attTier+'</div>';
+  nt += '<div style="display:flex;flex-direction:column;gap:2px;">';
+  nt += '<div style="font-size:0.62rem;color:var(--text-muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Attention Tier</div>';
+  nt += '<div style="font-size:1.10rem;font-weight:900;color:'+ab.attVerdictColor+';letter-spacing:1.5px;">'+ab.attVerdict+'</div>';
+  nt += '</div></div>';
+  nt += '<div style="display:flex;align-items:center;gap:8px;">';
+  nt += '<span style="font-size:0.62rem;color:var(--text-muted);">Score:</span>';
+  nt += '<span style="font-size:0.88rem;font-weight:700;color:'+ab.attTierColor+';">'+score+'/'+maxS+' ('+pct+'%)</span>';
+  nt += '</div></div>';
+
+  /* ── Four scoring pillars ── */
+  var pillars = [
+    { num:'1', label:'Narrative Strength',   score:ab.naScore,  max:10, notes:ab.naNotes,  category:ab.naCategory },
+    { num:'2', label:'Attention Velocity',    score:ab.velScore, max:10, notes:ab.velNotes, category:ab.velClass },
+    { num:'3', label:'Distribution Strength', score:ab.disScore, max:5,  notes:ab.disNotes, category:ab.disClass },
+    { num:'4', label:'Narrative Freshness',   score:ab.frScore,  max:5,  notes:ab.frNotes,  category:ab.frClass }
+  ];
+
+  nt += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">';
+  pillars.forEach(function(p) {
+    var ratio  = p.score / p.max;
+    var pColor = ratio >= 0.8 ? '#00e676' : ratio >= 0.6 ? '#ffeb3b' : ratio >= 0.4 ? '#ff9800' : '#ff4757';
+    var barW   = Math.round(ratio * 100);
+    nt += '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+pColor+';">';
+    nt += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
+    nt += '<div style="display:flex;align-items:center;gap:5px;">';
+    nt += '<span style="font-size:0.60rem;color:var(--text-muted);font-weight:700;">'+p.num+'.</span>';
+    nt += '<span style="font-size:0.70rem;font-weight:700;color:var(--text-primary);">'+p.label+'</span>';
+    nt += '<span style="font-size:0.58rem;color:var(--text-muted);"> — '+p.category+'</span>';
+    nt += '</div>';
+    nt += '<span style="font-size:0.82rem;font-weight:900;color:'+pColor+';">'+p.score+'/'+p.max+'</span>';
+    nt += '</div>';
+    nt += '<div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:4px;">';
+    nt += '<div style="height:3px;background:'+pColor+';border-radius:2px;width:'+barW+'%;"></div>';
+    nt += '</div>';
+    if (p.notes.length) {
+      nt += '<div style="display:flex;flex-direction:column;gap:1px;">';
+      p.notes.slice(0,2).forEach(function(n){ nt += '<div style="font-size:0.59rem;color:rgba(255,255,255,0.4);">▸ '+n+'</div>'; });
+      nt += '</div>';
+    }
+    nt += '</div>';
+  });
+  nt += '</div>';
+
+  nt += '<div style="border-top:1px solid rgba(255,255,255,0.07);margin:8px 0;"></div>';
+
+  /* ── Attention Lifecycle ── */
+  nt += '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.lifecycleColor+';margin-bottom:6px;">';
+  nt += '<div style="font-size:0.59rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">ATTENTION LIFECYCLE</div>';
+  nt += '<strong style="color:'+ab.lifecycleColor+';font-size:0.88rem;letter-spacing:1px;">'+ab.lifecycle+'</strong>';
+  nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.45);margin-top:3px;">'+ab.lifecycleDesc+'</div>';
+  nt += '</div>';
+
+  /* ── Attention Efficiency ── */
+  nt += '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.attEfficiencyColor+';margin-bottom:6px;">';
+  nt += '<div style="font-size:0.59rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">ATTENTION EFFICIENCY</div>';
+  nt += '<strong style="color:'+ab.attEfficiencyColor+';font-size:0.88rem;letter-spacing:1px;">'+ab.attEfficiency+'</strong>';
+  nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.45);margin-top:3px;">'+ab.attEfficiencyDesc+'</div>';
+  nt += '</div>';
+
+  /* ── Holder Momentum ── */
+  var hmC = ab.hmScore >= 75 ? '#00e676' : ab.hmScore >= 60 ? '#00e676' : ab.hmScore >= 45 ? '#ffeb3b' : '#ff4757';
+  nt += '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+hmC+';margin-bottom:6px;">';
+  nt += '<div style="font-size:0.59rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">HOLDER MOMENTUM</div>';
+  if (!ab.hmAvail) {
+    nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.3);">Historical holder data unavailable. Enter 1h / 6h / 24h counts for momentum tracking.</div>';
+  } else {
+    nt += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">';
+    nt += '<strong style="color:'+hmC+';">'+ab.hmClass+'</strong>';
+    nt += '<span style="font-size:0.60rem;color:var(--text-muted);">'+ab.hmScore+'/100</span>';
+    nt += '</div>';
+    var hmDesc = ab.hmScore>=90?'Holder base expanding rapidly — attention converting into ownership at high rate.'
+               : ab.hmScore>=75?'Strong holder growth — consistent new participant entry.'
+               : ab.hmScore>=60?'Steady holder growth — healthy accumulation pace.'
+               : ab.hmScore>=45?'Holder base stable — no significant growth or decline.'
+               : ab.hmScore>=30?'Holder growth slowing — some exit activity detected.'
+               : 'Net holder decline detected — participants exiting.';
+    nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.45);">'+hmDesc+'</div>';
+    if (ab.holderCount > 0) {
+      nt += '<div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">';
+      if (ab.hldH1 > 0)  { var _c1=((ab.holderCount-ab.hldH1)/ab.hldH1*100).toFixed(1);   nt += '<span style="font-size:0.60rem;color:var(--text-muted);">1h: <strong style="color:'+(parseFloat(_c1)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c1)>0?'+':'')+_c1+'%</strong></span>'; }
+      if (ab.hldH6 > 0)  { var _c6=((ab.holderCount-ab.hldH6)/ab.hldH6*100).toFixed(1);   nt += '<span style="font-size:0.60rem;color:var(--text-muted);">6h: <strong style="color:'+(parseFloat(_c6)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c6)>0?'+':'')+_c6+'%</strong></span>'; }
+      if (ab.hldH24 > 0) { var _c24=((ab.holderCount-ab.hldH24)/ab.hldH24*100).toFixed(1); nt += '<span style="font-size:0.60rem;color:var(--text-muted);">24h: <strong style="color:'+(parseFloat(_c24)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c24)>0?'+':'')+_c24+'%</strong></span>'; }
+      nt += '</div>';
+    }
+  }
+  nt += '</div>';
+
+  /* ── Holder Divergence ── */
+  var hdC = ab.hdType==='bullish'?'#00e676':ab.hdType==='bearish'?'#ff4757':'var(--text-muted)';
+  var hdL = ab.hdType==='bullish'?'Bullish Divergence':ab.hdType==='bearish'?'Bearish Divergence':'Neutral';
+  var hdH = ab.hdType==='bullish'?'Accumulation while price weakens — smart money entering despite price decline.'
+           :ab.hdType==='bearish'?'Participation shrinking despite price rise — potential exit liquidity forming.'
+           :'Holder and price movements aligned — no unusual divergence detected.';
+  nt += '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+hdC+';margin-bottom:8px;">';
+  nt += '<div style="font-size:0.59rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">HOLDER DIVERGENCE</div>';
+  nt += '<strong style="color:'+hdC+';">'+(ab.hdType==='bullish'?'↑ ':ab.hdType==='bearish'?'↓ ':'')+hdL+'</strong>';
+  nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.45);margin-top:3px;">'+hdH+'</div>';
+  nt += '</div>';
+
+  nt += '<div style="border-top:1px solid rgba(255,255,255,0.07);margin:8px 0;"></div>';
+
+  /* ── Bonus Indicators ── */
+  nt += '<div style="font-size:0.59rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;margin-bottom:5px;">BONUS INDICATORS</div>';
+  nt += '<div style="display:flex;flex-direction:column;gap:4px;">';
+  nt += '<div style="display:flex;align-items:center;gap:6px;font-size:0.60rem;">';
+  nt += '<span style="color:var(--text-muted);">Attention Persistence:</span>';
+  nt += '<span style="font-weight:700;color:'+ab.attPersColor+';">'+ab.attPersistence+'</span>';
+  nt += '</div>';
+  nt += '<div style="display:flex;align-items:center;gap:6px;font-size:0.60rem;">';
+  nt += '<span style="color:var(--text-muted);">Meta Rotation:</span>';
+  nt += '<span style="font-weight:700;color:'+ab.metaColor+';">'+ab.metaLabel+'</span>';
+  nt += '<span style="color:rgba(255,255,255,0.3);">—</span>';
+  nt += '<span style="color:'+ab.metaColor+';">'+ab.metaStrength+'</span>';
+  nt += '</div>';
+  if (ab.attDivSignal) {
+    nt += '<div style="padding:5px 8px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:2px solid '+ab.attDivColor+';font-size:0.60rem;">';
+    nt += '<span style="color:var(--text-muted);">Attention Divergence: </span>';
+    nt += '<span style="color:'+ab.attDivColor+';font-weight:700;">'+ab.attDivSignal+'</span>';
+    nt += '</div>';
+  }
+  nt += '</div>';
+
+  return '<div class="briefing-section">' +
+    '<div class="briefing-title"><i class="fa-solid fa-satellite-dish"></i> Attention Briefing</div>' +
+    nt +
+    '</div>';
+}
+
+/* ── Recommended Entry Checklist — three-briefing summary panel ─────────── */
+function buildRecommendedEntryChecklist(d, analysis) {
+  var ab  = window._tecAttentionBriefing || null;
+  var sa  = d.structuralAnalysis || null;
+
+  /* Security */
+  var secT = window._tecSecTier    || '—';
+  var secV = window._tecSecVerdict || '—';
+  var secS = window._tecSecScore   || 0;
+  var secTC= secT==='A'?'#00ffcc':secT==='B'?'#00e676':secT==='C'?'#ffeb3b':'#ff4757';
+
+  /* Structure */
+  var strT = sa ? (sa.confidenceTier || '—') : '—';
+  var strV = sa ? (sa.tierLabel      || '—') : '—';
+  var strS = sa ? (sa.tierScore      || 0)   : 0;
+  var strTC= strT==='S'?'#00ffcc':strT==='A'?'#00e676':strT==='B'?'#ffeb3b':strT==='C'?'#ff9800':'#ff4757';
+
+  /* Attention */
+  var attT = ab ? ab.attTier    : '—';
+  var attV = ab ? ab.attVerdict : '—';
+  var attS = ab ? Math.round(ab.corePct * 100) : 0;
+  var attTC= ab ? ab.attTierColor : 'var(--text-muted)';
+
+  /* Overall weighted score: Security 35% + Structure 35% + Attention 30% */
+  var secNum = secT==='A'?100:secT==='B'?75:secT==='C'?50:25;
+  var strNum = strT==='S'?100:strT==='A'?85:strT==='B'?65:strT==='C'?45:25;
+  var attNum = attT==='A'?100:attT==='B'?75:attT==='C'?50:attT==='D'?33:15;
+  var hasData= secT!=='—' || strT!=='—' || attT!=='—';
+  var oScore = hasData ? Math.round(secNum*0.35 + strNum*0.35 + attNum*0.30) : 0;
+
+  var oTier, oRec, oColor, oDesc;
+  if      (oScore >= 88) { oTier='A'; oRec='STRONG ENTRY CANDIDATE';      oColor='#00ffcc'; oDesc='Strong Security + Structure + Attention alignment. Highest-conviction setup.'; }
+  else if (oScore >= 72) { oTier='B'; oRec='VIABLE ENTRY — MANAGE RISK';  oColor='#00e676'; oDesc='Good overall profile with minor weaknesses. Tradeable with defined stop-loss.'; }
+  else if (oScore >= 55) { oTier='C'; oRec='SPECULATIVE — SIZE DOWN';      oColor='#ffeb3b'; oDesc='Mixed signals across briefings. Reduce position size or wait for improvement.'; }
+  else if (oScore >= 38) { oTier='D'; oRec='HIGH RISK — AVOID OR WATCH';  oColor='#ff9800'; oDesc='Multiple red flags across briefings. Watchlist only, do not enter.'; }
+  else                   { oTier='F'; oRec='SKIP — NOT RECOMMENDED';       oColor='#ff4757'; oDesc='Critical failures across multiple briefings. Do not trade.'; }
+
+  if (!hasData) { oTier='—'; oRec='Insufficient data'; oColor='var(--text-muted)'; oDesc='Run a full analysis to populate all three briefings.'; }
+
+  var html = '<div style="margin-top:14px;padding:12px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">';
+  html += '<div style="font-size:0.68rem;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;"><i class="fa-solid fa-list-check" style="margin-right:6px;"></i>Recommended Entry Checklist</div>';
+
+  /* Three-briefing side-by-side */
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">';
+  var briefings = [
+    { label:'Security',  tier:secT, verdict:secV, score:secS, color:secTC },
+    { label:'Structure', tier:strT, verdict:strV, score:strS, color:strTC },
+    { label:'Attention', tier:attT, verdict:attV, score:attS, color:attTC }
+  ];
+  briefings.forEach(function(b) {
+    html += '<div style="padding:8px;background:rgba(0,0,0,0.25);border-radius:5px;border-top:2px solid '+(b.tier!=='—'?b.color:'rgba(255,255,255,0.1)')+';text-align:center;">';
+    html += '<div style="font-size:0.58rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;margin-bottom:4px;">'+b.label.toUpperCase()+'</div>';
+    html += '<div style="font-size:1.8rem;font-weight:900;color:'+b.color+';line-height:1;margin-bottom:3px;">'+b.tier+'</div>';
+    html += '<div style="font-size:0.56rem;color:rgba(255,255,255,0.5);line-height:1.3;">'+b.verdict+'</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  /* Overall verdict */
+  html += '<div style="padding:10px;background:rgba(0,0,0,0.3);border-radius:5px;border-left:4px solid '+oColor+';">';
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">';
+  html += '<div style="font-size:1.6rem;font-weight:900;color:'+oColor+';">'+oTier+'</div>';
+  html += '<div>';
+  html += '<div style="font-size:0.60rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;">OVERALL TIER</div>';
+  html += '<div style="font-size:0.80rem;font-weight:900;color:'+oColor+';letter-spacing:1px;">'+oRec+'</div>';
+  if (hasData) html += '<div style="font-size:0.58rem;color:var(--text-muted);">Weighted Score: '+oScore+'/100 &nbsp;(Sec 35% · Str 35% · Att 30%)</div>';
+  html += '</div></div>';
+  html += '<div style="font-size:0.61rem;color:rgba(255,255,255,0.4);">'+oDesc+'</div>';
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
 /* ── Structure-Based Entry Pattern Engine ──────────────────────────────
    computeEntryPattern(fetched, sa) — evaluates ALL patterns using SA as
    primary signal. Returns { primary, secondary } each being an object:
@@ -7438,9 +7931,11 @@ function renderChecklist() {
     _kmVolFees + _kmVolVel +
     '</div></div>';
 
-  var securityHTML = buildSecurityBriefingHTML(currentAnalysis.data);
-  var entryHTML    = buildEntryBriefingHTML(currentAnalysis.data, currentAnalysis);
-  var qecHTML      = buildQECResultHTML();
+  var securityHTML  = buildSecurityBriefingHTML(currentAnalysis.data);
+  var entryHTML     = buildEntryBriefingHTML(currentAnalysis.data, currentAnalysis);
+  var attentionHTML = buildAttentionBriefingHTML(currentAnalysis.data, currentAnalysis);
+  var checklistHTML = buildRecommendedEntryChecklist(currentAnalysis.data, currentAnalysis);
+  var qecHTML       = buildQECResultHTML();
 
   /* ── QEC items appended to Filter Checklist grid ── */
   if (window._qecResult) {
@@ -7470,7 +7965,7 @@ function renderChecklist() {
     '</div>' +
     '<div class="verdict-info">' +
       '<div class="verdict-badge ' + sClass + '">' + currentAnalysis.status + '</div>' +
-      '<div class="verdict-notes">Passed ' + passedScoring + ' of ' + scoringChecks.length + ' scoring filters.' + failedHTML + hmcDisplay + securityHTML + entryHTML + qecHTML + notesDisplay + '</div>' +
+      '<div class="verdict-notes">Passed ' + passedScoring + ' of ' + scoringChecks.length + ' scoring filters.' + failedHTML + hmcDisplay + securityHTML + entryHTML + attentionHTML + checklistHTML + qecHTML + notesDisplay + '</div>' +
     '</div>';
 }
 
@@ -8149,6 +8644,51 @@ el('exportTxtBtn').addEventListener('click', function() {
   L.push('');
   L.push(' * Pre-Trade Verdict: ' + preVerdict);
   L.push('');
+
+  /* ── Attention Briefing block ── */
+  var _txAB = window._tecAttentionBriefing;
+  if (_txAB) {
+    L.push(sep);
+    L.push('ATTENTION BRIEFING');
+    L.push('Attention Tier: ' + _txAB.attTier + '  |  Score: ' + _txAB.coreScore + '/' + _txAB.maxScore + ' (' + Math.round(_txAB.corePct*100) + '%)');
+    L.push('Verdict: ' + _txAB.attVerdict);
+    L.push('');
+    L.push('1. Narrative Strength: ' + _txAB.naScore + '/10 (' + _txAB.naCategory + ')');
+    _txAB.naNotes.forEach(function(n){ L.push('   • ' + n); });
+    L.push('2. Attention Velocity: ' + _txAB.velScore + '/10 (' + _txAB.velClass + ')');
+    _txAB.velNotes.forEach(function(n){ L.push('   • ' + n); });
+    L.push('3. Distribution Strength: ' + _txAB.disScore + '/5 (' + _txAB.disClass + ')');
+    _txAB.disNotes.forEach(function(n){ L.push('   • ' + n); });
+    L.push('4. Narrative Freshness: ' + _txAB.frScore + '/5 (' + _txAB.frClass + ')');
+    _txAB.frNotes.forEach(function(n){ L.push('   • ' + n); });
+    L.push('');
+    L.push('Attention Lifecycle: ' + _txAB.lifecycle);
+    L.push('   ' + _txAB.lifecycleDesc);
+    L.push('Attention Efficiency: ' + _txAB.attEfficiency);
+    L.push('   ' + _txAB.attEfficiencyDesc);
+    L.push('Holder Momentum: ' + (_txAB.hmAvail ? _txAB.hmClass + ' (' + _txAB.hmScore + '/100)' : 'No History'));
+    var _hdLabel2 = _txAB.hdType==='bullish'?'Bullish Divergence':_txAB.hdType==='bearish'?'Bearish Divergence':'Neutral';
+    L.push('Holder Divergence: ' + _hdLabel2);
+    L.push('');
+    L.push('Bonus Indicators:');
+    L.push('   Attention Persistence: ' + _txAB.attPersistence);
+    L.push('   Meta Rotation: ' + _txAB.metaLabel + ' — ' + _txAB.metaStrength);
+    if (_txAB.attDivSignal) L.push('   Attention Divergence: ' + _txAB.attDivSignal);
+    L.push('');
+    /* Recommended Entry Checklist summary */
+    var _secT2 = window._tecSecTier || '—';
+    var _strT2 = (a.data.structuralAnalysis ? a.data.structuralAnalysis.confidenceTier : null) || '—';
+    var _attT2 = _txAB.attTier;
+    var _sN = _secT2==='A'?100:_secT2==='B'?75:_secT2==='C'?50:25;
+    var _stN= _strT2==='S'?100:_strT2==='A'?85:_strT2==='B'?65:_strT2==='C'?45:25;
+    var _aN = _attT2==='A'?100:_attT2==='B'?75:_attT2==='C'?50:_attT2==='D'?33:15;
+    var _oS = Math.round(_sN*0.35 + _stN*0.35 + _aN*0.30);
+    var _oT = _oS>=88?'A':_oS>=72?'B':_oS>=55?'C':_oS>=38?'D':'F';
+    var _oR = _oS>=88?'STRONG ENTRY CANDIDATE':_oS>=72?'VIABLE ENTRY — MANAGE RISK':_oS>=55?'SPECULATIVE — SIZE DOWN':_oS>=38?'HIGH RISK — AVOID OR WATCH':'SKIP — NOT RECOMMENDED';
+    L.push('RECOMMENDED ENTRY CHECKLIST');
+    L.push('Security: Tier ' + _secT2 + '  |  Structure: Tier ' + _strT2 + '  |  Attention: Tier ' + _attT2);
+    L.push('Overall Tier: ' + _oT + '  |  Score: ' + _oS + '/100  |  Recommendation: ' + _oR);
+  }
 
   /* ── Quick Entry Checker block ── */
   if (window._qecResult) {
@@ -9425,6 +9965,9 @@ function wlBuildEntry(existingId, existingDateAdded) {
     runnerPotential:  sa ? (sa.runnerPotential  || '—') : '—',
     entryVerdict:     currentAnalysis.status || '—',
     securityVerdict:  wlGetSecurityVerdict(d),
+    secTier:          window._tecSecTier    || '—',
+    attTier:          window._tecAttentionBriefing ? window._tecAttentionBriefing.attTier : '—',
+    attVerdict:       window._tecAttentionBriefing ? window._tecAttentionBriefing.attVerdict : '—',
     passPct:          Math.round(currentAnalysis.passPct || 0),
     formData:         wlCaptureForm()
   };
@@ -9449,6 +9992,9 @@ function wlSyncEntry(id) {
     runnerPotential:  sa ? (sa.runnerPotential || '—') : orig.runnerPotential,
     entryVerdict:     currentAnalysis.status || orig.entryVerdict,
     securityVerdict:  wlGetSecurityVerdict(d),
+    secTier:          window._tecSecTier    || orig.secTier || '—',
+    attTier:          window._tecAttentionBriefing ? window._tecAttentionBriefing.attTier : (orig.attTier || '—'),
+    attVerdict:       window._tecAttentionBriefing ? window._tecAttentionBriefing.attVerdict : (orig.attVerdict || '—'),
     passPct:          Math.round(currentAnalysis.passPct || 0),
     formData:         wlCaptureForm()
   };
@@ -9495,6 +10041,9 @@ function wlRender() {
     var fresh    = wlFreshness(entry.lastAnalysisTime);
     var caShort  = entry.ca ? entry.ca.slice(0,8) + '\u2026' + entry.ca.slice(-4) : '—';
 
+    var secTierColor = entry.secTier==='A'?'#00ffcc':entry.secTier==='B'?'#00e676':entry.secTier==='C'?'#ffeb3b':entry.secTier==='D'?'#ff4757':'var(--text-muted)';
+    var attTierColor = entry.attTier==='A'?'#00ffcc':entry.attTier==='B'?'#00e676':entry.attTier==='C'?'#ffeb3b':entry.attTier==='D'?'#ff9800':entry.attTier==='F'?'#ff4757':'var(--text-muted)';
+
     return '<div class="wl-item" id="wlItem_' + entry.id + '">' +
       '<div class="wl-item-header">' +
         '<span class="wl-name" title="' + (entry.name||'') + '">' + (entry.name||'—') + '</span>' +
@@ -9503,9 +10052,10 @@ function wlRender() {
       '</div>' +
       '<div class="wl-scores">' +
         '<div class="wl-chip"><span class="wl-chip-label">Pass</span><span class="wl-chip-val">' + (entry.passPct !== undefined ? entry.passPct + '%' : '—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">Tier</span><span class="wl-chip-val" style="color:' + tierColor + ';">' + (entry.confidenceTier||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Str</span><span class="wl-chip-val" style="color:' + tierColor + ';">' + (entry.confidenceTier||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Sec</span><span class="wl-chip-val" style="color:' + secTierColor + ';">' + (entry.secTier||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Att</span><span class="wl-chip-val" style="color:' + attTierColor + ';">' + (entry.attTier||'—') + '</span></div>' +
         '<div class="wl-chip"><span class="wl-chip-label">Runner</span><span class="wl-chip-val" style="color:' + runColor + ';">' + (entry.runnerPotential||'—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">Security</span><span class="wl-chip-val" style="color:' + secColor + ';">' + (entry.securityVerdict||'—') + '</span></div>' +
       '</div>' +
       '<div class="wl-item-meta">' +
         '<div class="wl-meta-item"><span class="wl-meta-label">CA</span><span class="wl-meta-val" title="' + (entry.ca||'') + '">' + caShort + '</span></div>' +

@@ -1,0 +1,769 @@
+ATTENTION BRIEFING IMPLEMENTATION
+
+Add a new major analysis section called:
+
+ATTENTION BRIEFING
+
+This section should be treated exactly like the existing Security Briefing and Structure Briefing systems.
+
+It must have:
+
+- Its own checklist scoring system
+- Its own Tier grading system
+- Its own Verdict
+- Detailed numbered breakdown
+- Contribution to the final overall recommendation
+
+Do NOT make this a simple social sentiment module.
+
+The goal is to measure whether a token is gaining attention faster than the market can price it in.
+
+The system should focus on identifying attention ignition, narrative strength, and early-stage momentum.
+
+==================================================
+ATTENTION TIER SYSTEM
+
+Create a checklist scoring system.
+
+Example:
+
+Attention Tier: A
+Score: 26/30 (87%)
+Verdict: HIGH ATTENTION POTENTIAL
+
+Suggested grading:
+
+A = Exceptional Attention Potential
+B = Strong Attention Potential
+C = Moderate Attention Potential
+D = Weak Attention Potential
+F = Attention Deficit / Avoid
+
+This should mirror the Security and Structure grading systems.
+
+==================================================
+CORE SCORING PILLARS
+
+Only score the highest-value signals.
+
+---
+
+1. NARRATIVE STRENGTH (0-10)
+
+---
+
+Evaluate:
+
+- One-line explainability
+- Emotional intensity
+- Familiarity
+- Meme strength
+- Cultural relevance
+
+Questions:
+
+Can the token be explained instantly?
+
+Does it trigger:
+
+- humor
+- outrage
+- absurdity
+- FOMO
+- tribalism
+
+Is the narrative naturally shareable?
+
+Examples of strong narratives:
+
+- animals
+- politics
+- celebrities
+- AI
+- viral clips
+- scandals
+- trending events
+
+Output:
+
+Narrative Strength: X/10
+
+---
+
+2. ATTENTION VELOCITY (0-10)
+
+---
+
+This is one of the highest-weighted signals.
+
+Measure:
+
+- Mention acceleration
+- Mention growth rate
+- Unique poster growth rate
+- Engagement acceleration
+
+Focus on acceleration rather than total volume.
+
+Example:
+
+5 → 10 → 20 → 40 mentions
+
+is stronger than
+
+100 → 100 → 100 → 100 mentions
+
+Output:
+
+Attention Velocity: X/10
+
+---
+
+3. DISTRIBUTION STRENGTH (0-5)
+
+---
+
+Measure:
+
+- Unique accounts posting
+- Community spread
+- Independent promotion
+- Influencer/KOL presence
+
+The goal is determining whether attention is spreading naturally.
+
+Example:
+
+50 posts from 40 unique accounts
+
+is stronger than
+
+50 posts from 5 accounts
+
+Output:
+
+Distribution Strength: X/5
+
+---
+
+4. NARRATIVE FRESHNESS (0-5)
+
+---
+
+Measure:
+
+- Narrative originality
+- Meme saturation
+- Clone detection
+- Recycled concepts
+
+Questions:
+
+Has this narrative recently run?
+
+Is this merely another variation of an exhausted meme?
+
+Fresh narratives should score higher.
+
+Output:
+
+Freshness Score: X/5
+
+==================================================
+BONUS ANALYTICS (NOT PART OF SCORE)
+
+Display these as informational signals only.
+
+---
+
+Attention Persistence
+
+Measure whether attention remains elevated over time.
+
+Example:
+
+100
+90
+85
+
+is stronger than
+
+100
+20
+5
+
+---
+
+Meta Rotation Detection
+
+Detect shifts between major narrative sectors.
+
+Examples:
+
+AI
+Politics
+Animals
+Celebrities
+Sports
+News
+
+Determine whether the token belongs to a strengthening or weakening meta.
+
+---
+
+Attention Divergence
+
+Detect:
+
+Attention rising while price remains flat
+
+or
+
+Price rising while attention declines
+
+These should be highlighted as important observations.
+
+---
+
+Cultural Timing
+
+Identify alignment with:
+
+- breaking news
+- sports events
+- elections
+- celebrity events
+- viral internet moments
+
+
+==================================================
+ATTENTION LIFECYCLE 
+==================================================
+
+This is a universal Attention Lifecycle system that works for:
+
+- Pre-bond tokens
+- Newly bonded tokens
+- Established runners
+- Mid-cap memes
+- Large-cap memes
+- Revival plays
+- Old coins regaining attention
+
+Classifications:
+
+1. EMERGING
+
+Characteristics:
+- Attention beginning to appear
+- Mentions increasing
+- Awareness still low
+- Early discovery phase
+
+Interpretation:
+Bullish early-stage attention.
+
+--------------------------------------------------
+
+2. ACCELERATING
+
+Characteristics:
+- Attention growing rapidly
+- Mention velocity increasing
+- More unique participants
+
+Interpretation:
+Strong momentum phase.
+
+--------------------------------------------------
+
+3. DOMINANT
+
+Characteristics:
+- Attention leader within its narrative
+- Broad discussion
+- High visibility
+
+Interpretation:
+Strong but higher-risk phase.
+
+--------------------------------------------------
+
+4. EXHAUSTING
+
+Characteristics:
+- Attention plateauing
+- Growth slowing
+- Engagement weakening
+
+Interpretation:
+Momentum fading.
+
+--------------------------------------------------
+
+5. DORMANT
+
+Characteristics:
+- Very low attention
+- Narrative inactive
+- Limited discussion
+
+Interpretation:
+Not necessarily bearish.
+Potential future revival candidate.
+
+--------------------------------------------------
+
+6. REVIVING
+
+Characteristics:
+- Dormant token regaining attention
+- New social activity
+- Narrative returning
+
+Interpretation:
+Potential high-upside reactivation.
+
+==================================================
+ATTENTION EFFICIENCY SCORE
+==================================================
+
+ATTENTION EFFICIENCY
+
+Purpose:
+
+Measure how effectively attention converts into market cap appreciation.
+
+Formula Concept:
+
+Market Cap Growth
+÷
+Attention Growth
+
+Examples:
+
+HIGH:
+
+Moderate attention increase
+Large market cap increase
+
+MEDIUM:
+
+Attention and price growing similarly
+
+LOW:
+
+Huge attention increase
+Weak market cap response
+
+Output:
+
+Attention Efficiency:
+- HIGH
+- MEDIUM
+- LOW
+
+Display explanation.
+
+Example:
+
+"Attention is converting into buyers efficiently."
+
+or
+
+"High attention but weak market response."
+
+====
+==================================================
+HOLDER MOMENTUM
+==================================================
+
+Move Holder Momentum into the ATTENTION BRIEFING.
+
+This is not a structure metric.
+
+It measures whether attention is converting into ownership.
+
+Use:
+
+- 1h holder growth
+- 6h holder growth
+- 24h holder growth
+
+Classifications:
+
+Explosive Growth
+Strong Growth
+Steady Growth
+Stable
+Distribution
+Holder Exodus
+
+Provide:
+
+Holder Momentum Score
+
+Explanation
+
+Examples:
+
+"Holder base expanding rapidly."
+
+"Holder growth slowing."
+
+"Net holder decline detected."
+
+==================================================
+HOLDER DIVERGENCE
+==================================================
+
+Move Holder Divergence into ATTENTION BRIEFING.
+
+Purpose:
+
+Compare ownership growth against market cap behavior.
+
+Analyze:
+
+1h
+6h
+24h
+
+Compare:
+
+Holder Change %
+vs
+Market Cap Change %
+
+Bullish Examples:
+
+MC -15%
+Holders +18%
+
+Interpretation:
+
+Accumulation while price weakens.
+
+--------------------------------------------------
+
+Bearish Examples:
+
+MC +25%
+Holders -10%
+
+Interpretation:
+
+Price rising while participants exit.
+
+--------------------------------------------------
+
+Neutral Examples:
+
+MC +20%
+Holders +18%
+
+Interpretation:
+
+Normal participation growth.
+
+Output:
+
+Bullish Divergence
+Neutral
+Bearish Divergence
+
+With explanation.
+
+==================================================
+SENTENCE TRANSFORMERS INTEGRATION
+==================================================
+
+Use Sentence Transformers as the primary Narrative Freshness engine.
+
+Purpose:
+
+Detect:
+
+- Narrative similarity
+- Meme similarity
+- Clone narratives
+- Recycled concepts
+- Meta saturation
+
+Examples:
+
+AI Cat #1
+AI Cat #2
+AI Cat #3
+
+Should be identified as highly similar narratives.
+
+Benefits:
+
+- Better Freshness scoring
+- Better Clone Detection
+- Better Narrative Saturation analysis
+
+Sentence Transformers should power:
+
+Freshness Score
+Meta Saturation Detection
+Narrative Similarity Detection
+
+==================================================
+ATTENTION BRIEFING INTEGRATION
+==================================================
+
+Attention Briefing should contain:
+
+- Narrative Strength
+- Attention Velocity
+- Distribution Strength
+- Freshness
+- Attention Lifecycle
+- Attention Efficiency
+- Holder Momentum
+- Holder Divergence
+
+Holder Momentum and Holder Divergence should contribute to the Attention Tier score because they represent attention converting into ownership.
+
+==================================================
+RECOMMENDED DATA SOURCES
+==================================================
+
+Use only the highest-value free sources.
+
+REQUIRED:
+
+1. DexScreener API
+- Market cap
+- Price
+- Volume
+- Liquidity
+- Pair creation
+- Historical pair metrics
+
+2. GeckoTerminal API
+- Pool data
+- Historical volume
+- Liquidity
+- New pool tracking
+
+3. Telegram (Telethon)
+- Public channel monitoring
+- Mention counts
+- Mention velocity
+- Narrative spread
+
+4. Nitter RSS / Alternative X Feed Monitoring
+- Coin mentions
+- Ticker mentions
+- Velocity tracking
+- Unique poster tracking
+
+5. Sentence Transformers
+- Narrative similarity
+- Freshness
+- Clone detection
+- Saturation detection
+
+OPTIONAL LOW-WEIGHT SOURCE:
+
+Reddit API
+- Narrative discovery
+- Supplemental sentiment
+
+==================================================
+FINAL ATTENTION BRIEFING FORMAT 
+Example: 
+
+ATTENTION BRIEFING
+
+Attention Tier: A
+Score: 27/30
+Verdict: HIGH ATTENTION POTENTIAL
+
+1. Narrative Strength
+Score: 9/10
+Explanation...
+
+2. Attention Velocity
+Score: 8/10
+Explanation...
+
+3. Distribution Strength
+Score: 4/5
+Explanation...
+
+4. Narrative Freshness
+Score: 5/5
+Explanation...
+
+--------------------------------------------------
+
+Attention Lifecycle:
+EMERGING / ACCELERATING / DOMINANT / EXHAUSTING / DORMANT / REVIVING
+
+--------------------------------------------------
+
+Attention Efficiency:
+HIGH / MEDIUM / LOW
+
+--------------------------------------------------
+
+Holder Momentum:
+Classification
+Score
+Explanation
+
+--------------------------------------------------
+
+Holder Divergence:
+Bullish / Neutral / Bearish
+
+Explanation
+
+--------------------------------------------------
+
+Bonus Indicators:
+
+- Attention Persistence
+- Meta Rotation
+- Cultural Timing
+
+
+==================================================
+OVERALL SYSTEM INTEGRATION
+
+The application will now have three major briefing sections:
+
+1. Security Briefing
+2. Structure Briefing
+3. Attention Briefing
+
+Each briefing must produce:
+
+- Tier
+- Score
+- Verdict
+
+==================================================
+NEW OVERALL SUMMARY SECTION
+
+After the Attention Briefing, create:
+
+RECOMMENDED ENTRY CHECKLIST
+
+Display all three briefing results side-by-side.
+
+Example:
+
+Security:
+Tier B
+Moderate Risk
+
+Structure:
+Tier A
+Excellent Structure
+
+Attention:
+Tier A
+High Attention Potential
+
+Overall Tier:
+A
+
+Recommendation:
+High Conviction Entry Candidate
+
+Provide a short summary explaining the combined result.
+
+==================================================
+FINAL PRE-TRADE VERDICT
+
+The Final Pre-Trade Verdict should use all three briefing systems.
+
+Suggested weighting:
+
+Security = 35%
+Structure = 35%
+Attention = 30%
+
+Generate:
+
+- Overall Tier
+- Overall Score
+- Conviction Rating
+- Entry Recommendation
+
+Example:
+
+PRE-TRADE VERDICT
+
+Overall Tier: A
+Score: 84%
+
+Conviction:
+HIGH
+
+Recommendation:
+ENTER ON CONFIRMED PULLBACK
+
+Reason:
+Strong security profile, excellent market structure, and accelerating attention velocity.
+
+===============================================================================
+WATCHLIST INTEGRATION
+==================================================
+
+Watchlist cards should display:
+
+Security: Tier & Verdict
+Structure: Tier & Verdict
+Attention: Tier & Verdict
+Entry Rec: Tier & Verdict
+
+Optional indicators:
+
+Lifecycle:
+ACCELERATING
+
+or
+
+REVIVING
+
+This allows fast identification of high-conviction opportunities; rapid filtering of watchlist candidates before opening the full analysis.
+
+==================================================
+IMPORTANT DESIGN PRINCIPLE
+
+The purpose of the Attention Briefing is NOT to predict winners.
+
+The purpose is to measure whether attention is accelerating faster than the market is pricing it in.
+
+================================================
+FINAL DESIGN PRINCIPLE
+==================================================
+
+The highest-conviction entries occur when:
+
+1. Security is strong.
+2. Structure is strong.
+3. Attention is accelerating.
+4. Holder growth confirms attention.
+5. Ownership is broadening.
+6. Attention converts efficiently into price appreciation.
+
+The system should identify situations where:
+
+Strong Security
++
+Strong Structure
++
+Strong Attention
++
+Strong Holder Growth
+
+align simultaneously.
+
+These represent the highest-quality trading opportunities.
