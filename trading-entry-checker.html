@@ -9224,6 +9224,7 @@ function wlBuildEntry(existingId, existingDateAdded) {
     ticker:           wlExtractTicker(d.coin),
     ca:               d.ca || '',
     dateAdded:        existingDateAdded || Date.now(),
+    mcAtAdd:          (!isNaN(d.marketCap) && d.marketCap > 0) ? d.marketCap : null,
     lastAnalysisTime: Date.now(),
     confidenceTier:   sa ? (sa.confidenceTier  || '—') : '—',
     runnerPotential:  sa ? (sa.runnerPotential  || '—') : '—',
@@ -9311,7 +9312,7 @@ function wlRender() {
       '</div>' +
       '<div class="wl-item-meta">' +
         '<div class="wl-meta-item"><span class="wl-meta-label">CA</span><span class="wl-meta-val" title="' + (entry.ca||'') + '">' + caShort + '</span></div>' +
-        '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + '</span></div>' +
+        '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + (entry.mcAtAdd ? ' <span style="color:var(--text-muted);">[' + formatUSD(entry.mcAtAdd) + ']</span>' : '') + '</span></div>' +
         '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + '</span></div>' +
         '<div class="wl-meta-item"><span class="wl-meta-label">Analysis Freshness</span><span class="wl-freshness wl-fresh-' + entry.id + '" style="color:' + fresh.color + ';">' + fresh.label + '</span></div>' +
       '</div>' +
