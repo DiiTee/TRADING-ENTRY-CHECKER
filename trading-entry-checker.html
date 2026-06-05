@@ -2614,10 +2614,10 @@ async function fetchFromCA(ca) {
           /* poolAttrs: GeckoTerminal native txn data (best) or DexScreener fallback */
           var saPoolAttrs = gtPoolAttrs || null;
           if (!saPoolAttrs && fetched._dexTxns) saPoolAttrs = { transactions: fetched._dexTxns };
-          window._tecHolderCount = fetched.holders    || 0;
-          window._tecHolderH1    = fetched.holdersH1  || 0;
-          window._tecHolderH6    = fetched.holdersH6  || 0;
-          window._tecHolderH24   = fetched.holdersH24 || 0;
+          window._tecHolderCount = fetched.holders    || parseInt((el('fHolders')  ||{}).value||'0') || 0;
+          window._tecHolderH1    = fetched.holdersH1  || parseInt((el('fHoldersH1')||{}).value||'0') || 0;
+          window._tecHolderH6    = fetched.holdersH6  || parseInt((el('fHoldersH6')||{}).value||'0') || 0;
+          window._tecHolderH24   = fetched.holdersH24 || parseInt((el('fHoldersH24')||{}).value||'0') || 0;
           window._tecSettings    = settings;
           gtStructuralAnalysis = computeStructuralAnalysis(gt15mList, saPoolAttrs);
           if (gtStructuralAnalysis) {
@@ -2710,6 +2710,12 @@ async function fetchFromCA(ca) {
             if (Array.isArray(c)) return c;
             return [c.t||c.time||0, c.o||c.open||0, c.h||c.high||0, c.l||c.low||0, c.c||c.close||0, c.v||c.volume||0];
           });
+          /* Ensure holder counts are available before running structural analysis */
+          if (!window._tecHolderCount) window._tecHolderCount = parseInt((el('fHolders')  ||{}).value||'0') || 0;
+          if (!window._tecHolderH1)    window._tecHolderH1    = parseInt((el('fHoldersH1')||{}).value||'0') || 0;
+          if (!window._tecHolderH6)    window._tecHolderH6    = parseInt((el('fHoldersH6')||{}).value||'0') || 0;
+          if (!window._tecHolderH24)   window._tecHolderH24   = parseInt((el('fHoldersH24')||{}).value||'0') || 0;
+          if (!window._tecSettings)    window._tecSettings    = settings;
           var dexSaAttrs = window._tecDexTxns ? { transactions: window._tecDexTxns } : null;
           var dexSA = computeStructuralAnalysis(dexNorm, dexSaAttrs);
           var dexClose = dexNorm[dexNorm.length - 1][4] || 0;
@@ -2740,6 +2746,18 @@ async function fetchFromCA(ca) {
     } catch(e) {
       addDiag('partial', 'DEX Screener OHLCV', 'Candle fallback attempted but failed: ' + (e && e.message ? e.message : String(e)) + '. Falling back to Flow Mode.');
     }
+  }
+
+  /* ── Flow mode final notice ── */
+  if (window._tecEngineMode !== 'STRUCTURE') {
+    addBadge('Structure Engine', 'fail');
+    addDiag('partial', 'Structure Engine',
+      'FLOW MODE: Candle data could not be loaded from GeckoTerminal or DEX Screener. ' +
+      'Possible causes: (1) Pool not yet indexed by GeckoTerminal (common for coins under ~30 min old). ' +
+      '(2) CORS proxy failures on the OHLCV endpoints — try re-fetching. ' +
+      '(3) DEX Screener does not expose a public OHLCV endpoint for this pair. ' +
+      'Floor/Ceiling estimates are LP-depth-based approximations. ' +
+      'Check the Diagnostics panel above for the specific error from each source.');
   }
 
   /* ── 5b. JUPITER PRICE API ─ SOL price (for Total Fees SOL→USD conversion) ── */
@@ -3959,7 +3977,7 @@ function buildSecurityBriefingHTML(d) {
   else                       { cabalScoreLabel = 'Extreme Cabal Risk';      cabalScoreColor = '#ff4757'; }
 
   /* ── Holder Density + Holder Efficiency (for checklist & intelligence) ── */
-  var _secHldCount = window._tecHolderCount || 0;
+  var _secHldCount = window._tecHolderCount || d.holders || 0;
   var _secMcap     = d.marketCap || 0;
   var _hdExpLow, _hdExpHigh;
   if      (_secMcap <  25000)  { _hdExpLow =   25; _hdExpHigh =   50; }
@@ -5080,7 +5098,7 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   var trapRiskColor = trapRiskScore >= 75 ? '#ff4757' : trapRiskScore >= 50 ? '#ff6b35' : trapRiskScore >= 25 ? '#ffeb3b' : '#00e676';
 
   /* ── Holder Count Quality + Holder Momentum (time-based) + Holder Divergence ── */
-  var hcHld  = window._tecHolderCount || 0;
+  var hcHld  = window._tecHolderCount || parseInt((el('fHolders')||{}).value||'0') || 0;
   var minH   = (window._tecSettings && window._tecSettings.minHolders) || 400;
   var hldH1  = window._tecHolderH1  || 0;
   var hldH6  = window._tecHolderH6  || 0;
@@ -8296,7 +8314,7 @@ function buildSetupText(d, analysis) {
   txtSEC.push({ label:'Dev Wallet',           status: _dwS,  note: d.devSold === 'Yes' ? 'Sold' : (d.devWallet || 0).toFixed(1) + '% held' });
   var _t10S = (d.top10 || 0) <= 25 ? 'PASS' : (d.top10 || 0) <= 40 ? 'CAUTION' : 'FAIL';
   txtSEC.push({ label:'Holder Distribution',  status: _t10S, note: 'Top 10: ' + (d.top10 || 0).toFixed(1) + '%' });
-  var _txtHld = window._tecHolderCount || 0;
+  var _txtHld = window._tecHolderCount || d.holders || 0;
   var _txtMc  = d.marketCap || 0;
   var _txtHdExpLow, _txtHdExpHigh;
   if      (_txtMc <  25000)  { _txtHdExpLow =   25; _txtHdExpHigh =   50; }
@@ -8639,10 +8657,9 @@ el('exportTxtBtn').addEventListener('click', function() {
   L.push(' * H/MC Ratio: ' + (isNaN(d.hmcRatio) ? 'N/A' : d.hmcRatio.toFixed(2)));
   L.push(' * L/MC Ratio: ' + pct(d.lmcRatio));
   L.push('');
-  L.push(' * The Setup:');
-  buildSetupText(d, a).split('\n').forEach(function(sl) { L.push('   ' + sl); });
+  buildSetupText(d, a).split('\n').forEach(function(sl) { L.push(sl); });
   L.push('');
-  L.push(' * Pre-Trade Verdict: ' + preVerdict);
+  L.push('PRE-TRADE VERDICT: ' + preVerdict);
   L.push('');
 
   /* ── Attention Briefing block ── */
