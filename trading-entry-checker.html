@@ -8657,9 +8657,10 @@ el('exportTxtBtn').addEventListener('click', function() {
   L.push(' * H/MC Ratio: ' + (isNaN(d.hmcRatio) ? 'N/A' : d.hmcRatio.toFixed(2)));
   L.push(' * L/MC Ratio: ' + pct(d.lmcRatio));
   L.push('');
-  buildSetupText(d, a).split('\n').forEach(function(sl) { L.push(sl); });
+  L.push(' * The Setup:');
+  buildSetupText(d, a).split('\n').forEach(function(sl) { L.push('   ' + sl); });
   L.push('');
-  L.push('PRE-TRADE VERDICT: ' + preVerdict);
+  L.push(' * Pre-Trade Verdict: ' + preVerdict);
   L.push('');
 
   /* ── Attention Briefing block ── */
