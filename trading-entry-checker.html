@@ -9247,7 +9247,9 @@ function wlSyncEntry(id) {
     ticker:           wlExtractTicker(d.coin) || orig.ticker,
     ca:               d.ca || orig.ca,
     dateAdded:        orig.dateAdded,
+    mcAtAdd:          orig.mcAtAdd !== undefined ? orig.mcAtAdd : null,
     lastAnalysisTime: Date.now(),
+    mcAtRefresh:      (!isNaN(d.marketCap) && d.marketCap > 0) ? d.marketCap : null,
     confidenceTier:   sa ? (sa.confidenceTier || '—') : orig.confidenceTier,
     runnerPotential:  sa ? (sa.runnerPotential || '—') : orig.runnerPotential,
     entryVerdict:     currentAnalysis.status || orig.entryVerdict,
@@ -9313,7 +9315,7 @@ function wlRender() {
       '<div class="wl-item-meta">' +
         '<div class="wl-meta-item"><span class="wl-meta-label">CA</span><span class="wl-meta-val" title="' + (entry.ca||'') + '">' + caShort + '</span></div>' +
         '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + (entry.mcAtAdd ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtAdd) + ']</span>' : '') + '</span></div>' +
-        '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + '</span></div>' +
+        '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + (entry.mcAtRefresh ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtRefresh) + ']</span>' : '') + '</span></div>' +
         '<div class="wl-meta-item"><span class="wl-meta-label">Analysis Freshness</span><span class="wl-freshness wl-fresh-' + entry.id + '" style="color:' + fresh.color + ';">' + fresh.label + '</span></div>' +
       '</div>' +
       '<div class="wl-item-actions" onclick="event.stopPropagation();">' +
