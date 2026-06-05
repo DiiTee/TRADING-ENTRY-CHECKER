@@ -3942,7 +3942,55 @@ function buildSecurityBriefingHTML(d) {
   var launchCoord  = computeLaunchCoordinationRisk(d);
   var secConf      = computeSecurityConfidence(d);
 
-  /* ══ Security Checklist — 14 items, PASS=2 CAUTION=1 FAIL=0 ══ */
+  /* ── Cabal Score (0–10 concentration/clustering rating) ── */
+  var cabalScore = 10;
+  if (bundleClust > 25) cabalScore -= 3;    else if (bundleClust > 12) cabalScore -= 1.5;
+  if (singleB > 15)     cabalScore -= 2;    else if (singleB > 8)      cabalScore -= 1;
+  if (top10 > 40)       cabalScore -= 2;    else if (top10 > 28)       cabalScore -= 1;
+  if (topH > 12)        cabalScore -= 2;    else if (topH > 8)         cabalScore -= 1;
+  if (clusterRisk.level === 'Confirmed Cluster')     cabalScore -= 1.5;
+  else if (clusterRisk.level === 'Possible Cluster') cabalScore -= 0.5;
+  cabalScore = Math.round(Math.max(0, Math.min(10, cabalScore)) * 10) / 10;
+  var cabalScoreLabel, cabalScoreColor;
+  if      (cabalScore >= 9) { cabalScoreLabel = 'Excellent Distribution';  cabalScoreColor = '#00ffcc'; }
+  else if (cabalScore >= 7) { cabalScoreLabel = 'Healthy Distribution';    cabalScoreColor = '#00e676'; }
+  else if (cabalScore >= 5) { cabalScoreLabel = 'Moderate Concentration';  cabalScoreColor = '#ffeb3b'; }
+  else if (cabalScore >= 3) { cabalScoreLabel = 'Concerning Concentration'; cabalScoreColor = '#ff9800'; }
+  else                       { cabalScoreLabel = 'Extreme Cabal Risk';      cabalScoreColor = '#ff4757'; }
+
+  /* ── Holder Density + Holder Efficiency (for checklist & intelligence) ── */
+  var _secHldCount = window._tecHolderCount || 0;
+  var _secMcap     = d.marketCap || 0;
+  var _hdExpLow, _hdExpHigh;
+  if      (_secMcap <  25000)  { _hdExpLow =   25; _hdExpHigh =   50; }
+  else if (_secMcap <  50000)  { _hdExpLow =   50; _hdExpHigh =  100; }
+  else if (_secMcap < 100000)  { _hdExpLow =  100; _hdExpHigh =  150; }
+  else if (_secMcap < 250000)  { _hdExpLow =  150; _hdExpHigh =  300; }
+  else if (_secMcap < 500000)  { _hdExpLow =  300; _hdExpHigh =  500; }
+  else if (_secMcap < 1000000) { _hdExpLow =  500; _hdExpHigh = 1000; }
+  else                         { _hdExpLow = 1000; _hdExpHigh = 2000; }
+  var _hdExpMid = (_hdExpLow + _hdExpHigh) / 2;
+  var _hdExpStr = _hdExpLow + '–' + _hdExpHigh;
+  var _hdRatio  = (_secHldCount > 0 && _hdExpMid > 0) ? _secHldCount / _hdExpMid : 0;
+  var _hdClass, _hdScore, _hdStatus;
+  if (_secHldCount <= 0) { _hdClass = 'No Data'; _hdScore = 0; _hdStatus = 'CAUTION'; }
+  else if (_hdRatio >= 2.0) { _hdClass = 'Exceptional'; _hdScore = 100; _hdStatus = 'PASS'; }
+  else if (_hdRatio >= 1.5) { _hdClass = 'Strong';      _hdScore =  85; _hdStatus = 'PASS'; }
+  else if (_hdRatio >= 1.0) { _hdClass = 'Healthy';     _hdScore =  70; _hdStatus = 'PASS'; }
+  else if (_hdRatio >= 0.75){ _hdClass = 'Fair';        _hdScore =  55; _hdStatus = 'CAUTION'; }
+  else if (_hdRatio >= 0.50){ _hdClass = 'Weak';        _hdScore =  35; _hdStatus = 'FAIL'; }
+  else                       { _hdClass = 'Poor';        _hdScore =  15; _hdStatus = 'FAIL'; }
+  var _heValue = (_secHldCount > 0 && _secMcap > 0) ? _secMcap / _secHldCount : 0;
+  var _heClass, _heStatus;
+  if (_secHldCount <= 0 || _secMcap <= 0) { _heClass = 'No Data'; _heStatus = 'CAUTION'; }
+  else if (_heValue <  150) { _heClass = 'Highly Distributed'; _heStatus = 'PASS'; }
+  else if (_heValue <  500) { _heClass = 'Distributed';        _heStatus = 'PASS'; }
+  else if (_heValue < 1500) { _heClass = 'Balanced';           _heStatus = 'CAUTION'; }
+  else if (_heValue < 5000) { _heClass = 'Concentrated';       _heStatus = 'FAIL'; }
+  else                       { _heClass = 'Very Concentrated';  _heStatus = 'FAIL'; }
+  var _cabRiskColor = cabRisk === 'HIGH' ? '#ff4757' : cabRisk === 'MEDIUM' ? '#ff9800' : '#00e676';
+
+  /* ══ Security Checklist — 16 items, PASS=2 CAUTION=1 FAIL=0 ══ */
   var SEC = [];
 
   /* 1 — LP Status */
@@ -3981,6 +4029,16 @@ function buildSecurityBriefingHTML(d) {
   SEC.push({ label:'Holder Distribution', val: top10.toFixed(1)+'% (top 10)',
     pts: t10S==='PASS'?2:t10S==='CAUTION'?1:0, status:t10S,
     note: top10<25?'Healthy spread — no whale bloc dominance':top10<38?'Moderate concentration — susceptible to coordinated dumps':'High concentration — whale collapses possible' });
+
+  /* 6b — Holder Density */
+  SEC.push({ label:'Holder Density', val: _hdClass + ' (' + _secHldCount.toLocaleString() + ' holders)',
+    pts: _hdStatus==='PASS'?2:_hdStatus==='CAUTION'?1:0, status:_hdStatus,
+    note: _secHldCount > 0 ? _secHldCount.toLocaleString() + ' vs ' + _hdExpStr + ' expected for ' + formatUSD(_secMcap) + ' MC' : 'No holder count — fetch data to populate' });
+
+  /* 6c — Holder Efficiency */
+  SEC.push({ label:'Holder Efficiency', val: _heClass,
+    pts: _heStatus==='PASS'?2:_heStatus==='CAUTION'?1:0, status:_heStatus,
+    note: _heValue > 0 ? formatUSD(Math.round(_heValue)) + ' MC per holder' : 'Insufficient data' });
 
   /* 7 — Top Holder Concentration */
   var thS = topH < 5 ? 'PASS' : topH < 9 ? 'CAUTION' : 'FAIL';
@@ -4204,6 +4262,23 @@ function buildSecurityBriefingHTML(d) {
   nt += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:1px;margin-bottom:3px;">FINAL SECURITY VERDICT</div>';
   nt += '<div style="font-size:1.35rem;font-weight:900;color:'+secVC+';letter-spacing:2px;">'+secVerdict+'</div>';
   nt += '<div style="color:var(--text-muted);font-size:0.63rem;margin-top:3px;">'+failCnt+' FAIL &nbsp;·&nbsp; '+cautCnt+' CAUTION &nbsp;·&nbsp; '+passCnt+' PASS (of '+SEC.length+' checks)</div>';
+  nt += '</div>';
+  nt += '</div>';
+
+  /* ── Cabal Risk + Cabal Score subsection ── */
+  nt += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
+  nt += '<div style="flex:1;min-width:130px;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+_cabRiskColor+';">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:1px;margin-bottom:3px;">CABAL RISK</div>';
+  nt += '<span class="risk-badge '+riskCls+'" id="cabRiskBadge" data-base="'+riskCls+'" style="font-size:1.3rem;font-weight:900;letter-spacing:2px;background:none;border:none;padding:0;border-radius:0;">'+cabRisk+' RISK</span>';
+  nt += '<div style="font-size:0.61rem;color:var(--text-muted);margin-top:3px;">Concentration &amp; clustering</div>';
+  nt += '</div>';
+  nt += '<div style="flex:2;min-width:200px;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+cabalScoreColor+';">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">CABAL SCORE</div>';
+  nt += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">';
+  nt += '<span style="font-size:1.5rem;font-weight:900;color:'+cabalScoreColor+';">'+cabalScore+'/10</span>';
+  nt += '<span style="font-size:0.80rem;font-weight:700;color:'+cabalScoreColor+';">'+cabalScoreLabel+'</span>';
+  nt += '</div>';
+  nt += '<div style="font-size:0.60rem;color:var(--text-muted);">9–10 Excellent · 7–8 Healthy · 5–6 Moderate · 3–4 Concerning · 0–2 Extreme</div>';
   nt += '</div>';
   nt += '</div>';
 
@@ -4458,11 +4533,38 @@ function buildSecurityBriefingHTML(d) {
   nt += '</div>';
 
   nt += '</div>';
+
+  /* ── Distribution Quality ── */
+  var _dqScore =
+    (_hdStatus === 'PASS' ? 25 : _hdStatus === 'CAUTION' ? 12 : 0) +
+    (_heStatus === 'PASS' ? 25 : _heStatus === 'CAUTION' ? 12 : 0) +
+    (t10S === 'PASS' ? 25 : t10S === 'CAUTION' ? 12 : 0) +
+    (thS  === 'PASS' ? 25 : thS  === 'CAUTION' ? 12 : 0);
+  var _dqLabel = _dqScore >= 80 ? 'Strong' : _dqScore >= 60 ? 'Moderate' : _dqScore >= 40 ? 'Weak' : 'Very Weak';
+  var _dqColor = _dqScore >= 80 ? '#00e676' : _dqScore >= 60 ? '#ffeb3b' : _dqScore >= 40 ? '#ff9800' : '#ff4757';
+  nt += '<div style="margin-top:6px;padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+_dqColor+';">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:0.8px;margin-bottom:2px;">DISTRIBUTION QUALITY</div>';
+  nt += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+  nt += '<strong style="color:'+_dqColor+';">'+_dqLabel+'</strong>';
+  nt += '<span style="font-size:0.60rem;color:var(--text-muted);">Score: '+_dqScore+'/100</span>';
+  nt += '</div>';
+  var _dqLines = [];
+  if (_hdStatus === 'PASS') _dqLines.push({ ok:true,  t:_hdClass+' holder density ('+_secHldCount.toLocaleString()+' vs '+_hdExpStr+' expected)' });
+  else _dqLines.push({ ok:false, t:'Holder count '+(_hdStatus==='CAUTION'?'below':'significantly below')+' expected range ('+_secHldCount.toLocaleString()+' vs '+_hdExpStr+')' });
+  if (_heStatus === 'PASS') _dqLines.push({ ok:true,  t:_heClass+' ownership ('+formatUSD(Math.round(_heValue))+' MC per holder)' });
+  else _dqLines.push({ ok:false, t:_heClass+' ownership ('+formatUSD(Math.round(_heValue))+' MC per holder)' });
+  _dqLines.push({ ok: thS==='PASS',  t:'Top holder: '+topH.toFixed(1)+'%' });
+  _dqLines.push({ ok: t10S==='PASS', t:'Top 10 holders: '+top10.toFixed(1)+'%' });
+  if (bundleClust <= 12) _dqLines.push({ ok:true,  t:'Low bundle concentration ('+bundleClust.toFixed(1)+'%)' });
+  else _dqLines.push({ ok:false, t:'Bundle concentration: '+bundleClust.toFixed(1)+'% of supply' });
+  nt += '<div style="display:flex;flex-direction:column;gap:1px;">';
+  _dqLines.forEach(function(l){ nt += '<div style="font-size:0.60rem;color:'+(l.ok?'#00e676':'#ff9800')+';">'+(l.ok?'✓':'✗')+' '+l.t+'</div>'; });
+  nt += '</div></div>';
+
   nt += '</div>';
 
   return '<div class="briefing-section">' +
-    '<div class="briefing-title"><i class="fa-solid fa-user-secret"></i> Security / Cabal Briefing' +
-    '<span class="risk-badge ' + riskCls + '" id="cabRiskBadge" data-base="' + riskCls + '">' + cabRisk + ' RISK</span></div>' +
+    '<div class="briefing-title"><i class="fa-solid fa-user-secret"></i> Security Briefing</div>' +
     nt +
     bmSection +
     '<ul class="briefing-list" id="cabRiskList">' + (_cabRiskBaseListHTML = listHTML) + '</ul>' +
@@ -5871,7 +5973,7 @@ function buildEntryBriefingHTML(d, analysis) {
           t += 'Holder Count: <strong>' + (window._tecHolderCount || 0).toLocaleString() + '</strong><br>';
           t += 'Expected Range: <span style="color:var(--text-muted);">' + (sa.holderExpectedRange || '—') + '</span><br>';
           var hcqC = sa.holderCountQualityScore >= 70 ? 'var(--safe)' : sa.holderCountQualityScore >= 55 ? 'var(--caution)' : '#ff4757';
-          t += 'Holder Count Quality Score: <strong style="color:' + hcqC + ';">' + sa.holderCountQualityClass + '</strong>';
+          t += 'Holder Density: <strong style="color:' + hcqC + ';">' + sa.holderCountQualityClass + '</strong>';
           t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderCountQualityScore + '/100)</span><br>';
           if (!sa.holderHistoryAvailable) {
             t += 'Holder Momentum: <span style="color:var(--text-muted);font-size:0.70rem;">Historical holder data unavailable. Enter 1h / 6h / 24h counts in the form.</span><br>';
@@ -6020,6 +6122,72 @@ function buildEntryBriefingHTML(d, analysis) {
 
   var _em = window._tecEngineMode || 'FLOW';
 
+  /* ── Structure Grade ── */
+  var structureGrade, structureGradeColor, structureGradeDesc;
+  if (_em === 'STRUCTURE' && sa) {
+    var _sgScore = Math.round(
+      (sa.shelfQualityScore  || 0) * 0.20 +
+      (sa.acceptanceScore    || 0) * 0.20 +
+      (sa.demandReturnScore  || 0) * 0.15 +
+      (sa.breakoutEfficiency || 0) * 0.15 +
+      (sa.overheadScore      || 0) * 0.10 +
+      Math.min(rrRatio * 20, 100) * 0.20
+    );
+    if      (_sgScore >= 80) { structureGrade = 'A'; structureGradeColor = '#00ffcc'; structureGradeDesc = 'Excellent'; }
+    else if (_sgScore >= 65) { structureGrade = 'B'; structureGradeColor = '#00e676'; structureGradeDesc = 'Strong';    }
+    else if (_sgScore >= 50) { structureGrade = 'C'; structureGradeColor = '#ffeb3b'; structureGradeDesc = 'Tradable';  }
+    else if (_sgScore >= 35) { structureGrade = 'D'; structureGradeColor = '#ff9800'; structureGradeDesc = 'Weak';      }
+    else                      { structureGrade = 'F'; structureGradeColor = '#ff4757'; structureGradeDesc = 'Avoid';     }
+  } else {
+    structureGrade = '—'; structureGradeColor = 'var(--text-muted)'; structureGradeDesc = 'N/A';
+  }
+
+  /* ── Confidence label for summary ── */
+  var _sumConf, _sumConfColor;
+  if (_em === 'STRUCTURE' && sa) {
+    _sumConf = (sa.confidenceTier === 'S' || sa.confidenceTier === 'A') ? 'HIGH' : sa.confidenceTier === 'B' ? 'MEDIUM' : 'LOW';
+    _sumConfColor = _sumConf === 'HIGH' ? '#00e676' : _sumConf === 'MEDIUM' ? '#ffeb3b' : '#ff9800';
+  } else {
+    _sumConf = 'LOW'; _sumConfColor = '#ff9800';
+  }
+
+  /* ── Action Summary block (sits above Confidence Tier banner) ── */
+  var _rrStr   = rrRatio > 0 ? rrRatio.toFixed(2) + ':1' : '—';
+  var _rrColor = rrRatio >= 3 ? '#00e676' : rrRatio >= 2 ? '#ffeb3b' : '#ff4757';
+  var actionSummary = (function() {
+    var t = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:5px;margin-bottom:8px;padding:9px 10px;background:rgba(0,0,0,0.3);border-radius:6px;border:1px solid rgba(255,255,255,0.07);">';
+    t += '<div style="text-align:center;padding:4px 2px;">';
+    t += '<div style="color:var(--text-muted);font-size:0.57rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">ACTION SIGNAL</div>';
+    t += '<div style="font-size:1.3rem;font-weight:900;color:'+actionColor+';letter-spacing:1px;line-height:1.1;">'+actionSignal+'</div>';
+    t += '</div>';
+    t += '<div style="text-align:center;padding:4px 2px;">';
+    t += '<div style="color:var(--text-muted);font-size:0.57rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">CONFIDENCE</div>';
+    t += '<div style="font-size:1.3rem;font-weight:900;color:'+_sumConfColor+';letter-spacing:1px;line-height:1.1;">'+_sumConf+'</div>';
+    t += '</div>';
+    t += '<div style="text-align:center;padding:4px 2px;">';
+    t += '<div style="color:var(--text-muted);font-size:0.57rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">STRUCTURE GRADE</div>';
+    t += '<div style="font-size:1.3rem;font-weight:900;color:'+structureGradeColor+';letter-spacing:1px;line-height:1.1;">'+structureGrade+'</div>';
+    t += '<div style="color:var(--text-muted);font-size:0.60rem;margin-top:1px;">'+structureGradeDesc+'</div>';
+    t += '</div>';
+    t += '<div style="text-align:center;padding:4px 2px;">';
+    t += '<div style="color:var(--text-muted);font-size:0.57rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">R:R RATIO</div>';
+    t += '<div style="font-size:1.3rem;font-weight:900;color:'+_rrColor+';letter-spacing:1px;line-height:1.1;">'+_rrStr+'</div>';
+    t += '</div>';
+    t += '</div>';
+    t += '<div style="display:flex;gap:7px;margin-bottom:8px;flex-wrap:wrap;">';
+    t += '<div style="flex:1;min-width:130px;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid var(--accent-cyan);">';
+    t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">CURRENT MC</div>';
+    t += '<div style="font-size:0.98rem;font-weight:700;color:var(--accent-cyan);">'+formatUSD(currentMC)+'</div>';
+    t += '</div>';
+    t += '<div style="flex:2;min-width:190px;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid #00e676;">';
+    t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">SAFE ENTRY RANGE</div>';
+    t += '<div style="font-size:0.98rem;font-weight:700;color:#00e676;">'+safeEntryStr+'</div>';
+    t += '<div style="font-size:0.60rem;color:var(--text-muted);">Preview — full detail in item 05 below</div>';
+    t += '</div>';
+    t += '</div>';
+    return t;
+  })();
+
   /* ── Confidence Tier + Structural Verdict banner (mirrors Security Tier banner) ── */
   var confBanner = (function() {
     var tierC, tierVal, tierSc, verdC, verdLbl, tierLbl;
@@ -6087,6 +6255,7 @@ function buildEntryBriefingHTML(d, analysis) {
 
   return '<div class="briefing-section">' +
     '<div class="briefing-title"><i class="fa-solid fa-crosshairs"></i> Structure Briefing</div>' +
+    actionSummary +
     confBanner +
     checklistBlock +
     rowsHTML +
@@ -7571,7 +7740,14 @@ function buildSetupText(d, analysis) {
   var manualRisk = (h[0] || h[1]) ? 'HIGH' : (h[2] || h[3]) ? 'MEDIUM' : 'LOW';
   if (sevOrder[manualRisk] > sevOrder[cabRisk]) cabRisk = manualRisk;
 
-  lines.push('SECURITY / CABAL BRIEFING  [' + cabRisk + ' RISK]');
+  lines.push('SECURITY BRIEFING');
+  var _txtCabScore = 10;
+  if (bundleClust > 25) _txtCabScore -= 3;    else if (bundleClust > 12) _txtCabScore -= 1.5;
+  if (singleB > 15)     _txtCabScore -= 2;    else if (singleB > 8)      _txtCabScore -= 1;
+  if (top10 > 40)       _txtCabScore -= 2;    else if (top10 > 28)       _txtCabScore -= 1;
+  if (topH > 12)        _txtCabScore -= 2;    else if (topH > 8)         _txtCabScore -= 1;
+  _txtCabScore = Math.round(Math.max(0, Math.min(10, _txtCabScore)) * 10) / 10;
+  lines.push('Cabal Risk: ' + cabRisk + '  |  Cabal Score: ' + _txtCabScore + '/10');
   lines.push('');
 
   /* Prepend any manual visual hits as explicit bullet points */
@@ -7625,8 +7801,27 @@ function buildSetupText(d, analysis) {
   txtSEC.push({ label:'Dev Wallet',           status: _dwS,  note: d.devSold === 'Yes' ? 'Sold' : (d.devWallet || 0).toFixed(1) + '% held' });
   var _t10S = (d.top10 || 0) <= 25 ? 'PASS' : (d.top10 || 0) <= 40 ? 'CAUTION' : 'FAIL';
   txtSEC.push({ label:'Holder Distribution',  status: _t10S, note: 'Top 10: ' + (d.top10 || 0).toFixed(1) + '%' });
+  var _txtHld = window._tecHolderCount || 0;
+  var _txtMc  = d.marketCap || 0;
+  var _txtHdExpLow, _txtHdExpHigh;
+  if      (_txtMc <  25000)  { _txtHdExpLow =   25; _txtHdExpHigh =   50; }
+  else if (_txtMc <  50000)  { _txtHdExpLow =   50; _txtHdExpHigh =  100; }
+  else if (_txtMc < 100000)  { _txtHdExpLow =  100; _txtHdExpHigh =  150; }
+  else if (_txtMc < 250000)  { _txtHdExpLow =  150; _txtHdExpHigh =  300; }
+  else if (_txtMc < 500000)  { _txtHdExpLow =  300; _txtHdExpHigh =  500; }
+  else if (_txtMc < 1000000) { _txtHdExpLow =  500; _txtHdExpHigh = 1000; }
+  else                       { _txtHdExpLow = 1000; _txtHdExpHigh = 2000; }
+  var _txtHdMid   = (_txtHdExpLow + _txtHdExpHigh) / 2;
+  var _txtHdRatio = (_txtHld > 0 && _txtHdMid > 0) ? _txtHld / _txtHdMid : 0;
+  var _txtHdClass  = _txtHld <= 0 ? 'No Data' : _txtHdRatio >= 2.0 ? 'Exceptional' : _txtHdRatio >= 1.5 ? 'Strong' : _txtHdRatio >= 1.0 ? 'Healthy' : _txtHdRatio >= 0.75 ? 'Fair' : _txtHdRatio >= 0.50 ? 'Weak' : 'Poor';
+  var _txtHdStatus = _txtHld <= 0 ? 'CAUTION' : _txtHdRatio >= 1.0 ? 'PASS' : _txtHdRatio >= 0.75 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Holder Density',   status: _txtHdStatus, note: _txtHld > 0 ? _txtHld.toLocaleString() + ' vs ' + _txtHdExpLow + '–' + _txtHdExpHigh + ' expected (' + _txtHdClass + ')' : 'No holder data' });
+  var _txtHeVal    = (_txtHld > 0 && _txtMc > 0) ? _txtMc / _txtHld : 0;
+  var _txtHeClass  = _txtHld <= 0 ? 'No Data' : _txtHeVal < 150 ? 'Highly Distributed' : _txtHeVal < 500 ? 'Distributed' : _txtHeVal < 1500 ? 'Balanced' : _txtHeVal < 5000 ? 'Concentrated' : 'Very Concentrated';
+  var _txtHeStatus = (_txtHld <= 0 || _txtMc <= 0) ? 'CAUTION' : _txtHeVal < 500 ? 'PASS' : _txtHeVal < 1500 ? 'CAUTION' : 'FAIL';
+  txtSEC.push({ label:'Holder Efficiency', status: _txtHeStatus, note: _txtHeVal > 0 ? '$' + Math.round(_txtHeVal).toLocaleString() + ' MC per holder (' + _txtHeClass + ')' : 'Insufficient data' });
   var _thS  = (d.topHolder || 0) <= 5 ? 'PASS' : (d.topHolder || 0) <= 10 ? 'CAUTION' : 'FAIL';
-  txtSEC.push({ label:'Top Holder',           status: _thS,  note: (d.topHolder || 0).toFixed(1) + '%' });
+  txtSEC.push({ label:'Top Holder',        status: _thS,         note: (d.topHolder || 0).toFixed(1) + '%' });
   var txtBundleConc = computeBundleConcentrationRisk(d);
   var _bcS  = txtBundleConc.score <= 25 ? 'PASS' : txtBundleConc.score <= 50 ? 'CAUTION' : 'FAIL';
   txtSEC.push({ label:'Bundle Concentration Risk', status: _bcS,  note: txtBundleConc.classification + ' (' + txtBundleConc.score + ')' });
@@ -7820,7 +8015,7 @@ function buildSetupText(d, analysis) {
     lines.push('    Trap Risk: ' + (txtSA.trapRiskLabel || '—') + ' (' + (txtSA.trapRiskScore || 0) + '/100)' + (txtSA.fakeBreakoutRisk ? ' ⚠ Fake Breakout' : '') + (txtSA.exitSpikeRisk ? ' ⚠ Exit Spike' : '') + (txtSA.perfectClimbRisk ? ' ⚠ Perfect Climb Risk' : ''));
     lines.push('    Holder Count: ' + (window._tecHolderCount || 0).toLocaleString());
     lines.push('    Expected Range: ' + (txtSA.holderExpectedRange || '—'));
-    lines.push('    Holder Count Quality Score: ' + (txtSA.holderCountQualityScore || 0) + '/100 (' + (txtSA.holderCountQualityClass || '—') + ')');
+    lines.push('    Holder Density: ' + (txtSA.holderCountQualityScore || 0) + '/100 (' + (txtSA.holderCountQualityClass || '—') + ')');
     if (!txtSA.holderHistoryAvailable) {
       lines.push('    Holder Momentum: Historical holder data unavailable.');
     } else {

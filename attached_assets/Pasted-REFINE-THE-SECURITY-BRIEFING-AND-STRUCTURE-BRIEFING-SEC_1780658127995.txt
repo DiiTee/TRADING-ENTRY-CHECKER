@@ -1,0 +1,594 @@
+REFINE THE SECURITY BRIEFING AND STRUCTURE BRIEFING SECTIONS TO REMOVE CONFUSION, IMPROVE READABILITY, AND MAKE THE OUTPUT MORE ACTIONABLE.
+
+IMPORTANT:
+- Preserve all existing calculations, formulas, thresholds, and data collection logic unless explicitly stated otherwise.
+- This is primarily a presentation and scoring-system refactor.
+- Do not remove any existing security checks, holder analysis, structure analysis, support analysis, entry analysis, TP analysis, or R:R calculations.
+
+==================================================
+SECURITY BRIEFING REWORK
+==================================================
+
+CURRENT PROBLEM
+
+The section currently outputs two separate risk systems:
+
+1. Cabal Risk Badge:
+- LOW RISK
+- MEDIUM RISK
+- HIGH RISK
+
+2. Security Tier:
+- Tier A
+- Tier B
+- Tier C
+- Tier D
+
+These can contradict each other.
+
+Example:
+
+SECURITY / CABAL BRIEFING [LOW RISK]
+
+Security Tier: C
+Score: 14/28
+Verdict: HIGH RISK
+
+This creates confusion because users see two different overall risk assessments.
+
+--------------------------------------------------
+REQUIRED CHANGE
+--------------------------------------------------
+
+Security Tier becomes the ONLY master security rating.
+
+Remove the old headline risk badge:
+
+[LOW RISK]
+[MEDIUM RISK]
+[HIGH RISK]
+
+from the section title.
+
+Replace with:
+
+SECURITY BRIEFING
+
+Security Tier: B
+Score: 21/28 (75%)
+Verdict: MODERATE RISK
+
+The Security Tier and Verdict must be treated as the official overall security assessment.
+
+==================================================
+SEPARATE CABAL RISK SYSTEM
+==================================================
+
+Do NOT remove the existing concentration and clustering analysis.
+
+Instead, convert it into a dedicated Cabal Risk subsection.
+
+Continue using existing inputs such as:
+
+- Bundle Cluster %
+- Largest Bundle %
+- Top Holder %
+- Top 10 Holder %
+- Wallet clustering
+- Linked wallets
+- Cluster confidence
+- Distribution concentration metrics
+
+Output:
+
+Cabal Risk: LOW
+
+or
+
+Cabal Risk: MEDIUM
+
+or
+
+Cabal Risk: HIGH
+
+This should be displayed directly beneath the Security Tier summary.
+
+Example:
+
+SECURITY BRIEFING
+
+Security Tier: B
+Score: 21/28 (75%)
+Verdict: MODERATE RISK
+
+Cabal Risk: LOW
+
+==================================================
+ADD CABAL SCORE
+==================================================
+
+Create a separate Cabal Score.
+
+Example:
+
+Cabal Score: 8/10
+
+Suggested scale:
+
+9-10 = Excellent Distribution
+7-8 = Healthy Distribution
+5-6 = Moderate Concentration
+3-4 = Concerning Concentration
+0-2 = Extreme Cabal Risk
+
+IMPORTANT:
+
+The Cabal Score measures ONLY concentration and clustering risk.
+
+The Cabal Score must NOT replace Security Tier.
+
+Security Tier remains the master verdict.
+
+==================================================
+NEW SECURITY SECTION LAYOUT
+==================================================
+
+SECURITY BRIEFING
+
+Security Tier: B
+Score: 21/28 (75%)
+Verdict: MODERATE RISK
+
+Cabal Risk: LOW
+Cabal Score: 8/10
+
+Key Findings:
+• LP Burned
+• Mint Revoked
+• No Self-Snipe Evidence
+• Healthy Distribution
+
+Detailed Security Checks:
+...
+
+==================================================
+STRUCTURE BRIEFING IMPROVEMENTS
+==================================================
+
+Keep ALL existing structure calculations.
+
+Do NOT modify:
+
+- Floor detection
+- Shelf detection
+- Support detection
+- Ceiling detection
+- Acceptance calculations
+- Entry calculations
+- TP calculations
+- Risk/Reward calculations
+- Pattern detection
+- Market structure logic
+
+Only improve presentation and summarization.
+
+==================================================
+MOVE ACTION SIGNAL TO TOP
+==================================================
+
+Immediately after the section title display:
+
+STRUCTURE BRIEFING
+
+Action Signal: BUY
+Confidence: HIGH
+
+This must appear before any detailed explanation.
+
+==================================================
+
+SAFE ENTRY RANGE MC should also be displayed prominently at the top like this: 
+
+Current MC: 
+Safe Entry Range: 
+
+Note: This is a quick preview for the user; this detail will still maintain its 05 position in the Structure Briefing 
+
+==================================================
+ADD STRUCTURE GRADE
+==================================================
+
+Create a Structure Grade.
+
+Example:
+
+Structure Grade: A
+
+Use existing structure metrics to derive the grade, including:
+
+- Shelf quality
+- Support strength
+- Demand return quality
+- Acceptance above support
+- Breakout efficiency
+- Resistance overhead risk
+- Risk/Reward quality
+
+Suggested grading:
+
+A = Excellent
+B = Strong
+C = Tradable
+D = Weak
+F = Avoid
+
+==================================================
+PROMOTE R:R TO SUMMARY
+==================================================
+
+Display Risk/Reward prominently in the summary block.
+
+Example:
+
+STRUCTURE BRIEFING
+
+Action Signal: BUY
+Confidence: HIGH
+Structure Grade: A
+R:R: 4.8
+
+Users should be able to understand the trade quality immediately without reading the full breakdown.
+
+==============================================
+HOLDER COUNT QUALITY REWORK
+==================================================
+
+Rename:
+
+Holder Count Quality
+
+to:
+
+Holder Density
+
+Purpose:
+
+Measure adoption quality relative to market cap.
+
+Continue using expected holder ranges based on market cap.
+
+Example:
+
+$25k MC
+Expected: 25-50 holders
+
+$100k MC
+Expected: 100-150 holders
+
+$500k MC
+Expected: 300-500 holders
+
+$1M MC
+Expected: 500-1000 holders
+
+Output:
+
+Exceptional
+Strong
+Healthy
+Fair
+Weak
+Poor
+
+==================================================
+HOLDER EFFICIENCY (NEW)
+==================================================
+
+Add:
+
+Holder Efficiency
+
+Formula Concept:
+
+Market Cap
+÷
+Holder Count
+
+Purpose:
+
+Determine whether valuation is supported by broad participation or a small number of holders.
+
+Interpretation:
+
+Very Concentrated
+Concentrated
+Balanced
+Distributed
+Highly Distributed
+
+Examples:
+
+100k MC
+100 holders
+
+= Concentrated
+
+100k MC
+1000 holders
+
+= Distributed
+
+===============================================================================
+
+Refine the Security Briefing by integrating Holder Density and Holder Efficiency into both the Security Checklist scoring system and the Security Intelligence section.
+
+IMPORTANT:
+
+- Preserve all existing Security calculations.
+- Do not remove any current checklist items.
+- These additions should improve Distribution Security analysis.
+- Holder Density and Holder Efficiency must contribute to the Security Tier score.
+
+==================================================
+SECURITY CHECKLIST INTEGRATION
+==================================================
+
+Add two new checklist items:
+
+1. Holder Density
+2. Holder Efficiency
+
+Place them directly after:
+
+Holder Distribution
+
+and before:
+
+Top Holder
+
+New order:
+
+LP Status
+Mint Authority
+Freeze Authority
+
+Dev Reputation
+Dev Wallet
+
+Holder Distribution
+Holder Density
+Holder Efficiency
+
+Top Holder
+Bundle Concentration Risk
+
+Volume Authenticity
+Sniper / Bot Risk
+
+Contract Security
+Wallet Cluster Confidence
+Early Buyer Health
+Self-Snipe Evidence
+
+==================================================
+HOLDER DENSITY
+==================================================
+
+Purpose:
+
+Measure participation quality relative to market cap.
+
+Continue using existing expected-holder logic based on market cap.
+
+Examples:
+
+$25k MC → 25–50 expected holders
+$50k MC → 50–100 expected holders
+$100k MC → 100–150 expected holders
+$250k MC → 150–300 expected holders
+$500k MC → 300–500 expected holders
+$1M MC → 500–1000 expected holders
+
+Checklist output examples:
+
+PASS (2)
+Strong (182 holders vs 140 expected)
+Participation exceeds expected adoption for current market cap
+
+CAUTION (1)
+Fair (110 holders vs 140 expected)
+Participation slightly below expected range
+
+FAIL (0)
+Poor (48 holders vs 140 expected)
+Adoption significantly below expected range
+
+==================================================
+HOLDER EFFICIENCY
+==================================================
+
+Purpose:
+
+Measure how much market cap exists per holder.
+
+Formula Concept:
+
+Market Cap ÷ Holder Count
+
+Interpretation:
+
+Highly Distributed
+Distributed
+Balanced
+Concentrated
+Very Concentrated
+
+Checklist output examples:
+
+PASS (2)
+Distributed ($412 MC per holder)
+Ownership is broadly distributed across participants
+
+CAUTION (1)
+Balanced ($950 MC per holder)
+Moderate ownership concentration
+
+FAIL (0)
+Very Concentrated ($4,200 MC per holder)
+Valuation supported by a small number of holders
+
+==================================================
+SECURITY CHECKLIST SCORING
+==================================================
+
+Holder Density and Holder Efficiency should contribute to the Security Tier exactly like other checklist items.
+
+Scoring:
+
+PASS = 2 points
+CAUTION = 1 point
+FAIL = 0 points
+
+Update maximum checklist score accordingly.
+
+Example:
+
+Current:
+14 checks × 2 = 28 max
+
+New:
+16 checks × 2 = 32 max
+
+Security Tier calculations should automatically use the new maximum score.
+
+==================================================
+SECURITY INTELLIGENCE ADDITION
+==================================================
+
+Add a new intelligence block:
+
+DISTRIBUTION QUALITY
+
+Place it alongside:
+
+Launch Coordination Risk
+Bundle Concentration Risk
+Wallet Cluster Confidence
+Self-Snipe Evidence
+
+==================================================
+DISTRIBUTION QUALITY FORMAT
+==================================================
+
+Example:
+
+DISTRIBUTION QUALITY
+
+Strong
+Score: 82/100
+
+✓ Holder count exceeds expected range
+✓ Holder efficiency indicates broad ownership
+✓ Top holder only 3.4%
+✓ Top 10 holders only 12.2%
+✓ Low concentration profile
+
+==================================================
+
+Weak Example:
+
+DISTRIBUTION QUALITY
+
+Weak
+Score: 29/100
+
+✗ Holder count significantly below expected range
+✗ $4,200 MC per holder
+✗ Top holder concentration elevated
+✗ Top 10 holders control large share of supply
+✗ Ownership highly concentrated
+
+==================================================
+IMPORTANT SEPARATION OF RESPONSIBILITIES
+==================================================
+
+Holder Density and Holder Efficiency measure:
+
+- Adoption quality
+- Ownership quality
+- Distribution health
+- Concentration risk
+
+These metrics belong to Distribution Security.
+
+Do NOT place them inside:
+
+- Launch Coordination Risk
+- Bundle Concentration Risk
+- Wallet Cluster Confidence
+- Self-Snipe Evidence
+
+Those sections measure coordination and wallet relationships.
+
+Holder Density and Holder Efficiency measure ownership quality.
+
+They should remain separate but complementary.
+
+==================================================
+DESIGN GOAL
+==================================================
+
+The Security Briefing should clearly answer two separate questions:
+
+1. Is ownership broadly distributed?
+   - Holder Distribution
+   - Holder Density
+   - Holder Efficiency
+   - Top Holder
+
+2. Are holders secretly coordinated?
+   - Bundle Concentration Risk
+   - Launch Coordination Risk
+   - Wallet Cluster Confidence
+   - Self-Snipe Evidence
+
+Both perspectives should contribute to the final Security Tier and overall risk assessment.
+
+================================================
+FINAL OUTPUT REQUIREMENTS
+==================================================
+
+SECURITY BRIEFING must contain:
+
+- Security Tier
+- Security Score
+- Security Verdict
+- Cabal Risk
+- Cabal Score
+- Security Checklist
+- Dev Reputation
+- Early Buyer Analysis
+- Security Intelligence
+- the rest of the existing briefing  analysis 
+
+Security Tier is the ONLY overall security verdict.
+
+Cabal Risk is a separate concentration/distribution metric.
+
+
+STRUCTURE BRIEFING must begin with:
+
+- Action Signal
+- Confidence
+- Structure Grade
+- Risk/Reward
+- Current MC & Safe Entry MC Range
+
+before displaying the detailed analysis.
+
+Eliminate all situations where multiple "overall risk" ratings can contradict each other.
+
+Maintain all existing calculations unless explicitly changed above.
+
+
+
