@@ -1,0 +1,218 @@
+ATTENTION BRIEFING DATA ARCHITECTURE
+
+The Attention Briefing should use a layered data architecture.
+
+Each data source has a specific responsibility and should only be used for the signals it is best suited to provide.
+
+==================================================
+LAYER 1 — MARKET DATA
+==================================================
+
+Primary Sources:
+
+1. DexScreener API
+2. GeckoTerminal API
+
+Purpose:
+
+Provide all market-based inputs used by the Attention engine.
+
+Metrics:
+
+- Market Cap
+- Liquidity
+- Volume
+- Pair Age
+- Pair Creation Time
+- Price Change
+- Volume Change
+- Historical Market Cap
+- Historical Volume
+
+Used For:
+
+✓ Attention Efficiency
+✓ Attention Lifecycle
+✓ Attention Divergence
+✓ Volume Acceleration
+✓ Revival Detection
+✓ Emerging Detection
+
+These sources are the system's source of truth for market data.
+
+==================================================
+LAYER 2 — SOCIAL ATTENTION DATA
+==================================================
+
+Primary Sources:
+
+1. Telegram (Telethon)
+2. Nitter RSS / Alternative X Monitoring
+
+Purpose:
+
+Measure how quickly attention is spreading.
+
+Metrics:
+
+- Coin Name Mentions
+- Ticker Mentions
+- Contract Address Mentions
+- Mentions Per Minute
+- Mention Growth Rate
+- Unique Posters
+- Unique Channels
+- Reposts / Retweets
+- Social Velocity
+
+Used For:
+
+✓ Attention Velocity
+✓ Distribution Strength
+✓ Attention Lifecycle
+✓ Attention Persistence
+✓ Revival Detection
+
+These sources should be considered the source of truth for attention metrics.
+
+==================================================
+LAYER 3 — NARRATIVE INTELLIGENCE
+==================================================
+
+Primary Source:
+
+Sentence Transformers
+
+Purpose:
+
+Analyze narrative similarity and freshness.
+
+Metrics:
+
+- Narrative Similarity
+- Narrative Clustering
+- Meme Similarity
+- Clone Detection
+- Narrative Saturation
+- Narrative Freshness
+
+Examples:
+
+AI Cat #1
+AI Cat #2
+AI Cat #3
+
+Should be recognized as highly similar narratives.
+
+Used For:
+
+✓ Narrative Strength
+✓ Narrative Freshness
+✓ Saturation Detection
+✓ Clone Detection
+✓ Meta Rotation Detection
+
+Sentence Transformers should be the primary Narrative Intelligence engine.
+
+==================================================
+LAYER 4 — OPTIONAL SUPPLEMENTAL DATA
+==================================================
+
+Source:
+
+Reddit API
+
+Purpose:
+
+Supplementary narrative discovery only.
+
+Metrics:
+
+- Mention Counts
+- Community Discussion
+- Narrative Validation
+
+Used For:
+
+✓ Narrative Discovery
+✓ Supplemental Sentiment
+
+IMPORTANT:
+
+Reddit should have low weighting.
+
+Do not allow Reddit activity to heavily influence Attention Tier scores.
+
+==================================================
+ATTENTION BRIEFING SIGNAL MAPPING
+==================================================
+
+Narrative Strength
+→ Sentence Transformers
+→ Telegram
+→ X/Nitter
+
+Narrative Freshness
+→ Sentence Transformers
+
+Attention Velocity
+→ Telegram
+→ X/Nitter
+
+Distribution Strength
+→ Telegram
+→ X/Nitter
+
+Attention Lifecycle
+→ DexScreener
+→ GeckoTerminal
+→ Telegram
+→ X/Nitter
+
+Attention Efficiency
+→ DexScreener
+→ GeckoTerminal
+→ Social Attention Metrics
+
+Holder Momentum
+→ Existing Holder Tracking System
+
+Holder Divergence
+→ Existing Holder Tracking System
+→ DexScreener Market Data
+
+Attention Persistence
+→ Telegram
+→ X/Nitter
+
+Meta Rotation
+→ Sentence Transformers
+→ Telegram
+→ X/Nitter
+
+==================================================
+DESIGN RULE
+==================================================
+
+The Attention Briefing should not simply count mentions.
+
+The objective is to identify situations where:
+
+1. A strong narrative exists.
+2. Attention is accelerating.
+3. Attention is spreading to new participants.
+4. Holders are increasing.
+5. Narrative freshness remains high.
+6. Market cap is responding efficiently.
+
+The system should prioritize:
+
+Narrative Quality
++
+Attention Velocity
++
+Holder Growth
++
+Attention Efficiency
+
+over raw mention volume.
