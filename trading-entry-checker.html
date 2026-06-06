@@ -1175,7 +1175,40 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
           <label class="settings-label">RugCheck API Key <a href="https://rugcheck.xyz" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get free key</a></label>
           <input class="settings-input" type="password" id="sRugCheckKey" placeholder="Paste RugCheck API key here" autocomplete="off">
         </div>
-        <div class="form-group" style="grid-column:1/-1;"><div style="height:1px;background:rgba(0,212,255,0.12);margin:6px 0;"></div><div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;"><i class="fa-solid fa-satellite-dish" style="margin-right:5px;"></i>Social Intelligence — Provider Keys</div><div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:8px;line-height:1.5;">Used to auto-fetch X/Twitter data for the Attention Briefing. TwitterAPI.io is the primary provider; Apify is the fallback. Reddit is fetched without a key. Telegram requires manual entry.</div></div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <div style="height:1px;background:rgba(0,212,255,0.12);margin:6px 0;"></div>
+          <div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px;"><i class="fa-solid fa-satellite-dish" style="margin-right:5px;"></i>Social Intelligence — Provider Keys</div>
+
+          <!-- X/Twitter row -->
+          <div style="margin-bottom:8px;padding:7px 9px;background:rgba(29,161,242,0.05);border-radius:5px;border-left:3px solid rgba(29,161,242,0.4);">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <i class="fa-brands fa-x-twitter" style="color:#1DA1F2;font-size:0.75rem;"></i>
+              <span style="font-size:0.60rem;font-weight:700;color:#1DA1F2;">X / TWITTER</span>
+              <span style="font-size:0.50rem;padding:1px 5px;border-radius:3px;background:rgba(255,214,0,0.12);color:#ffd600;border:1px solid rgba(255,214,0,0.3);">KEY REQUIRED</span>
+            </div>
+            <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.5;">TwitterAPI.io (primary) → Apify (fallback). Without a key, X data cannot be auto-fetched — enter X mention counts manually in Social Data Inputs.</div>
+          </div>
+
+          <!-- Reddit row -->
+          <div style="margin-bottom:8px;padding:7px 9px;background:rgba(255,69,0,0.05);border-radius:5px;border-left:3px solid rgba(255,69,0,0.4);">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <i class="fa-brands fa-reddit" style="color:#ff4500;font-size:0.75rem;"></i>
+              <span style="font-size:0.60rem;font-weight:700;color:#ff4500;">REDDIT</span>
+              <span style="font-size:0.50rem;padding:1px 5px;border-radius:3px;background:rgba(0,230,118,0.12);color:#00e676;border:1px solid rgba(0,230,118,0.3);">✓ AUTO-FETCHES FREE</span>
+            </div>
+            <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.5;">Uses the free public Reddit Search API — no key required, works out of the box. Add a Client ID + Secret below to use the authenticated API (higher rate limits: 60 req/min vs ~1 req/min public).</div>
+          </div>
+
+          <!-- Telegram row -->
+          <div style="margin-bottom:2px;padding:7px 9px;background:rgba(44,165,224,0.05);border-radius:5px;border-left:3px solid rgba(44,165,224,0.3);">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+              <i class="fa-brands fa-telegram" style="color:#2CA5E0;font-size:0.75rem;"></i>
+              <span style="font-size:0.60rem;font-weight:700;color:#2CA5E0;">TELEGRAM</span>
+              <span style="font-size:0.50rem;padding:1px 5px;border-radius:3px;background:rgba(255,152,0,0.12);color:#ff9800;border:1px solid rgba(255,152,0,0.3);">⚠ PASTE ONLY</span>
+            </div>
+            <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.5;">Auto-fetch is not possible from a browser: the Telegram Bot API cannot search channel history, and the MTProto client API (which can) requires a backend server. Use the <strong style="color:var(--text-primary);">paste area</strong> at the top of the page to paste Rickbot / scanner bot output — TEC parses it automatically.</div>
+          </div>
+        </div>
         <div class="form-group">
           <label class="settings-label">TwitterAPI.io Key <a href="https://twitterapi.io" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get key</a></label>
           <input class="settings-input" type="password" id="sTwitterAPIKey" placeholder="Paste TwitterAPI.io key" autocomplete="off">
@@ -1183,6 +1216,14 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
         <div class="form-group">
           <label class="settings-label">Apify Token <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(fallback)</span> <a href="https://apify.com" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get token</a></label>
           <input class="settings-input" type="password" id="sApifyKey" placeholder="Paste Apify API token" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="settings-label"><i class="fa-brands fa-reddit" style="color:#ff4500;margin-right:4px;"></i>Reddit Client ID <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(optional — for higher rate limits)</span> <a href="https://www.reddit.com/prefs/apps" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">create app</a></label>
+          <input class="settings-input" type="password" id="sRedditClientId" placeholder="Reddit app client_id" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="settings-label"><i class="fa-brands fa-reddit" style="color:#ff4500;margin-right:4px;"></i>Reddit Client Secret <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <input class="settings-input" type="password" id="sRedditSecret" placeholder="Reddit app client_secret" autocomplete="off">
         </div>
       </div>
 
@@ -1332,12 +1373,12 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
     </div>
     <div class="card-body collapsible collapsed" id="socialScanHistBody" style="max-height:0;">
       <div class="wl-controls" style="flex-wrap:wrap;gap:6px;align-items:center;">
-        <span style="font-size:0.62rem;color:var(--text-muted);">Per-CA log of every social scan — provider, post counts, and density trend over time.</span>
+        <span style="font-size:0.62rem;color:var(--text-muted);">Fetch metadata — provider used, posts retrieved vs limit, fill-rate. Different from Attention History (which logs scored output: tier, mode, score %).</span>
         <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="socialScanHistClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
       </div>
       <div id="socialScanHistEmpty" class="wl-empty" style="padding:20px 0;">
         <i class="fa-solid fa-satellite-dish"></i>
-        No social scans logged yet.<br>Use <strong>Scan Social</strong> or <strong>Deep Scan</strong> buttons to start.
+        No social scans logged yet.<br>Use <strong>Scan Social</strong> or <strong>Deep Scan</strong> to start.
       </div>
       <div id="socialScanHistGrid" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>
     </div>
@@ -2089,8 +2130,10 @@ function applySettingsToUI() {
     el('sHeliusKey').value    = localStorage.getItem('tec_helius_key')       || '';
     el('sDefadeKey').value    = localStorage.getItem('tec_defade_key')       || '';
     el('sRugCheckKey').value  = localStorage.getItem('tec_rugcheck_key')     || '';
-    el('sTwitterAPIKey').value= localStorage.getItem('tec_twitter_api_key')  || '';
-    el('sApifyKey').value     = localStorage.getItem('tec_apify_key')        || '';
+    el('sTwitterAPIKey').value  = localStorage.getItem('tec_twitter_api_key')   || '';
+    el('sApifyKey').value       = localStorage.getItem('tec_apify_key')         || '';
+    el('sRedditClientId').value = localStorage.getItem('tec_reddit_client_id')  || '';
+    el('sRedditSecret').value   = localStorage.getItem('tec_reddit_secret')     || '';
   } catch(e) {}
 }
 
@@ -2137,6 +2180,10 @@ function saveSettings() {
     try {
       var twk = el('sTwitterAPIKey').value.trim();
       var apk = el('sApifyKey').value.trim();
+      var rci = el('sRedditClientId').value.trim();
+      var rcs = el('sRedditSecret').value.trim();
+      if (rci) localStorage.setItem('tec_reddit_client_id', rci); else localStorage.removeItem('tec_reddit_client_id');
+      if (rcs) localStorage.setItem('tec_reddit_secret',    rcs); else localStorage.removeItem('tec_reddit_secret');
       if (twk) localStorage.setItem('tec_twitter_api_key', twk); else localStorage.removeItem('tec_twitter_api_key');
       if (apk) localStorage.setItem('tec_apify_key',       apk); else localStorage.removeItem('tec_apify_key');
     } catch(e) {}
@@ -7864,34 +7911,76 @@ async function fetchApifyFallback(queries, limit) {
   return { ok: true, tweets: [], usedQuery: null, provider: 'apify', warning: 'No results' };
 }
 
-/* ── Reddit: Public search JSON API (no auth required) ── */
+/* ── Reddit OAuth token cache ── */
+var _redditOAuthToken = null;
+var _redditOAuthExpiry = 0;
+
+async function getRedditOAuthToken() {
+  var clientId = getSocialAPIKey('tec_reddit_client_id');
+  var secret   = getSocialAPIKey('tec_reddit_secret');
+  if (!clientId || !secret) return null;
+  if (_redditOAuthToken && Date.now() < _redditOAuthExpiry) return _redditOAuthToken;
+  try {
+    var creds = btoa(clientId + ':' + secret);
+    var resp = await Promise.race([
+      fetch('https://www.reddit.com/api/v1/access_token', {
+        method: 'POST',
+        headers: { 'Authorization': 'Basic ' + creds, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=client_credentials'
+      }),
+      new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 8000); })
+    ]);
+    if (!resp.ok) return null;
+    var json = await resp.json();
+    if (!json.access_token) return null;
+    _redditOAuthToken  = json.access_token;
+    _redditOAuthExpiry = Date.now() + ((json.expires_in || 3600) - 60) * 1000;
+    return _redditOAuthToken;
+  } catch(e) { return null; }
+}
+
+/* ── Reddit: Public search API (free) or OAuth (authenticated) ── */
 async function fetchRedditData(queries, limit, sinceTs) {
   var priority = ['ca', 'ticker', 'name'];
+  /* Try OAuth first if credentials are configured */
+  var oauthToken = await getRedditOAuthToken();
+
+  function parseChildren(children) {
+    return children.map(function(c) {
+      var dd = c.data;
+      return { id: dd.id || '', title: dd.title || dd.body || '', author: (dd.author || '').toLowerCase(), ts: dd.created_utc ? dd.created_utc * 1000 : null, score: dd.score || 0, subreddit: dd.subreddit || '' };
+    }).filter(function(p) {
+      if (!p.ts) return false;
+      if (sinceTs && p.ts <= sinceTs * 1000) return false;
+      return true;
+    });
+  }
+
   for (var i = 0; i < priority.length; i++) {
     var q = queries[priority[i]];
     if (!q) continue;
     try {
-      var url = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(q) + '&sort=new&limit=' + limit + '&t=week';
+      var baseUrl, headers;
+      if (oauthToken) {
+        baseUrl  = 'https://oauth.reddit.com/search.json?q=' + encodeURIComponent(q) + '&sort=new&limit=' + limit + '&t=week';
+        headers  = { 'Authorization': 'Bearer ' + oauthToken, 'Accept': 'application/json' };
+      } else {
+        baseUrl  = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(q) + '&sort=new&limit=' + limit + '&t=week';
+        headers  = { 'Accept': 'application/json' };
+      }
       var resp = await Promise.race([
-        fetch(url, { headers: { Accept: 'application/json' } }),
+        fetch(baseUrl, { headers: headers }),
         new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 10000); })
       ]);
       if (!resp.ok) continue;
       var json = await resp.json();
       var children = (json.data && json.data.children) ? json.data.children : [];
       if (children.length === 0) continue;
-      var posts = children.map(function(c) {
-        var dd = c.data;
-        return { id: dd.id || '', title: dd.title || dd.body || '', author: (dd.author || '').toLowerCase(), ts: dd.created_utc ? dd.created_utc * 1000 : null, score: dd.score || 0, subreddit: dd.subreddit || '' };
-      }).filter(function(p) {
-        if (!p.ts) return false;
-        if (sinceTs && p.ts <= sinceTs * 1000) return false;
-        return true;
-      });
-      if (posts.length > 0) return { ok: true, posts: posts, usedQuery: priority[i] };
+      var posts = parseChildren(children);
+      if (posts.length > 0) return { ok: true, posts: posts, usedQuery: priority[i], authenticated: !!oauthToken };
     } catch(e) { /* try next query */ }
   }
-  return { ok: true, posts: [], usedQuery: null };
+  return { ok: true, posts: [], usedQuery: null, authenticated: !!oauthToken };
 }
 
 /* ── Derive raw metric objects from tweet/post arrays ── */
