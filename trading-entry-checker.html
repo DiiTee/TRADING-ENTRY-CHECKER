@@ -1104,6 +1104,63 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 
       </div>
 
+      <div class="settings-section-label" style="margin-top:14px;">Overall Tier Weighting <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(Security + Structure + Attention should sum to 100%)</span></div>
+      <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">Weights determine how much each briefing contributes to the Overall Tier score. Each mode has its own set — Attention is downweighted when social data is limited.</div>
+
+      <div style="margin-bottom:9px;padding:8px 10px;background:rgba(0,212,255,0.04);border-radius:6px;border-left:3px solid var(--accent-cyan);">
+        <div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.9px;margin-bottom:6px;">FULL SOCIAL MODE <span style="font-weight:400;color:var(--text-muted);">— all social fields filled</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Security %</label>
+            <input class="settings-input" type="number" id="sWFullSec" value="35" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Structure %</label>
+            <input class="settings-input" type="number" id="sWFullStr" value="35" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Attention %</label>
+            <input class="settings-input" type="number" id="sWFullAtt" value="30" min="0" max="100" step="0.5">
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:9px;padding:8px 10px;background:rgba(255,235,59,0.04);border-radius:6px;border-left:3px solid #ffeb3b;">
+        <div style="font-size:0.60rem;color:#ffeb3b;font-weight:700;letter-spacing:0.9px;margin-bottom:6px;">PARTIAL SOCIAL MODE <span style="font-weight:400;color:var(--text-muted);">— some social fields filled</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Security %</label>
+            <input class="settings-input" type="number" id="sWPartSec" value="38" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Structure %</label>
+            <input class="settings-input" type="number" id="sWPartStr" value="38" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Attention %</label>
+            <input class="settings-input" type="number" id="sWPartAtt" value="24" min="0" max="100" step="0.5">
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:9px;padding:8px 10px;background:rgba(255,152,0,0.04);border-radius:6px;border-left:3px solid #ff9800;">
+        <div style="font-size:0.60rem;color:#ff9800;font-weight:700;letter-spacing:0.9px;margin-bottom:6px;">PROXY MODE <span style="font-weight:400;color:var(--text-muted);">— no social fields filled</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Security %</label>
+            <input class="settings-input" type="number" id="sWProxSec" value="42.5" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Structure %</label>
+            <input class="settings-input" type="number" id="sWProxStr" value="42.5" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Attention %</label>
+            <input class="settings-input" type="number" id="sWProxAtt" value="15" min="0" max="100" step="0.5">
+          </div>
+        </div>
+      </div>
+
       <div class="settings-section-label" style="margin-top:14px;">API Keys <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(stored in your browser only — never sent anywhere)</span></div>
       <div class="api-keys-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
         <div class="form-group">
@@ -1902,7 +1959,10 @@ var DEFAULT_SETTINGS = {
   maxSellTax: 5,
   minBuzz: 3,
   minHmc: 3.0, lmcMin: 8, lmcMax: 15,
-  tp1: 50, tp2: 90
+  tp1: 50, tp2: 90,
+  wFullSec: 35,   wFullStr: 35,   wFullAtt: 30,
+  wPartSec: 38,   wPartStr: 38,   wPartAtt: 24,
+  wProxSec: 42.5, wProxStr: 42.5, wProxAtt: 15
 };
 
 var settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -1952,6 +2012,15 @@ function applySettingsToUI() {
   el('sLmcMax').value = settings.lmcMax;
   el('sTp1').value    = settings.tp1;
   el('sTp2').value    = settings.tp2;
+  el('sWFullSec').value = settings.wFullSec;
+  el('sWFullStr').value = settings.wFullStr;
+  el('sWFullAtt').value = settings.wFullAtt;
+  el('sWPartSec').value = settings.wPartSec;
+  el('sWPartStr').value = settings.wPartStr;
+  el('sWPartAtt').value = settings.wPartAtt;
+  el('sWProxSec').value = settings.wProxSec;
+  el('sWProxStr').value = settings.wProxStr;
+  el('sWProxAtt').value = settings.wProxAtt;
   try {
     el('sHeliusKey').value   = localStorage.getItem('tec_helius_key')    || '';
     el('sDefadeKey').value   = localStorage.getItem('tec_defade_key')    || '';
@@ -1978,7 +2047,10 @@ function readSettingsFromUI() {
     maxSellTax: n('sMaxSellTax'),
     minBuzz: n('sMinBuzz'),
     minHmc: n('sMinHmc'), lmcMin: n('sLmcMin'), lmcMax: n('sLmcMax'),
-    tp1: n('sTp1'), tp2: n('sTp2')
+    tp1: n('sTp1'), tp2: n('sTp2'),
+    wFullSec: n('sWFullSec'), wFullStr: n('sWFullStr'), wFullAtt: n('sWFullAtt'),
+    wPartSec: n('sWPartSec'), wPartStr: n('sWPartStr'), wPartAtt: n('sWPartAtt'),
+    wProxSec: n('sWProxSec'), wProxStr: n('sWProxStr'), wProxAtt: n('sWProxAtt')
   };
 }
 
@@ -7525,11 +7597,14 @@ function buildRecommendedEntryChecklist(d, analysis) {
   var _aMode = window._tecAttentionMode || 'PROXY';
   var _wSec, _wStr, _wAtt, _wLabel;
   if (_aMode === 'FULL SOCIAL') {
-    _wSec=0.35;  _wStr=0.35;  _wAtt=0.30; _wLabel='Sec 35% · Str 35% · Att 30%';
+    var _fs = settings.wFullSec||35, _fst = settings.wFullStr||35, _fa = settings.wFullAtt||30;
+    _wSec=_fs/100; _wStr=_fst/100; _wAtt=_fa/100; _wLabel='Sec '+_fs+'% · Str '+_fst+'% · Att '+_fa+'%';
   } else if (_aMode === 'PARTIAL SOCIAL') {
-    _wSec=0.38;  _wStr=0.38;  _wAtt=0.24; _wLabel='Sec 38% · Str 38% · Att 24%';
+    var _ps = settings.wPartSec||38, _pst = settings.wPartStr||38, _pa = settings.wPartAtt||24;
+    _wSec=_ps/100; _wStr=_pst/100; _wAtt=_pa/100; _wLabel='Sec '+_ps+'% · Str '+_pst+'% · Att '+_pa+'%';
   } else {
-    _wSec=0.425; _wStr=0.425; _wAtt=0.15; _wLabel='Sec 42.5% · Str 42.5% · Att 15%';
+    var _xs = settings.wProxSec||42.5, _xst = settings.wProxStr||42.5, _xa = settings.wProxAtt||15;
+    _wSec=_xs/100; _wStr=_xst/100; _wAtt=_xa/100; _wLabel='Sec '+_xs+'% · Str '+_xst+'% · Att '+_xa+'%';
   }
   var secNum = secT==='A'?100:secT==='B'?75:secT==='C'?50:25;
   var strNum = strT==='S'?100:strT==='A'?85:strT==='B'?65:strT==='C'?45:25;
@@ -9627,7 +9702,11 @@ el('exportTxtBtn').addEventListener('click', function() {
   var _sN  = _secT2==='A'?100:_secT2==='B'?75:_secT2==='C'?50:25;
   var _stN = _strT2==='S'?100:_strT2==='A'?85:_strT2==='B'?65:_strT2==='C'?45:25;
   var _aN  = _attT2==='A'?100:_attT2==='B'?75:_attT2==='C'?50:_attT2==='D'?33:15;
-  var _oS  = Math.round(_sN*0.35 + _stN*0.35 + _aN*0.30);
+  var _aMode3 = window._tecAttentionMode || 'PROXY';
+  var _wSec3 = (_aMode3==='FULL SOCIAL' ? (settings.wFullSec||35) : _aMode3==='PARTIAL SOCIAL' ? (settings.wPartSec||38) : (settings.wProxSec||42.5)) / 100;
+  var _wStr3 = (_aMode3==='FULL SOCIAL' ? (settings.wFullStr||35) : _aMode3==='PARTIAL SOCIAL' ? (settings.wPartStr||38) : (settings.wProxStr||42.5)) / 100;
+  var _wAtt3 = (_aMode3==='FULL SOCIAL' ? (settings.wFullAtt||30) : _aMode3==='PARTIAL SOCIAL' ? (settings.wPartAtt||24) : (settings.wProxAtt||15)) / 100;
+  var _oS  = Math.round(_sN*_wSec3 + _stN*_wStr3 + _aN*_wAtt3);
   var _oT  = _oS>=88?'A':_oS>=72?'B':_oS>=55?'C':_oS>=38?'D':'F';
   var _oR  = _oS>=88?'STRONG ENTRY CANDIDATE':_oS>=72?'VIABLE ENTRY — MANAGE RISK':_oS>=55?'SPECULATIVE — SIZE DOWN':_oS>=38?'HIGH RISK — AVOID OR WATCH':'SKIP — NOT RECOMMENDED';
 
