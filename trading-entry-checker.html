@@ -1557,10 +1557,15 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
   </div>
 
   <div class="card hidden" id="checklistCard">
-    <div class="card-title" style="cursor:default;"><i class="fa-solid fa-clipboard-check"></i> Filter Checklist</div>
+    <div class="card-title" style="cursor:default;"><i class="fa-solid fa-chart-bar"></i> Analysis Results</div>
     <div class="card-body">
-      <div class="checklist-grid" id="checklistGrid"></div>
       <div class="verdict-section" id="verdictSection"></div>
+      <div id="pfcSection" style="margin:0 0 10px 0;">
+        <div id="pfcHeader"></div>
+        <div id="pfcBody" style="display:none;border:1px solid rgba(255,255,255,0.07);border-top:none;border-radius:0 0 6px 6px;overflow:hidden;">
+          <div class="checklist-grid" id="checklistGrid"></div>
+        </div>
+      </div>
       <div class="btn-group" style="justify-content: center;">
         <button class="btn btn-primary" id="addTableBtn"><i class="fa-solid fa-plus"></i> Add to Table</button>
         <button class="btn btn-secondary" id="exportTxtBtn"><i class="fa-solid fa-file-lines"></i> Export TXT</button>
@@ -6803,6 +6808,13 @@ function buildRecommendedEntryChecklist(d, analysis) {
 
   if (!hasData) { oTier='—'; oRec='Insufficient data'; oColor='var(--text-muted)'; oDesc='Run a full analysis to populate all three briefings.'; }
 
+  /* ── Store globally so Pre-Trade Verdict, Cross-Reference, TXT export and
+        Watchlist can all read the same single value ── */
+  window._tecOverallTier  = oTier;
+  window._tecOverallScore = oScore;
+  window._tecOverallColor = oColor;
+  window._tecOverallRec   = oRec;
+
   var html = '<div style="margin-top:14px;padding:12px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">';
   html += '<div style="font-size:0.68rem;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;"><i class="fa-solid fa-list-check" style="margin-right:6px;"></i>Recommended Entry Checklist</div>';
 
@@ -8039,16 +8051,70 @@ function renderChecklist() {
     });
   }
 
-  verdictSection.innerHTML =
-    '<div class="progress-ring">' +
-      '<svg><circle class="bg" cx="55" cy="55" r="48"/>' +
-      '<circle class="fg" cx="55" cy="55" r="48" style="stroke-dasharray:301.6;stroke-dashoffset:' + (301.6 * (1 - currentAnalysis.passPct / 100)) + ';stroke:var(--' + sClass + ');"/></svg>' +
-      '<div class="pct" style="color:var(--' + sClass + ')">' + Math.round(currentAnalysis.passPct) + '%</div>' +
-    '</div>' +
-    '<div class="verdict-info">' +
-      '<div class="verdict-badge ' + sClass + '">' + currentAnalysis.status + '</div>' +
-      '<div class="verdict-notes">Passed ' + passedScoring + ' of ' + scoringChecks.length + ' scoring filters.' + failedHTML + hmcDisplay + securityHTML + entryHTML + attentionHTML + checklistHTML + qecHTML + notesDisplay + '</div>' +
+  /* ── Pre-Trade Verdict (from OVERALL TIER) ── */
+  var _pvOT = window._tecOverallTier || '—';
+  var _pvMap = {
+    'A': { action:'TRADE',       color:'#00ffcc', detail:'Tier A — Strong entry candidate. Full position with defined stop-loss and partials at 2× / 3×.' },
+    'B': { action:'TRADE SMALL', color:'#00e676', detail:'Tier B — Viable entry with manageable risk. Reduce size vs. a Tier A setup and define your stop.' },
+    'C': { action:'SPECULATIVE', color:'#ffeb3b', detail:'Tier C — Mixed signals across briefings. Size down significantly or wait for cleaner alignment.' },
+    'D': { action:'SKIP',        color:'#ff9800', detail:'Tier D — High risk across multiple briefings. Watchlist only — do not enter.' },
+    'F': { action:'SKIP',        color:'#ff4757', detail:'Tier F — Critical failures across briefings. Do not trade this setup.' }
+  };
+  var _pvV = _pvMap[_pvOT] || { action:'AWAITING', color:'var(--text-muted)', detail:'Run a full analysis to generate the Pre-Trade Verdict.' };
+  var preVerdictHTML =
+    '<div style="margin-top:14px;padding:12px 14px;background:rgba(0,0,0,0.3);border-radius:8px;border-left:4px solid ' + _pvV.color + ';">' +
+      '<div style="font-size:0.60rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:5px;"><i class="fa-solid fa-gavel" style="margin-right:5px;"></i>Pre-Trade Verdict</div>' +
+      '<div style="font-size:1.1rem;font-weight:900;color:' + _pvV.color + ';font-family:\'Orbitron\',sans-serif;letter-spacing:1px;margin-bottom:4px;">' + _pvV.action + '</div>' +
+      '<div style="font-size:0.70rem;color:var(--text-secondary);line-height:1.5;">' + _pvV.detail + '</div>' +
     '</div>';
+
+  /* ── Personal Filter Analysis (collapsed by default) ── */
+  var pfaHTML =
+    '<div style="margin-top:10px;">' +
+      '<div onclick="window._pfToggle(this);" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:6px;border:1px solid rgba(255,255,255,0.08);user-select:none;">' +
+        '<div style="font-size:0.62rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.8px;display:flex;align-items:center;gap:6px;">' +
+          '<i class="fa-solid fa-filter" style="color:#60a5fa;"></i>Personal Filter Analysis' +
+          '<span style="font-size:0.58rem;font-weight:400;color:var(--text-muted);"> (' + passedScoring + '/' + scoringChecks.length + ' passed · ' + Math.round(currentAnalysis.passPct) + '% · ' + currentAnalysis.status + ')</span>' +
+        '</div>' +
+        '<span class="pf-arr" style="color:var(--text-muted);font-size:0.9rem;display:inline-block;transition:transform 0.2s;">›</span>' +
+      '</div>' +
+      '<div style="display:none;padding:14px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.08);border-top:none;border-radius:0 0 6px 6px;">' +
+        '<div style="display:flex;align-items:center;gap:20px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:10px;">' +
+          '<div class="progress-ring">' +
+            '<svg><circle class="bg" cx="55" cy="55" r="48"/>' +
+            '<circle class="fg" cx="55" cy="55" r="48" style="stroke-dasharray:301.6;stroke-dashoffset:' + (301.6 * (1 - currentAnalysis.passPct / 100)) + ';stroke:var(--' + sClass + ');"/></svg>' +
+            '<div class="pct" style="color:var(--' + sClass + ')">' + Math.round(currentAnalysis.passPct) + '%</div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:0.60rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:5px;">Personal Filter Score</div>' +
+            '<div class="verdict-badge ' + sClass + '" style="display:inline-block;">' + currentAnalysis.status + '</div>' +
+            '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:6px;">Passed ' + passedScoring + ' of ' + scoringChecks.length + ' personal filter criteria.</div>' +
+          '</div>' +
+        '</div>' +
+        failedHTML + hmcDisplay + notesDisplay +
+      '</div>' +
+    '</div>';
+
+  verdictSection.innerHTML = checklistHTML + securityHTML + entryHTML + attentionHTML + preVerdictHTML + pfaHTML + qecHTML;
+
+  /* ── Personal Filter Checklist toggle header ── */
+  var pfcH = el('pfcHeader');
+  var pfcB = el('pfcBody');
+  if (pfcH && pfcB) {
+    pfcH.style.cssText = 'display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid rgba(255,255,255,0.07);user-select:none;margin-top:4px;';
+    pfcH.innerHTML =
+      '<div style="font-size:0.62rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.8px;display:flex;align-items:center;gap:6px;">' +
+        '<i class="fa-solid fa-clipboard-check" style="color:#60a5fa;"></i>Personal Filter Checklist' +
+        '<span style="font-size:0.58rem;font-weight:400;color:var(--text-muted);"> (' + passedScoring + '/' + scoringChecks.length + ' passed)</span>' +
+      '</div>' +
+      '<span class="pfc-arr" style="color:var(--text-muted);font-size:0.9rem;display:inline-block;transition:transform 0.2s;">›</span>';
+    pfcH.onclick = function() {
+      var isOpen = pfcB.style.display !== 'none';
+      pfcB.style.display = isOpen ? 'none' : 'block';
+      var arr = pfcH.querySelector('.pfc-arr');
+      if (arr) arr.style.transform = isOpen ? '' : 'rotate(90deg)';
+    };
+  }
 }
 
 function renderTable() {
@@ -8115,6 +8181,16 @@ function removeCoin(idx) {
   coins.splice(idx, 1);
   renderTable();
 }
+
+/* ── Collapsible toggle for Personal Filter sections ── */
+window._pfToggle = function(el) {
+  var body = el.nextElementSibling;
+  if (!body) return;
+  var isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  var arr = el.querySelector('.pf-arr');
+  if (arr) arr.style.transform = isOpen ? '' : 'rotate(90deg)';
+};
 
 function showToast(msg, type) {
   var t = document.createElement('div');
@@ -8659,13 +8735,16 @@ el('exportTxtBtn').addEventListener('click', function() {
   var num  = function(v) { return (v === undefined || v === null || isNaN(v)) ? 'N/A' : String(v); };
   var str  = function(v) { return (v === undefined || v === null || v === '') ? 'N/A' : String(v); };
 
-  /* ── Pre-Trade Verdict ── */
-  var failedCount = a.checks.filter(function(c) { return !c.info && !c.pass; }).length;
-  var preVerdict = a.status === 'SAFE'
-    ? 'TRADE IT — ' + Math.round(a.passPct) + '% score with a defined pattern and healthy structure. Enter with conviction, manage risk with a floor stop, and take partials at 2x and 3x.'
-    : a.status === 'CAUTION'
-    ? 'TRADE SMALL OR WAIT — ' + Math.round(a.passPct) + '% score with ' + failedCount + ' open flags. A reduced position is defensible if the pattern holds, but this is not a high-conviction full-size trade.'
-    : 'SKIP — ' + Math.round(a.passPct) + '% score falls below the safe threshold with ' + failedCount + ' failed criteria. The risk-to-reward is unfavorable at current levels. Better setups exist.';
+  /* ── Pre-Trade Verdict (from OVERALL TIER — primary decision engine) ── */
+  var _pvOT2 = window._tecOverallTier || '—';
+  var _pvRec = {
+    'A': 'TRADE — Tier A. Strong entry candidate. Full position with defined stop-loss and partials at 2× and 3×.',
+    'B': 'TRADE SMALL — Tier B. Viable entry with manageable risk. Reduce position size vs. a Tier A setup. Define your stop.',
+    'C': 'SPECULATIVE — Tier C. Mixed signals across briefings. Size down significantly or wait for cleaner alignment.',
+    'D': 'SKIP — Tier D. High risk across multiple briefings. Watchlist only — do not enter.',
+    'F': 'SKIP — Tier F. Critical failures across multiple briefings. Do not trade.'
+  };
+  var preVerdict = _pvRec[_pvOT2] || ('AWAITING — Run a full analysis to generate the Pre-Trade Verdict.');
 
   var scoringChecks = a.checks.filter(function(c) { return !c.info; });
   var passedScoring = scoringChecks.filter(function(c) { return c.pass; }).length;
@@ -8786,12 +8865,12 @@ el('exportTxtBtn').addEventListener('click', function() {
 
   /* ── Evaluation block ── */
   L.push(sep);
-  L.push(' * ENTRY CHECKER EVALUATION:');
+  L.push(' * PERSONAL FILTER ANALYSIS:');
   L.push('Score  : ' + Math.round(a.passPct) + '%');
   L.push('Verdict: ' + a.status);
-  L.push('Passed ' + passedScoring + ' of ' + scoringChecks.length + ' scoring filters.');
+  L.push('Passed ' + passedScoring + ' of ' + scoringChecks.length + ' personal filter criteria.');
   L.push(thin);
-  L.push('  FILTER CHECKLIST');
+  L.push('  PERSONAL FILTER CHECKLIST');
   L.push(thin);
   a.checks.forEach(function(c) {
     var tag = c.info ? '[INFO]' : (c.pass ? '[PASS]' : '[FAIL]');
@@ -9866,42 +9945,54 @@ function buildDevPatternScore(rugCount, warnCount, total, devDeployed, devBonded
    CROSS-REFERENCE: QEC vs Main App
    ═══════════════════════════════════════════════════════════════ */
 function buildCrossReferenceHTML() {
-  if (!window._qecResult || !currentAnalysis) return '';
-  var qvClass  = window._qecResult.vClass;      /* 'go' | 'caution' | 'abort' */
-  var mainStat = currentAnalysis.status;         /* 'SAFE' | 'CAUTION' | 'SKIP' */
-  var qecRisk  = qvClass === 'go' ? 0 : qvClass === 'caution' ? 1 : 2;
-  var mainRisk = mainStat === 'SAFE' ? 0 : mainStat === 'CAUTION' ? 1 : 2;
-  var diff     = Math.abs(qecRisk - mainRisk);
+  if (!window._qecResult) return '';
+  var qvClass   = window._qecResult.vClass;          /* 'go' | 'caution' | 'abort' */
+  var overallT  = window._tecOverallTier || '—';     /* OVERALL TIER: A/B/C/D/F */
+  var overallC  = window._tecOverallColor || 'var(--text-muted)';
+
+  /* Map QEC verdict to risk level 0/1/2 */
+  var qecRisk   = qvClass === 'go' ? 0 : qvClass === 'caution' ? 1 : 2;
+  /* Map OVERALL TIER to risk level 0/1/2 */
+  var tierRisk  = (overallT === 'A' || overallT === 'B') ? 0
+                : overallT === 'C' ? 1 : 2;
+  var diff      = Math.abs(qecRisk - tierRisk);
+
   var level, icon, heading, message;
-  if (diff === 0) {
+  if (overallT === '—') {
+    /* No overall tier yet — only QEC ran */
+    level   = 'mild';
+    icon    = 'ℹ️';
+    heading = 'OVERALL TIER NOT YET COMPUTED';
+    message = 'Run a full analysis to compute the Overall Tier before cross-referencing.';
+  } else if (diff === 0) {
     level   = 'aligned';
     icon    = '✅';
     heading = 'SIGNALS ALIGNED';
-    message = 'Both the Quick Entry Checker and the deep analysis agree: ' +
-      (qvClass === 'go' ? 'this looks like a valid entry. Proceed with your position-sizing rules.'
-      : qvClass === 'caution' ? 'there are flags worth watching. Size small or wait for cleaner data.'
+    message = 'Quick Entry Checker and Overall Tier agree: ' +
+      (qecRisk === 0 ? 'this looks like a valid entry. Proceed with your position-sizing rules.'
+      : qecRisk === 1 ? 'there are flags worth watching. Size small or wait for cleaner data.'
       : 'this trade does not meet criteria. Stand aside.');
   } else if (diff === 1) {
     level   = 'mild';
     icon    = '⚠️';
     heading = 'MILD CONFLICT';
-    if (qecRisk < mainRisk) {
-      message = 'Quick Entry Checker says <strong>' + window._qecResult.verdict + '</strong> but the deep analysis scores it as <strong>' + mainStat + '</strong>. The deeper scan flagged issues the QEC doesn\'t capture (security, on-chain metrics). Favour the deep analysis verdict.';
+    if (qecRisk < tierRisk) {
+      message = 'Quick Entry Checker says <strong>' + window._qecResult.verdict + '</strong> but Overall Tier is <strong>' + overallT + '</strong>. The broader briefing analysis flagged issues that QEC doesn\'t capture (security depth, structure, attention). Favour the Overall Tier.';
     } else {
-      message = 'Quick Entry Checker says <strong>' + window._qecResult.verdict + '</strong> but the deep analysis rates it <strong>' + mainStat + '</strong>. QEC may be catching holder/liquidity concerns the scoring misses. Investigate the QEC fail reasons.';
+      message = 'Quick Entry Checker says <strong>' + window._qecResult.verdict + '</strong> but Overall Tier is <strong>' + overallT + '</strong>. QEC may be catching holder or liquidity concerns not fully weighted in the briefings. Investigate the QEC fail reasons.';
     }
   } else {
     level   = 'conflict';
     icon    = '🚨';
     heading = 'CONFLICT — DO NOT ENTER';
-    if (qecRisk < mainRisk) {
-      message = 'QEC says <strong>' + window._qecResult.verdict + '</strong> but the deep analysis says <strong>SKIP</strong>. Critical filters have failed — do not let a bullish quick read override the full analysis. This is a trap.';
+    if (qecRisk < tierRisk) {
+      message = 'QEC says <strong>' + window._qecResult.verdict + '</strong> but Overall Tier is <strong>' + overallT + '</strong>. Multiple briefings show critical failures — do not let a bullish quick read override the full analysis. This is a trap.';
     } else {
-      message = 'QEC says <strong>' + window._qecResult.verdict + '</strong> but the deep analysis says <strong>SAFE</strong>. The quick check found serious holder/liquidity red flags the scoring may not fully weight. Trust the QEC abort and stand aside.';
+      message = 'QEC says <strong>' + window._qecResult.verdict + '</strong> but Overall Tier is <strong>' + overallT + '</strong>. QEC found serious red flags the briefing scoring may not fully weight. Trust the QEC abort and stand aside.';
     }
   }
-  var qecColour  = qvClass  === 'go' ? 'var(--safe)' : qvClass  === 'caution' ? 'var(--caution)' : 'var(--skip)';
-  var mainColour = mainRisk === 0    ? 'var(--safe)' : mainRisk === 1          ? 'var(--caution)' : 'var(--skip)';
+
+  var qecColour = qvClass === 'go' ? 'var(--safe)' : qvClass === 'caution' ? 'var(--caution)' : 'var(--skip)';
   return '<div class="xref-section xref-' + level + '">' +
     '<div class="xref-lbl xref-' + level + '"><i class="fa-solid fa-code-compare"></i>' + icon + ' Cross-Reference: ' + heading + '</div>' +
     '<div class="xref-compare">' +
@@ -9911,8 +10002,8 @@ function buildCrossReferenceHTML() {
       '</div>' +
       '<div class="xref-vs">VS</div>' +
       '<div class="xref-box">' +
-        '<div class="xref-box-lbl">Deep Analysis</div>' +
-        '<div class="xref-box-val" style="color:' + mainColour + ';">' + mainStat + '</div>' +
+        '<div class="xref-box-lbl">Overall Tier</div>' +
+        '<div class="xref-box-val" style="color:' + overallC + ';">' + overallT + '</div>' +
       '</div>' +
     '</div>' +
     '<div class="xref-msg">' + message + '</div>' +
@@ -10001,6 +10092,9 @@ function wlBuildEntry(existingId, existingDateAdded) {
     dateAdded:        existingDateAdded || Date.now(),
     mcAtAdd:          (!isNaN(d.marketCap) && d.marketCap > 0) ? d.marketCap : null,
     lastAnalysisTime: Date.now(),
+    overallTier:      window._tecOverallTier  || '—',
+    overallColor:     window._tecOverallColor || 'var(--text-muted)',
+    overallRec:       window._tecOverallRec   || '—',
     confidenceTier:   sa ? (sa.confidenceTier  || '—') : '—',
     runnerPotential:  sa ? (sa.runnerPotential  || '—') : '—',
     entryVerdict:     currentAnalysis.status || '—',
@@ -10028,6 +10122,9 @@ function wlSyncEntry(id) {
     mcAtAdd:          orig.mcAtAdd !== undefined ? orig.mcAtAdd : null,
     lastAnalysisTime: Date.now(),
     mcAtRefresh:      (!isNaN(d.marketCap) && d.marketCap > 0) ? d.marketCap : null,
+    overallTier:      window._tecOverallTier  || orig.overallTier  || '—',
+    overallColor:     window._tecOverallColor || orig.overallColor || 'var(--text-muted)',
+    overallRec:       window._tecOverallRec   || orig.overallRec   || '—',
     confidenceTier:   sa ? (sa.confidenceTier || '—') : orig.confidenceTier,
     runnerPotential:  sa ? (sa.runnerPotential || '—') : orig.runnerPotential,
     entryVerdict:     currentAnalysis.status || orig.entryVerdict,
@@ -10091,9 +10188,10 @@ function wlRender() {
         '<span class="wl-verdict ' + vClass + '">' + (entry.entryVerdict||'—') + '</span>' +
       '</div>' +
       '<div class="wl-scores">' +
-        '<div class="wl-chip"><span class="wl-chip-label">Pass</span><span class="wl-chip-val">' + (entry.passPct !== undefined ? entry.passPct + '%' : '—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">Str</span><span class="wl-chip-val" style="color:' + tierColor + ';">' + (entry.confidenceTier||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Tier</span><span class="wl-chip-val" style="color:' + (entry.overallColor||'var(--text-muted)') + ';font-size:0.82rem;font-weight:900;">' + (entry.overallTier||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">PF</span><span class="wl-chip-val">' + (entry.passPct !== undefined ? entry.passPct + '%' : '—') + '</span></div>' +
         '<div class="wl-chip"><span class="wl-chip-label">Sec</span><span class="wl-chip-val" style="color:' + secTierColor + ';">' + (entry.secTier||'—') + '</span></div>' +
+        '<div class="wl-chip"><span class="wl-chip-label">Str</span><span class="wl-chip-val" style="color:' + tierColor + ';">' + (entry.confidenceTier||'—') + '</span></div>' +
         '<div class="wl-chip"><span class="wl-chip-label">Att</span><span class="wl-chip-val" style="color:' + attTierColor + ';">' + (entry.attTier||'—') + '</span></div>' +
         '<div class="wl-chip"><span class="wl-chip-label">Runner</span><span class="wl-chip-val" style="color:' + runColor + ';">' + (entry.runnerPotential||'—') + '</span></div>' +
       '</div>' +

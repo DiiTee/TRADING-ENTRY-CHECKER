@@ -1,0 +1,207 @@
+PERSONAL FILTER + OVERALL TIER REFACTOR
+
+PROBLEM:
+
+The app currently has two competing decision systems:
+
+1. Old Filter Checklist System
+2. Recommended Entry Checklist (OVERALL TIER)
+
+These systems frequently contradict each other.
+
+Example:
+
+Filter Checklist:
+FAIL
+
+OVERALL TIER:
+A
+
+This creates confusion because the user receives two different answers to the same question:
+
+"Should I take this trade?"
+
+--------------------------------------------------
+
+OBJECTIVE:
+
+Keep the Old Filter Checklist system. Rename it: Personal Filter.
+It's a personal trading criteria preference reminder. 
+
+DO NOT REMOVE IT.
+
+However, reposition it as a PERSONAL TRADING PREFERENCE TOOL rather than a primary decision engine.
+
+OVERALL TIER must become the app's primary source of truth.
+
+--------------------------------------------------
+
+NEW RESPONSIBILITIES
+
+OVERALL TIER answers:
+
+"How objectively good is this setup?"
+
+Personal Filter answers:
+
+"Does this match MY personal trading rules?"
+
+These are not the same thing.
+
+--------------------------------------------------
+
+AUTHORITY HIERARCHY
+
+1. OVERALL TIER (Highest Authority)
+
+Primary decision engine.
+
+Used for:
+
+- Watchlist ranking
+- Main recommendation
+- Cross-Reference comparisons
+- Deep Analysis headline verdict
+- Pre-Trade Verdict generation
+
+--------------------------------------------------
+
+2. Personal Filter Checklist
+
+Answers:
+
+"Does this fit my preferred trading criteria?"
+
+Used as a discipline reminder only.
+
+Should NOT override OVERALL TIER.
+
+--------------------------------------------------
+
+UI CHANGES
+
+Move Recommended Entry Checklist to the TOP of all briefings.
+
+New order:
+
+1. Recommended Entry Checklist
+2. Security Briefing
+3. Structure Briefing
+4. Attention Briefing
+5. Pre-Trade Verdict
+6. Personal Filter Checklist (collapsed by default)
+7. Personal Filter Results / Analysis (collapsed by default)
+8. QEC preview & Cross-Reference
+
+--------------------------------------------------
+
+RENAMES
+
+Rename:
+
+"Filter Checklist"
+
+TO:
+
+"Personal Filter Checklist"
+
+Rename:
+
+"Filter Checklist Results"
+
+TO EITHER:
+
+"Personal Filter Analysis"
+
+
+--------------------------------------------------
+
+COLLAPSIBLE BEHAVIOR
+
+Personal Filter Checklist:
+- Collapsed by default
+
+Personal Filter Analysis:
+- Collapsed by default
+
+These sections should not visually compete with the main recommendation engine.
+
+--------------------------------------------------
+
+WATCHLIST CHANGES
+
+Change Watchlist to put the rankings in this order:
+
+First:
+OVERALL TIER (to be written as TIER)
+
+Second:
+Personal Filter (abbreviate)
+
+The Others: SEC, STR, ATT, RUNNER
+
+--------------------------------------------------
+
+PRE-TRADE VERDICT CHANGES
+
+Generate verdict primarily from OVERALL TIER.
+
+Suggested mapping:
+
+S = TRADE
+A = TRADE
+B = TRADE SMALL
+C = SPECULATIVE
+D = SKIP
+
+--------------------------------------------------
+
+CROSS-REFERENCE / DEEP ANALYSIS CHANGES
+
+Replace legacy filter-driven comparisons.
+
+Compare:
+
+Quick Entry Checker Verdict
+
+VS
+
+OVERALL TIER
+
+Examples:
+
+QEC = GO
+OVERALL TIER = A
+
+Aligned
+
+or
+
+QEC = GO
+OVERALL TIER = D
+
+Conflict Detected
+
+This provides more meaningful analysis than comparing against personal preferences.
+
+--------------------------------------------------
+
+IMPORTANT RULE
+
+Personal Filter failures should NOT automatically downgrade OVERALL TIER.
+
+The filter is purely informational and discipline-focused, not predictive and has no weight on Overall Tier.
+
+--------------------------------------------------
+
+EXPECTED RESULT
+
+The app should have one clear decision hierarchy:
+
+OVERALL TIER
+→ Primary recommendation
+
+Personal Filter
+→ User preference reminder
+
+This removes contradictory signals while preserving the value of the original Personal Filter system.
