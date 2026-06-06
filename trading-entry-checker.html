@@ -1175,6 +1175,15 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
           <label class="settings-label">RugCheck API Key <a href="https://rugcheck.xyz" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get free key</a></label>
           <input class="settings-input" type="password" id="sRugCheckKey" placeholder="Paste RugCheck API key here" autocomplete="off">
         </div>
+        <div class="form-group" style="grid-column:1/-1;"><div style="height:1px;background:rgba(0,212,255,0.12);margin:6px 0;"></div><div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;"><i class="fa-solid fa-satellite-dish" style="margin-right:5px;"></i>Social Intelligence — Provider Keys</div><div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:8px;line-height:1.5;">Used to auto-fetch X/Twitter data for the Attention Briefing. TwitterAPI.io is the primary provider; Apify is the fallback. Reddit is fetched without a key. Telegram requires manual entry.</div></div>
+        <div class="form-group">
+          <label class="settings-label">TwitterAPI.io Key <a href="https://twitterapi.io" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get key</a></label>
+          <input class="settings-input" type="password" id="sTwitterAPIKey" placeholder="Paste TwitterAPI.io key" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="settings-label">Apify Token <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(fallback)</span> <a href="https://apify.com" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get token</a></label>
+          <input class="settings-input" type="password" id="sApifyKey" placeholder="Paste Apify API token" autocomplete="off">
+        </div>
       </div>
 
       <div class="settings-section-label" style="margin-top:14px;">Flagged Wallets <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(known ruggers, snipers &amp; cabal — auto-highlighted in QEC holder scans)</span></div>
@@ -1423,10 +1432,15 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 
         <!-- ── Social Data Inputs (full-width collapsible panel) ── -->
         <div class="form-group" style="grid-column:1/-1;margin-top:4px;">
-          <div onclick="toggleSocialDataPanel()" style="cursor:pointer;padding:8px 12px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.18);border-radius:5px;display:flex;align-items:center;justify-content:space-between;user-select:none;">
-            <span style="font-size:0.68rem;font-weight:700;color:var(--accent-cyan);letter-spacing:1px;text-transform:uppercase;"><i class="fa-solid fa-satellite-dish" style="margin-right:6px;"></i>Social Data Inputs <span style="font-size:0.58rem;color:var(--text-muted);font-weight:400;text-transform:none;"> — optional · enhances Attention Briefing</span></span>
-            <span id="socialDataChevron" style="color:var(--accent-cyan);font-size:0.7rem;transition:transform 0.2s;">▼</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <div onclick="toggleSocialDataPanel()" style="cursor:pointer;flex:1;min-width:200px;padding:8px 12px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.18);border-radius:5px;display:flex;align-items:center;justify-content:space-between;user-select:none;">
+              <span style="font-size:0.68rem;font-weight:700;color:var(--accent-cyan);letter-spacing:1px;text-transform:uppercase;"><i class="fa-solid fa-satellite-dish" style="margin-right:6px;"></i>Social Data Inputs <span style="font-size:0.58rem;color:var(--text-muted);font-weight:400;text-transform:none;"> — optional · enhances Attention Briefing</span></span>
+              <span id="socialDataChevron" style="color:var(--accent-cyan);font-size:0.7rem;transition:transform 0.2s;">▼</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="socialScanBtn" onclick="runSocialScan(false)" title="Auto-fetch X &amp; Reddit data (Quick Scan: 15 posts each). Requires TwitterAPI.io or Apify key in Settings."><i class="fa-solid fa-satellite-dish"></i> Scan Social</button>
+            <button class="btn btn-secondary btn-sm" id="socialDeepScanBtn" onclick="runSocialScan(true)" title="Deep Scan: 50 posts each — higher confidence, more API usage"><i class="fa-solid fa-binoculars"></i> Deep Scan</button>
           </div>
+          <div id="socialScanStatus" style="display:none;margin-top:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid var(--accent-cyan);font-size:0.60rem;color:var(--text-muted);line-height:1.6;"></div>
           <div id="socialDataPanel" style="display:none;margin-top:6px;padding:12px;background:rgba(0,0,0,0.15);border-radius:5px;border:1px solid rgba(255,255,255,0.06);">
             <div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">Enter mention counts from your monitoring tools (Telegram bots, X search, Reddit, etc.). All fields are optional. Any data entered will activate Social Mode and enhance the Attention Briefing with real signals.</div>
             <div style="font-size:0.62rem;font-weight:700;color:#1DA1F2;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(29,161,242,0.2);"><i class="fa-brands fa-x-twitter" style="margin-right:5px;"></i>X / Twitter</div>
@@ -2022,9 +2036,11 @@ function applySettingsToUI() {
   el('sWProxStr').value = settings.wProxStr;
   el('sWProxAtt').value = settings.wProxAtt;
   try {
-    el('sHeliusKey').value   = localStorage.getItem('tec_helius_key')    || '';
-    el('sDefadeKey').value   = localStorage.getItem('tec_defade_key')    || '';
-    el('sRugCheckKey').value = localStorage.getItem('tec_rugcheck_key')  || '';
+    el('sHeliusKey').value    = localStorage.getItem('tec_helius_key')       || '';
+    el('sDefadeKey').value    = localStorage.getItem('tec_defade_key')       || '';
+    el('sRugCheckKey').value  = localStorage.getItem('tec_rugcheck_key')     || '';
+    el('sTwitterAPIKey').value= localStorage.getItem('tec_twitter_api_key')  || '';
+    el('sApifyKey').value     = localStorage.getItem('tec_apify_key')        || '';
   } catch(e) {}
 }
 
@@ -2061,9 +2077,15 @@ function saveSettings() {
     var hk = el('sHeliusKey').value.trim();
     var dk = el('sDefadeKey').value.trim();
     var rk = el('sRugCheckKey').value.trim();
-    if (hk) localStorage.setItem('tec_helius_key',   hk); else localStorage.removeItem('tec_helius_key');
-    if (dk) localStorage.setItem('tec_defade_key',   dk); else localStorage.removeItem('tec_defade_key');
-    if (rk) localStorage.setItem('tec_rugcheck_key', rk); else localStorage.removeItem('tec_rugcheck_key');
+    if (hk) localStorage.setItem('tec_helius_key',      hk); else localStorage.removeItem('tec_helius_key');
+    if (dk) localStorage.setItem('tec_defade_key',      dk); else localStorage.removeItem('tec_defade_key');
+    if (rk) localStorage.setItem('tec_rugcheck_key',    rk); else localStorage.removeItem('tec_rugcheck_key');
+    try {
+      var twk = el('sTwitterAPIKey').value.trim();
+      var apk = el('sApifyKey').value.trim();
+      if (twk) localStorage.setItem('tec_twitter_api_key', twk); else localStorage.removeItem('tec_twitter_api_key');
+      if (apk) localStorage.setItem('tec_apify_key',       apk); else localStorage.removeItem('tec_apify_key');
+    } catch(e) {}
   } catch(e) {}
   showToast('Settings saved', 'success');
 }
@@ -7187,6 +7209,75 @@ function computeAttentionBriefing(d, analysis) {
   }
   window._tecAttentionMode = attMode;
 
+  /* ── Raw Social Data (from auto-fetch) ── */
+  var _rawX  = (window._tecSocialRaw && window._tecSocialRaw.x)     ? window._tecSocialRaw.x     : null;
+  var _rawRd = (window._tecSocialRaw && window._tecSocialRaw.reddit) ? window._tecSocialRaw.reddit : null;
+
+  /* ── Mention Density — how tightly clustered in time ── */
+  var mentionDensityLabel = null, mentionDensityColor = 'var(--text-muted)', mentionDensityRatio = 0;
+  var _allTs = [];
+  if (_rawX  && _rawX.timestamps)  _allTs = _allTs.concat(_rawX.timestamps);
+  if (_rawRd && _rawRd.timestamps) _allTs = _allTs.concat(_rawRd.timestamps);
+  if (_allTs.length >= 1) {
+    if (_allTs.length === 1) {
+      mentionDensityLabel = 'VERY HIGH'; mentionDensityColor = '#00ffcc';
+    } else {
+      var _tMax = Math.max.apply(null, _allTs);
+      var _tMin = Math.min.apply(null, _allTs);
+      var _tSpanMin = Math.max((_tMax - _tMin) / 60000, 1);
+      mentionDensityRatio = _allTs.length / _tSpanMin;
+      if      (mentionDensityRatio >= 2)    { mentionDensityLabel = 'VERY HIGH'; mentionDensityColor = '#00ffcc'; }
+      else if (mentionDensityRatio >= 0.5)  { mentionDensityLabel = 'HIGH';      mentionDensityColor = '#00e676'; }
+      else if (mentionDensityRatio >= 0.1)  { mentionDensityLabel = 'MODERATE';  mentionDensityColor = '#ffeb3b'; }
+      else if (mentionDensityRatio >= 0.02) { mentionDensityLabel = 'LOW';       mentionDensityColor = '#ff9800'; }
+      else                                  { mentionDensityLabel = 'VERY LOW';  mentionDensityColor = '#ff4757'; }
+    }
+  }
+
+  /* ── Author Concentration Ratio — detect manipulation ── */
+  var authorConcentrationLabel = null, authorConcentrationRatio = 0;
+  var authorConcentrationColor = 'var(--text-muted)', authorConcentrationPenalty = 0;
+  var _allAuthors = {};
+  if (_rawX  && _rawX.authorMap)  Object.keys(_rawX.authorMap).forEach(function(a) { _allAuthors[a] = (_allAuthors[a] || 0) + _rawX.authorMap[a]; });
+  if (_rawRd && _rawRd.authorMap) Object.keys(_rawRd.authorMap).forEach(function(a) { _allAuthors[a] = (_allAuthors[a] || 0) + _rawRd.authorMap[a]; });
+  var _authorKeys = Object.keys(_allAuthors);
+  var _totAuthorMentions = _authorKeys.reduce(function(s, k) { return s + _allAuthors[k]; }, 0);
+  if (_totAuthorMentions > 0) {
+    var _maxAuthorCount = Math.max.apply(null, _authorKeys.map(function(k) { return _allAuthors[k]; }));
+    authorConcentrationRatio = _maxAuthorCount / _totAuthorMentions;
+    if      (authorConcentrationRatio >= 0.55) { authorConcentrationLabel = 'EXTREME CONCENTRATION'; authorConcentrationColor = '#ff4757'; authorConcentrationPenalty = 20; }
+    else if (authorConcentrationRatio >= 0.35) { authorConcentrationLabel = 'HIGH CONCENTRATION';    authorConcentrationColor = '#ff9800'; authorConcentrationPenalty = 10; }
+    else if (authorConcentrationRatio >= 0.20) { authorConcentrationLabel = 'MODERATE CONCENTRATION';authorConcentrationColor = '#ffeb3b'; authorConcentrationPenalty = 4;  }
+    else                                       { authorConcentrationLabel = 'LOW CONCENTRATION';     authorConcentrationColor = '#00e676'; authorConcentrationPenalty = 0;  }
+  }
+
+  /* ── Time-Weighted Confidence — replaces simple mode-based confidence ── */
+  var coinAgeMin = !isNaN(parseFloat(d.launchAge)) ? parseFloat(d.launchAge) : null;
+  var twConfidence = attConfidence;
+  var twConfidenceReason = null;
+  if (anySocial) {
+    var _densityHigh = mentionDensityLabel === 'VERY HIGH' || mentionDensityLabel === 'HIGH';
+    /* Ignition detection: young coin + high density */
+    if (coinAgeMin !== null && coinAgeMin < 60 && _densityHigh) {
+      twConfidence = 'HIGH';
+      twConfidenceReason = 'IGNITION — Token <1h old · ' + (mentionDensityLabel || '') + ' density';
+    } else if (coinAgeMin !== null && coinAgeMin < 720 && _densityHigh) {
+      if (twConfidence !== 'HIGH') twConfidence = 'MEDIUM';
+      twConfidenceReason = 'EARLY BURST — Token <12h · ' + (mentionDensityLabel || '') + ' density';
+    }
+    /* Cross-platform bonus */
+    if (platformsActive >= 3 && twConfidence !== 'HIGH') {
+      twConfidence = twConfidence === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
+      twConfidenceReason = (twConfidenceReason ? twConfidenceReason + ' · ' : '') + 'Cross-platform (3+ sources)';
+    }
+    /* Author concentration penalty */
+    if (authorConcentrationLabel === 'EXTREME CONCENTRATION') {
+      twConfidence = twConfidence === 'HIGH' ? 'MEDIUM' : 'LOW';
+      twConfidenceReason = (twConfidenceReason ? twConfidenceReason + ' · ' : '') + '⚠ Extreme author concentration';
+    }
+    attConfidence = twConfidence;
+  }
+
   /* ── Weighted Mention Aggregation ──
      X ticker: 0.7 | X CA: 1.0 (avg 0.85) | Telegram: 1.2 | Reddit: 0.5 */
   var wMentions = {
@@ -7256,7 +7347,7 @@ function computeAttentionBriefing(d, analysis) {
     var _uRatio   = _totUniq1h > 0 ? _totUniq1h / _totMent1h : 0.3;
     var _divBonus = platformsActive * 12;
     var _engBonus = (socX.rt > 0 || socTg.fwd > 0) ? 10 : 0;
-    attQualScore  = Math.min(100, Math.round(_uRatio * 65 + _divBonus + _engBonus));
+    attQualScore  = Math.min(100, Math.max(0, Math.round(_uRatio * 65 + _divBonus + _engBonus - authorConcentrationPenalty)));
     if      (attQualScore >= 65) { attQualLabel = 'HIGH';   attQualColor = '#00e676'; }
     else if (attQualScore >= 35) { attQualLabel = 'MEDIUM'; attQualColor = '#ffeb3b'; }
     else                          { attQualLabel = 'LOW';    attQualColor = '#ff4757'; }
@@ -7280,6 +7371,9 @@ function computeAttentionBriefing(d, analysis) {
   if (anySocial) {
     var _vc  = socialVelPct  !== null ? Math.min(100,Math.max(0, 50 + socialVelPct  * 0.22)) : 50;
     var _ac  = socialAccPct  !== null ? Math.min(100,Math.max(0, 50 + socialAccPct  * 0.15)) : 50;
+    /* Mention density modifies velocity component */
+    var _densityBoost = mentionDensityLabel === 'VERY HIGH' ? 15 : mentionDensityLabel === 'HIGH' ? 8 : mentionDensityLabel === 'MODERATE' ? 0 : mentionDensityLabel === 'LOW' ? -5 : mentionDensityLabel === 'VERY LOW' ? -10 : 0;
+    _vc = Math.min(100, Math.max(0, _vc + _densityBoost));
     var _pc  = socialPersLabel === 'PERSISTENT' ? 90 : socialPersLabel === 'FLASH HYPE' ? 55
              : socialPersLabel === 'FADING' ? 25 : socialPersLabel === 'STEADY' ? 65 : 50;
     var _qc  = attQualScore  > 0 ? attQualScore  : 50;
@@ -7338,7 +7432,10 @@ function computeAttentionBriefing(d, analysis) {
     srcExpLabel, srcExpColor,
     platformsActive,
     totMentions1h: _totMent1h, totUnique1h: _totUniq1hSrc,
-    wMentions, socX, socTg, socRd
+    wMentions, socX, socTg, socRd,
+    mentionDensityLabel, mentionDensityColor, mentionDensityRatio,
+    authorConcentrationLabel, authorConcentrationRatio, authorConcentrationColor,
+    twConfidence, twConfidenceReason, coinAgeMin
   };
 }
 
@@ -7356,7 +7453,7 @@ function buildAttentionBriefingHTML(d, analysis) {
   var _modeColor = ab.attMode === 'FULL SOCIAL' ? '#00ffcc' : ab.attMode === 'PARTIAL SOCIAL' ? '#ffeb3b' : '#9fa8da';
   var _modeIcon  = ab.attMode === 'FULL SOCIAL' ? 'fa-satellite-dish' : ab.attMode === 'PARTIAL SOCIAL' ? 'fa-signal' : 'fa-chart-line';
   var _confColor = ab.attConfidence === 'HIGH' ? '#00e676' : ab.attConfidence === 'MEDIUM' ? '#ffeb3b' : '#9fa8da';
-  nt += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:4px;">';
+  nt += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:' + (ab.twConfidenceReason ? '4px' : '8px') + ';flex-wrap:wrap;gap:4px;">';
   nt += '<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(0,0,0,0.25);border-radius:20px;border:1px solid '+_modeColor+'33;">';
   nt += '<i class="fa-solid '+_modeIcon+'" style="font-size:0.6rem;color:'+_modeColor+';"></i>';
   nt += '<span style="font-size:0.62rem;font-weight:700;color:'+_modeColor+';letter-spacing:0.8px;">'+ab.attMode+'</span>';
@@ -7366,6 +7463,9 @@ function buildAttentionBriefingHTML(d, analysis) {
   nt += '<span style="font-size:0.62rem;font-weight:700;color:'+_confColor+';">'+ab.attConfidence+'</span>';
   nt += '</div>';
   nt += '</div>';
+  if (ab.twConfidenceReason) {
+    nt += '<div style="font-size:0.57rem;color:'+_confColor+';padding:3px 8px;margin-bottom:8px;background:rgba(0,0,0,0.15);border-radius:3px;border-left:2px solid '+_confColor+'55;">⚡ '+ab.twConfidenceReason+'</div>';
+  }
 
   /* ── Tier header ── */
   nt += '<div style="padding:12px 14px;background:rgba(0,0,0,0.25);border-radius:6px;margin-bottom:10px;">';
@@ -7439,6 +7539,18 @@ function buildAttentionBriefingHTML(d, analysis) {
     }
     nt += '</div>';
 
+    /* Mention Density (from auto-fetch) */
+    if (ab.mentionDensityLabel) {
+      nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.mentionDensityColor+';margin-bottom:6px;">';
+      nt += '<div style="display:flex;align-items:center;justify-content:space-between;">';
+      nt += '<div><div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">MENTION DENSITY</div>';
+      nt += '<strong style="font-size:0.82rem;color:'+ab.mentionDensityColor+';letter-spacing:1px;">'+ab.mentionDensityLabel+'</strong>';
+      if (ab.mentionDensityRatio > 0) nt += '<span style="font-size:0.57rem;color:rgba(255,255,255,0.3);margin-left:6px;">' + ab.mentionDensityRatio.toFixed(2) + ' mentions/min</span>';
+      nt += '</div>';
+      nt += '<div style="font-size:0.55rem;color:rgba(255,255,255,0.3);text-align:right;">Temporal clustering<br>of social activity</div>';
+      nt += '</div></div>';
+    }
+
     /* Persistence + Quality + Source Expansion */
     nt += '<div class="mob-grid-3">';
     if (ab.socialPersLabel) {
@@ -7463,6 +7575,22 @@ function buildAttentionBriefingHTML(d, analysis) {
       nt += '</div>';
     }
     nt += '</div>';
+
+    /* Author Concentration Ratio (from auto-fetch) */
+    if (ab.authorConcentrationLabel) {
+      var _acIcon = ab.authorConcentrationLabel === 'EXTREME CONCENTRATION' ? 'fa-triangle-exclamation' : ab.authorConcentrationLabel === 'HIGH CONCENTRATION' ? 'fa-circle-exclamation' : 'fa-circle-check';
+      nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.authorConcentrationColor+';margin-bottom:6px;">';
+      nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">AUTHOR CONCENTRATION</div>';
+      nt += '<div style="display:flex;align-items:center;gap:6px;">';
+      nt += '<i class="fa-solid '+_acIcon+'" style="font-size:0.65rem;color:'+ab.authorConcentrationColor+';"></i>';
+      nt += '<strong style="font-size:0.75rem;color:'+ab.authorConcentrationColor+';">'+ab.authorConcentrationLabel+'</strong>';
+      nt += '<span style="font-size:0.57rem;color:rgba(255,255,255,0.3);">('+Math.round(ab.authorConcentrationRatio*100)+'% from top author)</span>';
+      nt += '</div>';
+      if (ab.authorConcentrationLabel === 'EXTREME CONCENTRATION' || ab.authorConcentrationLabel === 'HIGH CONCENTRATION') {
+        nt += '<div style="font-size:0.56rem;color:rgba(255,100,100,0.6);margin-top:2px;">⚠ Potential coordinated activity — reduces attention quality &amp; confidence</div>';
+      }
+      nt += '</div>';
+    }
 
     /* Weighted Mention Time Windows */
     if (ab.wMentions && (ab.wMentions.h1 > 0 || ab.wMentions.h24 > 0)) {
@@ -7564,6 +7692,324 @@ function buildAttentionBriefingHTML(d, analysis) {
     '<div class="briefing-title"><i class="fa-solid fa-satellite-dish"></i> Attention Briefing</div>' +
     nt +
     '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOCIAL INTELLIGENCE ENGINE — Auto-Fetch Layer v2
+   Provider priority: TwitterAPI.io → Apify (X) | Reddit public API
+   Telegram: manual entry only (MTProto requires backend server)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function getSocialAPIKey(keyName) {
+  try { return localStorage.getItem(keyName) || ''; } catch(e) { return ''; }
+}
+
+/* ── Per-CA Scan Timestamp Storage (incremental re-scan) ── */
+var _socialScanTimestamps = {};
+var SOCIAL_SCAN_TS_KEY = 'tec_social_scan_ts';
+
+function loadSocialScanTimestamps() {
+  try { _socialScanTimestamps = JSON.parse(localStorage.getItem(SOCIAL_SCAN_TS_KEY) || '{}'); } catch(e) { _socialScanTimestamps = {}; }
+}
+
+function saveSocialScanTimestamp(ca) {
+  loadSocialScanTimestamps();
+  _socialScanTimestamps[ca] = Math.floor(Date.now() / 1000);
+  try { localStorage.setItem(SOCIAL_SCAN_TS_KEY, JSON.stringify(_socialScanTimestamps)); } catch(e) {}
+}
+
+function getLastSocialScanTimestamp(ca) {
+  loadSocialScanTimestamps();
+  return _socialScanTimestamps[ca] || null;
+}
+
+/* ── Build time-window mention buckets from raw timestamps ── */
+function bucketsFromTimestamps(timestamps) {
+  var now = Date.now();
+  var b = { m15: 0, m30: 0, h1: 0, h3: 0, h24: 0 };
+  timestamps.forEach(function(ts) {
+    var diff = now - ts;
+    if (diff <= 15 * 60000)         b.m15++;
+    if (diff <= 30 * 60000)         b.m30++;
+    if (diff <= 60 * 60000)         b.h1++;
+    if (diff <= 3 * 3600 * 1000)    b.h3++;
+    if (diff <= 24 * 3600 * 1000)   b.h24++;
+  });
+  return b;
+}
+
+/* ── X/Twitter Provider 1: TwitterAPI.io ── */
+async function fetchTwitterAPIio(queries, limit, sinceTs) {
+  var apiKey = getSocialAPIKey('tec_twitter_api_key');
+  if (!apiKey) return { ok: false, error: 'No TwitterAPI.io key in Settings', tweets: [] };
+
+  var priority = ['ca', 'ticker', 'name'];
+  for (var i = 0; i < priority.length; i++) {
+    var q = queries[priority[i]];
+    if (!q) continue;
+    var fullQuery = q;
+    if (sinceTs) fullQuery += ' since_time:' + sinceTs;
+    try {
+      var url = 'https://api.twitterapi.io/twitter/tweet/advanced_search?' + new URLSearchParams({ query: fullQuery, queryType: 'Latest' }).toString();
+      var resp = await Promise.race([
+        fetch(url, { headers: { 'X-API-Key': apiKey } }),
+        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 12000); })
+      ]);
+      if (resp.status === 401 || resp.status === 403) return { ok: false, error: 'TwitterAPI.io: Invalid key (HTTP ' + resp.status + ')', tweets: [] };
+      if (!resp.ok) continue;
+      var json = await resp.json();
+      var raw = Array.isArray(json.tweets) ? json.tweets : (Array.isArray(json.data) ? json.data : []);
+      if (raw.length === 0) continue;
+      raw = raw.slice(0, limit);
+      var tweets = raw.map(function(t) {
+        var ts = t.created_at ? new Date(t.created_at).getTime() : null;
+        var author = (t.author && (t.author.userName || t.author.screen_name)) || (t.user && t.user.screen_name) || '';
+        return { id: t.id || '', text: t.text || t.full_text || '', ts: ts, author: author.toLowerCase(), retweets: t.retweetCount || t.retweet_count || 0, likes: t.likeCount || t.favorite_count || 0 };
+      }).filter(function(t) { return t.ts !== null; });
+      return { ok: true, tweets: tweets, usedQuery: priority[i], provider: 'twitterapi.io' };
+    } catch(e) {
+      if (e.message === 'timeout') return { ok: false, error: 'TwitterAPI.io: Timed out', tweets: [] };
+    }
+  }
+  return { ok: true, tweets: [], usedQuery: null, provider: 'twitterapi.io', warning: 'No results' };
+}
+
+/* ── X/Twitter Provider 2: Apify Tweet Scraper ── */
+async function fetchApifyFallback(queries, limit) {
+  var token = getSocialAPIKey('tec_apify_key');
+  if (!token) return { ok: false, error: 'No Apify token in Settings', tweets: [] };
+
+  var priority = ['ca', 'ticker', 'name'];
+  for (var i = 0; i < priority.length; i++) {
+    var q = queries[priority[i]];
+    if (!q) continue;
+    try {
+      var url = 'https://api.apify.com/v2/acts/apidojo~tweet-scraper/run-sync-get-dataset-items?token=' + encodeURIComponent(token) + '&timeout=45';
+      var resp = await Promise.race([
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ searchTerms: [q], sort: 'Latest', maxItems: limit, includeReplies: false })
+        }),
+        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 50000); })
+      ]);
+      if (resp.status === 401) return { ok: false, error: 'Apify: Invalid token', tweets: [] };
+      if (!resp.ok) continue;
+      var arr = await resp.json();
+      if (!Array.isArray(arr) || arr.length === 0) continue;
+      var tweets = arr.slice(0, limit).map(function(t) {
+        var ts = t.created_at ? new Date(t.created_at).getTime() : (t.createdAt ? new Date(t.createdAt).getTime() : null);
+        var author = (t.author && t.author.userName) || (t.user && t.user.screen_name) || '';
+        return { id: t.id || '', text: t.full_text || t.text || '', ts: ts, author: author.toLowerCase(), retweets: t.retweet_count || t.retweetCount || 0, likes: t.favorite_count || t.likeCount || 0 };
+      }).filter(function(t) { return t.ts !== null; });
+      return { ok: true, tweets: tweets, usedQuery: priority[i], provider: 'apify' };
+    } catch(e) {
+      if (e.message === 'timeout') return { ok: false, error: 'Apify: Actor timed out (actor runs take up to ~45s)', tweets: [] };
+    }
+  }
+  return { ok: true, tweets: [], usedQuery: null, provider: 'apify', warning: 'No results' };
+}
+
+/* ── Reddit: Public search JSON API (no auth required) ── */
+async function fetchRedditData(queries, limit, sinceTs) {
+  var priority = ['ca', 'ticker', 'name'];
+  for (var i = 0; i < priority.length; i++) {
+    var q = queries[priority[i]];
+    if (!q) continue;
+    try {
+      var url = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(q) + '&sort=new&limit=' + limit + '&t=week';
+      var resp = await Promise.race([
+        fetch(url, { headers: { Accept: 'application/json' } }),
+        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 10000); })
+      ]);
+      if (!resp.ok) continue;
+      var json = await resp.json();
+      var children = (json.data && json.data.children) ? json.data.children : [];
+      if (children.length === 0) continue;
+      var posts = children.map(function(c) {
+        var dd = c.data;
+        return { id: dd.id || '', title: dd.title || dd.body || '', author: (dd.author || '').toLowerCase(), ts: dd.created_utc ? dd.created_utc * 1000 : null, score: dd.score || 0, subreddit: dd.subreddit || '' };
+      }).filter(function(p) {
+        if (!p.ts) return false;
+        if (sinceTs && p.ts <= sinceTs * 1000) return false;
+        return true;
+      });
+      if (posts.length > 0) return { ok: true, posts: posts, usedQuery: priority[i] };
+    } catch(e) { /* try next query */ }
+  }
+  return { ok: true, posts: [], usedQuery: null };
+}
+
+/* ── Derive raw metric objects from tweet/post arrays ── */
+function deriveRawMetrics(items, textKey) {
+  var timestamps = [], authorMap = {};
+  items.forEach(function(item) {
+    if (item.ts) timestamps.push(item.ts);
+    var a = item.author || '';
+    if (a) authorMap[a] = (authorMap[a] || 0) + 1;
+  });
+  return { timestamps: timestamps, authorMap: authorMap };
+}
+
+/* ── Populate form fields from auto-fetch results ── */
+function populateSocialFormFields(xResult, rdResult) {
+  function setF(id, val) { var e = el(id); if (e) e.value = (val || 0); }
+  var now = Date.now();
+
+  if (xResult && xResult.tweets && xResult.tweets.length > 0) {
+    var metrics = deriveRawMetrics(xResult.tweets);
+    var b = bucketsFromTimestamps(metrics.timestamps);
+    var uniq1h = new Set();
+    xResult.tweets.forEach(function(t) { if (t.ts && (now - t.ts) <= 3600000) uniq1h.add(t.author); });
+    var totalRt = xResult.tweets.reduce(function(s, t) { return s + (t.retweets || 0); }, 0);
+    setF('fSocXM15',  b.m15);
+    setF('fSocXM30',  b.m30);
+    setF('fSocXM1h',  b.h1);
+    setF('fSocXM3h',  b.h3);
+    setF('fSocXM24h', b.h24);
+    setF('fSocXUp1h', uniq1h.size);
+    setF('fSocXUp24h', Object.keys(metrics.authorMap).length);
+    setF('fSocXRt',   totalRt);
+    xResult.timestamps = metrics.timestamps;
+    xResult.authorMap  = metrics.authorMap;
+    xResult.buckets    = b;
+  }
+
+  if (rdResult && rdResult.posts && rdResult.posts.length > 0) {
+    var rdMetrics = deriveRawMetrics(rdResult.posts);
+    var rdB = bucketsFromTimestamps(rdMetrics.timestamps);
+    var rdUniq1h = new Set();
+    rdResult.posts.forEach(function(p) { if (p.ts && (now - p.ts) <= 3600000) rdUniq1h.add(p.author); });
+    setF('fSocRdM1h',  rdB.h1);
+    setF('fSocRdM24h', rdB.h24);
+    setF('fSocRdUp1h', rdUniq1h.size);
+    setF('fSocRdUp24h', Object.keys(rdMetrics.authorMap).length);
+    rdResult.timestamps = rdMetrics.timestamps;
+    rdResult.authorMap  = rdMetrics.authorMap;
+    rdResult.buckets    = rdB;
+  }
+}
+
+/* ── Scan status UI helpers ── */
+function socialScanSetStatus(html, borderColor) {
+  var s = el('socialScanStatus');
+  if (!s) return;
+  if (!html) { s.style.display = 'none'; return; }
+  s.style.display = '';
+  s.style.borderLeftColor = borderColor || 'var(--accent-cyan)';
+  s.innerHTML = html;
+}
+
+function socialScanSetBusy(busy) {
+  var scanBtn = el('socialScanBtn');
+  var deepBtn = el('socialDeepScanBtn');
+  if (scanBtn) {
+    scanBtn.disabled = busy;
+    scanBtn.innerHTML = busy ? '<i class="fa-solid fa-spinner fa-spin"></i> Scanning…' : '<i class="fa-solid fa-satellite-dish"></i> Scan Social';
+  }
+  if (deepBtn) deepBtn.disabled = busy;
+}
+
+/* ── Main Social Scan Orchestrator ── */
+async function runSocialScan(isDeep) {
+  var ca     = (el('fCA')   ? el('fCA').value.trim()   : '') || '';
+  var ticker = (el('fCoin') ? el('fCoin').value.trim() : '') || '';
+
+  /* Extract symbol */
+  var symMatch = ticker.match(/\$([A-Z]{2,10})/i);
+  var tickerSym = symMatch ? symMatch[1].toUpperCase() : (ticker.length >= 2 && ticker.length <= 10 ? ticker.toUpperCase() : null);
+  var nameQ = (ticker && ticker !== tickerSym && ticker.length > 2) ? ticker : null;
+
+  if (!ca && !tickerSym) {
+    socialScanSetStatus('<i class="fa-solid fa-triangle-exclamation" style="color:#ff9800;margin-right:5px;"></i>Enter a Contract Address or Coin Name first.', '#ff9800');
+    return;
+  }
+
+  var queries  = { ca: ca || null, ticker: tickerSym, name: nameQ };
+  var xLimit   = isDeep ? 50 : 15;
+  var rdLimit  = isDeep ? 25 : 10;
+  var sinceTs  = ca ? getLastSocialScanTimestamp(ca) : null;
+  var isIncremental = sinceTs !== null;
+
+  var twKey  = getSocialAPIKey('tec_twitter_api_key');
+  var apKey  = getSocialAPIKey('tec_apify_key');
+  var hasX   = !!(twKey || apKey);
+
+  socialScanSetBusy(true);
+  socialScanSetStatus('<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Scanning X/Twitter' + (isDeep ? ' (deep — 50 posts)' : '') + '…', 'var(--accent-cyan)');
+
+  /* Open social panel */
+  var panel = el('socialDataPanel');
+  if (panel && panel.style.display === 'none') toggleSocialDataPanel();
+
+  var xResult  = { ok: false, tweets: [], error: null, provider: null };
+  var rdResult = { ok: false, posts: [], error: null };
+  var errors   = [];
+
+  /* ── Fetch X/Twitter: primary → fallback ── */
+  if (hasX) {
+    if (twKey) {
+      xResult = await fetchTwitterAPIio(queries, xLimit, sinceTs);
+      if (!xResult.ok) {
+        errors.push('TwitterAPI.io: ' + (xResult.error || 'failed'));
+        if (apKey) {
+          socialScanSetStatus('<i class="fa-solid fa-arrow-right-arrow-left" style="margin-right:5px;color:#ff9800;"></i>Falling back to Apify…', '#ff9800');
+          xResult = await fetchApifyFallback(queries, xLimit);
+          if (!xResult.ok) errors.push('Apify: ' + (xResult.error || 'failed'));
+        }
+      }
+    } else {
+      xResult = await fetchApifyFallback(queries, xLimit);
+      if (!xResult.ok) errors.push('Apify: ' + (xResult.error || 'failed'));
+    }
+  } else {
+    errors.push('No X provider — add TwitterAPI.io or Apify key in Settings');
+  }
+
+  /* ── Fetch Reddit ── */
+  socialScanSetStatus('<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Scanning Reddit…', 'var(--accent-cyan)');
+  try {
+    rdResult = await fetchRedditData(queries, rdLimit, sinceTs);
+    rdResult.ok = true;
+  } catch(e) {
+    rdResult = { ok: false, posts: [], error: 'Reddit: ' + (e.message || 'failed') };
+    errors.push(rdResult.error);
+  }
+
+  /* ── Populate form fields & store raw ── */
+  populateSocialFormFields(xResult, rdResult);
+  window._tecSocialRaw = { x: xResult, reddit: rdResult, scanTs: Date.now(), isDeep: isDeep };
+
+  /* ── Store incremental timestamp ── */
+  var xCount  = (xResult.tweets || []).length;
+  var rdCount = (rdResult.posts  || []).length;
+  if (ca && (xCount > 0 || rdCount > 0)) saveSocialScanTimestamp(ca);
+
+  /* ── Build status message ── */
+  var parts = [];
+  if (xResult.ok && xCount > 0) {
+    parts.push('<span style="color:#1DA1F2;"><i class="fa-brands fa-x-twitter"></i> ' + xCount + ' posts via ' + (xResult.provider || 'X') + ' (searched: ' + (xResult.usedQuery || '?') + ')</span>');
+  } else if (hasX && xCount === 0 && xResult.ok) {
+    parts.push('<span style="color:var(--text-muted);"><i class="fa-brands fa-x-twitter"></i> No X posts found</span>');
+  }
+  if (rdResult.ok && rdCount > 0) {
+    parts.push('<span style="color:#FF4500;"><i class="fa-brands fa-reddit-alien"></i> ' + rdCount + ' Reddit posts</span>');
+  } else if (rdResult.ok && rdCount === 0) {
+    parts.push('<span style="color:var(--text-muted);"><i class="fa-brands fa-reddit-alien"></i> No Reddit posts</span>');
+  }
+  if (isIncremental) parts.push('<span style="color:var(--text-muted);font-size:0.55rem;">[incremental — only new since last scan]</span>');
+
+  var errHTML = errors.length ? '<br><span style="color:#ff9800;">⚠ ' + errors.join(' · ') + '</span>' : '';
+
+  if (errors.length > 0 && xCount + rdCount === 0) {
+    socialScanSetStatus('<i class="fa-solid fa-circle-xmark" style="color:#ff4757;margin-right:5px;"></i>' + errors.join('<br>'), '#ff4757');
+  } else if (xCount + rdCount === 0) {
+    socialScanSetStatus('<i class="fa-solid fa-circle-info" style="color:#9fa8da;margin-right:5px;"></i>No social mentions found. Token may be very new or unlisted.' + errHTML, '#9fa8da');
+  } else {
+    socialScanSetStatus('<i class="fa-solid fa-circle-check" style="color:#00e676;margin-right:5px;"></i>' + parts.join(' · ') + errHTML, '#00e676');
+  }
+
+  socialScanSetBusy(false);
 }
 
 /* ── Recommended Entry Checklist — three-briefing summary panel ─────────── */
@@ -11403,7 +11849,16 @@ function attHistSave(ab, d) {
     wm_h1:     Math.round(ab.wMentions ? ab.wMentions.h1  : 0),
     wm_h24:    Math.round(ab.wMentions ? ab.wMentions.h24 : 0),
     totUniq:   ab.totUnique1h  || 0,
-    platforms: ab.platformsActive || 0
+    platforms: ab.platformsActive || 0,
+    mentionDensity:   ab.mentionDensityLabel  || null,
+    authorConc:       ab.authorConcentrationLabel || null,
+    twConfidence:     ab.twConfidence || ab.attConfidence,
+    twConfReason:     ab.twConfidenceReason || null,
+    coinAgeMin:       ab.coinAgeMin || null,
+    scanIsDeep:       (window._tecSocialRaw && window._tecSocialRaw.isDeep) || false,
+    xProvider:        (window._tecSocialRaw && window._tecSocialRaw.x && window._tecSocialRaw.x.provider) || null,
+    rawXCount:        (window._tecSocialRaw && window._tecSocialRaw.x && window._tecSocialRaw.x.tweets) ? window._tecSocialRaw.x.tweets.length : 0,
+    rawRdCount:       (window._tecSocialRaw && window._tecSocialRaw.reddit && window._tecSocialRaw.reddit.posts) ? window._tecSocialRaw.reddit.posts.length : 0
   };
 
   /* Re-scan comparison — find most recent snapshot for same CA */

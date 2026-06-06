@@ -1,0 +1,1159 @@
+ATTENTION BRIEFING OPTIMIZATION
+
+OBJECTIVE
+
+Refactor the Attention Briefing social data engine for efficient on-demand scanning.
+
+The app is NOT a continuous social monitoring platform.
+
+The app is an on-demand Trading Entry Checker where users manually analyze and re-analyze tokens.
+
+The architecture should prioritize:
+
+- Low API usage
+- Low rate-limit risk
+- Fast scan speeds
+- Reliable Attention metrics
+- Sustainable free-tier operation
+
+==================================================
+SOCIAL DATA PROVIDERS
+==================================================
+
+Implement provider abstraction so the Attention Engine can switch providers without changing scoring logic.
+
+Provider Priority:
+
+1. TwitterAPI.io
+2. Apify
+4. Future Providers
+
+The Attention Engine should never depend on a single provider.
+
+If one provider fails, automatically attempt the next available provider.
+
+==================================================
+PRIMARY SOCIAL SOURCES
+==================================================
+
+X / Twitter
+
+Purpose:
+
+- Attention Velocity
+- Attention Acceleration
+- Attention Quality
+- Early Narrative Detection
+
+Search Priority:
+
+1. Contract Address
+2. Ticker
+3. Coin Name
+
+Contract Address matches should carry the highest confidence.
+
+==================================================
+
+Telegram
+
+Purpose:
+
+- Early Narrative Spread
+- Channel Expansion
+- Forward Velocity
+- Source Expansion
+
+Search Priority:
+
+1. Contract Address
+2. Ticker
+3. Coin Name
+
+==================================================
+
+Reddit
+
+Purpose:
+
+- Persistence Validation
+- Community Expansion
+- Narrative Confirmation
+
+Search Priority:
+
+1. Contract Address
+2. Ticker
+3. Coin Name
+
+Reddit remains a lower-weight confirmation layer.
+
+==================================================
+DEFAULT SOCIAL SCAN LIMITS
+==================================================
+
+Quick Scan (Default)
+
+X:
+15 most recent posts
+
+Telegram:
+15 most recent messages
+
+Reddit:
+10 most recent posts/comments
+
+These limits should be used for every standard coin analysis.
+
+Reason:
+
+15 posts provides enough data for:
+
+- Mention Velocity
+- Mention Acceleration
+- Attention Quality
+- Unique Poster Analysis
+- Source Expansion
+
+while keeping API usage low.
+
+==================================================
+LOW ACTIVITY TOKENS
+==================================================
+
+If fewer than the requested results exist:
+
+Use all available results.
+
+Examples:
+
+X:
+4 posts returned
+
+Telegram:
+2 messages returned
+
+Reddit:
+0 posts returned
+
+Still calculate all metrics.
+
+
+Low mention count does NOT always mean low confidence.
+
+Newly launched tokens naturally have fewer mentions.
+
+The system must distinguish between:
+
+A token with very little attention
+
+and
+
+A token experiencing extremely early attention ignition.
+
+---
+
+IMPLEMENTATION
+
+Replace simple mention-count confidence logic with:
+
+Time-Weighted Confidence.
+
+Confidence should consider:
+
+- Coin Age
+- Mention Density
+- Velocity
+- Acceleration
+- Data Sample Size
+
+---
+
+EXAMPLES
+
+Case A
+
+Coin Age:
+4 Days
+
+Mentions:
+4
+
+Spread Across:
+4 Days
+
+Result:
+
+Confidence:
+LOW
+
+---
+
+Case B
+
+Coin Age:
+30 Minutes
+
+Mentions:
+4
+
+All posted within:
+3 Minutes
+
+Velocity:
+HIGH
+
+Acceleration:
+HIGH
+
+Result:
+
+Confidence:
+HIGH
+
+---
+
+CONFIDENCE DRIVERS
+
+Positive Factors:
+
+- High Velocity
+- High Acceleration
+- High Mention Density
+- High Source Diversity
+- Young Coin Age
+
+Negative Factors:
+
+- Sparse Mentions
+- Low Density
+- No Expansion
+- Long Periods of Inactivity
+
+
+==================================================
+HIGH ACTIVITY TOKENS
+==================================================
+
+If more than the requested results exist:
+
+Use only the most recent results.
+
+Example:
+
+200 tweets found
+
+Use newest 15 only.
+
+Attention Briefing is designed to measure current attention, not build a complete historical archive.
+
+==================================================
+DEEP ATTENTION SCAN
+==================================================
+
+Add optional Deep Attention Scan mode.
+
+Trigger when:
+
+- User manually requests it
+
+Deep Scan Limits:
+
+X:
+50 posts
+
+Telegram:
+50 messages
+
+Reddit:
+25 posts/comments
+
+Purpose:
+
+Increase confidence on high-potential coins without increasing normal API usage.
+
+==================================================
+RE-ANALYSIS OPTIMIZATION
+==================================================
+
+Store:
+
+Last Social Scan Timestamp
+
+For every coin analyzed.
+
+When a coin is re-analyzed:
+
+Attempt incremental retrieval.
+
+Only request posts/messages newer than the previous scan timestamp.
+
+Example:
+
+First Scan:
+10:00 AM
+
+Second Scan:
+12:00 PM
+
+Request:
+
+Only content created after 10:00 AM
+
+Benefits:
+
+- Lower API usage
+- Lower rate-limit risk
+- Faster scans
+- More accurate velocity calculations
+
+================================================
+MENTION DENSITY METRIC
+
+NEW METRIC
+
+Mention Density
+
+Purpose:
+
+Measure how tightly attention is clustered in time.
+
+---
+
+EXAMPLE
+
+15 Mentions
+
+All within 5 Minutes
+
+Density:
+VERY HIGH
+
+---
+
+15 Mentions
+
+Spread Across 18 Hours
+
+Density:
+LOW
+
+---
+
+CLASSIFICATIONS
+
+VERY HIGH
+
+HIGH
+
+MODERATE
+
+LOW
+
+VERY LOW
+
+---
+
+USAGE
+
+Mention Density should influence:
+
+- Attention Confidence
+- Attention Velocity
+- Attention Ignition Detection
+
+High density should increase confidence.
+
+==================================================
+INCREMENTAL RE-SCAN SYSTEM
+
+PURPOSE
+
+Reduce API usage.
+
+Reduce provider costs.
+
+Reduce rate-limit risk.
+
+Improve re-analysis accuracy.
+
+---
+
+STORE
+
+For every Attention Scan:
+
+Last Social Scan Timestamp
+
+Per Coin.
+
+---
+
+RE-SCAN LOGIC
+
+When the same coin is analyzed again:
+
+Request only content newer than:
+
+Last Social Scan Timestamp
+
+---
+
+EXAMPLE
+
+First Scan
+
+10:00 AM
+
+Stored:
+
+lastScanTimestamp = 10:00 AM
+
+---
+
+Second Scan
+
+12:00 PM
+
+Request:
+
+Only posts/messages/comments created after 10:00 AM
+
+---
+
+SUPPORTED SOURCES
+
+X / Twitter
+
+Telegram
+
+Reddit
+
+---
+
+BENEFITS
+
+- Lower API usage
+- Lower rate-limit risk
+- Faster scans
+- Cleaner velocity calculations
+- Cleaner acceleration calculations
+
+==================================================
+X QUERY OPTIMIZATION
+
+For re-analysis scans:
+
+Append timestamp filters directly into provider search queries whenever supported.
+
+---
+
+EXAMPLE
+
+Contract Address Search
+
+0xABC123...
+
+---
+
+Re-Scan Query
+
+0xABC123... since_time:<lastScanTimestamp>
+
+---
+
+Purpose
+
+Prevent duplicate retrieval.
+
+Reduce provider processing costs.
+
+Retrieve only fresh social activity.
+
+==================================================
+AUTHOR CONCENTRATION RATIO
+
+Formula:
+
+Largest Author Share
+
+=
+
+Mentions From Largest Author
+
+÷
+
+Total Mentions
+
+---
+
+EXAMPLES
+
+15 Mentions
+
+Largest Author:
+2 Mentions
+
+Ratio:
+
+2 ÷ 15
+
+= 13%
+
+Result:
+
+Healthy Distribution
+
+---
+
+15 Mentions
+
+Largest Author:
+8 Mentions
+
+Ratio:
+
+8 ÷ 15
+
+= 53%
+
+Result:
+
+Suspicious Concentration
+
+---
+
+CLASSIFICATIONS
+
+LOW CONCENTRATION
+
+MODERATE CONCENTRATION
+
+HIGH CONCENTRATION
+
+EXTREME CONCENTRATION
+
+---
+
+USAGE
+
+High concentration should:
+
+- Reduce Attention Quality
+- Reduce Confidence
+- Increase Manipulation Risk
+
+==================================================
+ATTENTION HISTORY STORAGE
+==================================================
+
+Store every Attention scan snapshot.
+
+Store:
+
+- Coin Name
+- Contract Address
+- Timestamp
+- Attention Score
+- Attention Mode
+- Confidence
+- Velocity
+- Acceleration
+- Quality
+- Persistence
+- Source Expansion
+- Narrative Strength
+
+Mention Counts:
+
+- 15m
+- 30m
+- 1h
+- 3h
+- 24h
+
+Unique Posters
+
+Unique Channels
+
+Unique Sources
+
+==================================================
+ATTENTION QUALITY ENGINE
+==================================================
+
+Attention Quality is mandatory.
+
+Calculate:
+
+Quality Ratio =
+Unique Authors / Total Mentions
+
+Examples:
+
+30 mentions
+25 unique authors
+
+Quality:
+HIGH
+
+--------------------------------
+
+30 mentions
+5 unique authors
+
+Quality:
+LOW
+
+Apply penalties for:
+
+- Repeated authors
+- Low diversity
+- Concentrated posting activity
+
+Apply bonuses for:
+
+- Unique authors
+- Cross-platform presence
+- Multiple independent sources
+
+
+Attention Quality should  evaluate:
+
+- Unique Author Ratio
+- Author Concentration Ratio
+- Source Diversity
+- Cross-Platform Diversity
+- Engagement Distribution
+- Mention Density
+
+---
+
+QUALITY BOOSTS
+
+High Unique Author Ratio
+
+High Source Diversity
+
+Cross-Platform Presence
+
+Healthy Author Distribution
+
+High Mention Density
+
+---
+
+QUALITY PENALTIES
+
+Low Diversity
+
+High Author Concentration
+
+Repeated Coordinated Activity
+
+Single-Source Dominance
+
+
+==================================================
+MOST IMPORTANT ATTENTION SIGNALS
+==================================================
+
+Rank attention signals by importance:
+
+1. Mention Acceleration (X)
+2. Unique Posters (X)
+3. Unique Channels (Telegram)
+4. Contract Address Mentions (X)
+5. Channel Expansion (Telegram)
+6. Forward Velocity (Telegram)
+7. Mention Velocity (X)
+8. Engagement Velocity (X)
+
+These signals should drive the majority of the Attention Briefing score.
+
+==================================================
+ATTENTION MODES SYSTEM
+==================================================
+
+FULL SOCIAL MODE
+
+Requirements:
+
+X available
+AND
+Telegram available
+
+Confidence:
+HIGH
+
+Overall Tier Weights:
+
+Security = 35%
+Structure = 35%
+Attention = 30%
+
+==================================================
+
+PARTIAL SOCIAL MODE
+
+Requirements:
+
+At least one social source available
+
+Examples:
+
+- X only
+- Telegram only
+- Reddit only
+- X + Reddit
+- Telegram + Reddit
+
+Confidence:
+MEDIUM
+
+Overall Tier Weights:
+
+Security = 38%
+Structure = 38%
+Attention = 24%
+
+==================================================
+
+PROXY MODE
+
+Requirements:
+
+No usable social data available
+
+Confidence:
+LOW
+
+Overall Tier Weights:
+
+Security = 42.5%
+Structure = 42.5%
+Attention = 15%
+
+==================================================
+FAILURE HANDLING
+==================================================
+
+If one provider fails:
+
+Do NOT enter Proxy Mode immediately.
+
+Attempt:
+
+1. TwitterAPI.io
+2. Blotato
+3. Apify
+
+If social data is still available from any source:
+
+Remain in PARTIAL SOCIAL MODE.
+
+Only activate PROXY MODE when no usable social data can be retrieved.
+
+==================================================
+EXPECTED RESULT
+==================================================
+
+The Attention Briefing should:
+
+- Remain functional even when providers fail
+- Minimize API usage
+- Minimize rate-limit issues
+- Support high-frequency coin scanning
+- Detect early attention ignition
+- Detect acceleration
+- Detect expansion
+- Detect attention quality
+- Detect emerging narratives
+
+while remaining sustainable on free or low-cost social data providers.
+
+
+
+=======================================================================================
+
+DATA SOURCING:
+
+1. X / Twitter Abstraction Engine Instructions
+
+We will use TwitterAPI.io as our primary Data Ingestion Layer and Apify as our structural fallback. Do not hardcode a single provider; create a provider abstraction wrapper that catches timeouts, handles provider failures gracefully, and fails over dynamically.
+
+Provider Priority:
+
+1. TwitterAPI.io
+2. Apify
+
+Search Priority:
+
+1. Contract Address
+2. Ticker
+3. Coin Name
+
+Contract Address matches should always receive the highest confidence weighting.
+
+Primary Data Source: TwitterAPI.io
+
+Primary Data Source Details:
+
+* Purpose: High-speed, cost-effective chronological tracking.
+* Base URL: https://api.twitterapi.io/v1/twitter/search
+OR: 
+https://api.twitterapi.io/twitter/tweet/advanced_search
+
+* Authentication Method: Pass the API key in the HTTP Header as X-API-Key.
+
+Required Parameters for Quick Scan:
+
+* query: The search term string (Contract Address, Ticker, or Name).
+* limit: Set to 15 (or 50 for Deep Scan).
+* product: Hardcode to "Latest" (ensures a strictly chronological data slice).
+
+Incremental Re-Scan Parameter Rule:
+
+If a lastScanTimestamp exists for the token in our database, append:
+
+since_time:unix_timestamp
+
+directly to the query string.
+
+Example Query String:
+
+0xABC123... since_time:1717660800
+
+Fallback Data Source: Apify (Tweet Scraper V2)
+
+Fallback Data Source Details:
+
+* Purpose: Auto-triggered secondary circuit-breaker if TwitterAPI.io fails.
+* Base URL:
+
+https://api.apify.com/v2/acts/apidojo~tweet-scraper/run-sync-get-dataset-items
+
+* Authentication Method:
+
+Append token to URL query string:
+
+?token=YOUR_APIFY_TOKEN
+
+Payload Blueprint (JSON POST):
+
+{
+  "searchTerms": ["YOUR_SEARCH_TERM"],
+  "sort": "Latest",
+  "maxItems": 15,
+  "includeReplies": false
+}
+
+---
+
+2. Telegram Layer Integration Instructions
+
+Do not use third-party paid web scrapers for Telegram.
+
+Use:
+
+* Telethon (Python)
+  OR
+* GramJS (Node.js)
+
+Both connect directly to Telegram's MTProto API and operate free of charge.
+
+Integration Details:
+
+Setup Requirements:
+
+* Create developer application at my.telegram.org
+* Store api_id and api_hash inside .env
+
+Target Data Pool:
+
+Define a configurable channel list containing:
+
+* Alpha call channels
+* Token deployment trackers
+* Volume scanner channels
+
+Examples:
+
+* @SolanaAlphaCalls
+* @DegenIgnitionFeed
+
+Ingestion Query Parameters:
+
+* Initialize on-demand client event loop using client.iter_messages()
+
+* Pass target channel ID
+
+* Set limit=15 (or 50 for Deep Scan)
+
+* Search using:
+  
+  1. Contract Address
+  2. Ticker
+  3. Coin Name
+
+Incremental Logic:
+
+Inside iteration loop:
+
+if message.date.timestamp() <= lastScanTimestamp:
+    break
+
+This prevents duplicate processing and minimizes API usage.
+
+Data Objects To Extract:
+
+* message.id
+* message.date (Unix Timestamp)
+* message.text
+* message.forwards
+
+Used For:
+
+* Forward Velocity
+* Source Expansion
+* Channel Expansion
+
+---
+
+3. Reddit Layer Integration Instructions
+
+Use:
+
+* PRAW (Python)
+  OR
+* Snoowrap (Node.js)
+
+Both connect directly to Reddit's official API.
+
+Integration Details:
+
+Setup Requirements:
+
+* Create Reddit "script" application
+
+* Obtain:
+  
+  * client_id
+  * client_secret
+
+Target Subreddits:
+
+CryptoMoonShots+SolanaMemeCoins+SatoshiStreetBets
+
+Ingestion Query Parameters:
+
+* sort="new"
+* time_filter="week"
+* limit=10 (or 25 for Deep Scan)
+
+Search Priority:
+
+1. Contract Address
+2. Ticker
+3. Coin Name
+
+Incremental Logic:
+
+Reject posts older than:
+
+lastScanTimestamp
+
+Example:
+
+if submission.created_utc <= lastScanTimestamp:
+    continue
+
+Used For:
+
+* Attention Persistence
+* Community Expansion
+* Narrative Validation
+
+---
+
+4. Analytical Calculations & Memory Layout
+
+Pipe all returned payloads into internal processing structures before database writes.
+
+In-Memory Windowing & Density Calculation
+
+1. Store incoming timestamps inside an in-memory structure or Redis Sorted Set.
+
+2. Calculate:
+
+Time Span Minutes
+
+(Newest Timestamp - Oldest Timestamp) / 60
+
+3. Apply Density Safety Floor:
+
+Time Span Minutes = max(Time Span Minutes, 1)
+
+This prevents unrealistic density spikes when all mentions occur within seconds.
+
+4. Calculate:
+
+Mention Density =
+Total Mentions
+÷
+Time Span Minutes
+
+Classification:
+
+* VERY_HIGH
+* HIGH
+* MODERATE
+* LOW
+* VERY_LOW
+
+Example:
+
+15 mentions within 5 minutes
+
+→ VERY_HIGH
+
+---
+
+Time-Weighted Confidence Logic
+
+Do NOT penalize low mention counts automatically.
+
+Calculate:
+
+* Coin Age
+* Mention Density
+* Velocity
+* Acceleration
+* Data Sample Size
+* Cross-Platform Presence
+
+Ignition Detection Rules:
+
+Maximum Ignition Boost:
+
+Coin Age < 1 Hour
+AND
+Density = HIGH or VERY_HIGH
+
+Result:
+
+Attention Confidence = HIGH
+
+Partial Ignition Boost:
+
+Coin Age < 12 Hours
+AND
+Density = HIGH or VERY_HIGH
+
+Result:
+
+Confidence Boost Applied
+
+No Age Boost:
+
+Coin Age >= 12 Hours
+
+Cross-Platform Presence Bonus:
+
+Platforms Found:
+
+* X only
+* X + Telegram
+* X + Telegram + Reddit
+
+More platform coverage increases:
+
+* Attention Quality
+* Attention Confidence
+
+---
+
+Author Concentration Ratio Formula
+
+Prevent manipulation by mapping usernames into an internal frequency dictionary.
+
+Formula:
+
+Author Concentration Ratio
+
+=
+Mentions From Most Active User
+÷
+Total Mentions
+
+Example:
+
+15 mentions
+
+Most Active User:
+
+8 mentions
+
+Ratio:
+
+8 / 15
+
+= 0.53
+
+Classifications:
+
+* LOW CONCENTRATION
+* MODERATE CONCENTRATION
+* HIGH CONCENTRATION
+* EXTREME CONCENTRATION
+
+Rule:
+
+If:
+
+Author Concentration Ratio > 0.55
+
+Then:
+
+* Drop Attention Quality to LOW
+* Apply Manipulation Penalty Modifier
+* Reduce Confidence Score
+
+---
+
+5. Storage Blueprint
+
+Log every scan as an immutable snapshot.
+
+Never overwrite previous records.
+
+{
+  "coin_name": "STRING",
+  "contract_address": "STRING",
+  "scan_timestamp": "UNIX_TIMESTAMP",
+  "last_scan_timestamp": "UNIX_TIMESTAMP",
+  "attention_mode": "FULL | PARTIAL | PROXY",
+  "metrics": {
+    "velocity": "EXPLODING | STRONG | STEADY | WEAK | DECLINING",
+    "acceleration": "VERY_HIGH | HIGH | MODERATE | LOW | NEGATIVE",
+    "quality": "HIGH | LOW",
+    "mention_density": "VERY_HIGH | HIGH | MODERATE | LOW | VERY_LOW",
+    "author_concentration": "FLOAT_VALUE",
+    "cross_platform_presence": "X | X+TG | X+TG+REDDIT",
+    "confidence": "HIGH | MEDIUM | LOW"
+  },
+  "raw_counts": {
+    "window_15m": "INT",
+    "window_30m": "INT",
+    "window_1h": "INT"
+  }
+}
+
+=========================================================
+================================
+
+Incorporate proper and clear Error message handling and display when data sourcing encounters issues. 
+
+
+
+
