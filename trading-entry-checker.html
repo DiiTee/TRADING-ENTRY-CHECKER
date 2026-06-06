@@ -2022,10 +2022,20 @@ async function fetchFromCA(ca) {
   apiDiagRow.classList.add('hidden');
   missingFieldsRow.classList.add('hidden');
 
-  window._tecCandles     = null;       /* reset candle cache for this fetch */
-  window._tecDexTxns     = null;       /* reset tx fallback for structural analysis */
-  window._tecOhlcvSource = null;       /* 'GeckoTerminal' | 'DEX Screener' | null */
-  window._tecEngineMode  = 'FLOW';     /* 'STRUCTURE' when candles available, 'FLOW' otherwise */
+  window._tecCandles          = null;    /* reset candle cache for this fetch */
+  window._tecDexTxns          = null;    /* reset tx fallback for structural analysis */
+  window._tecOhlcvSource      = null;    /* 'GeckoTerminal' | 'DEX Screener' | null */
+  window._tecEngineMode       = 'FLOW';  /* 'STRUCTURE' | 'HINT' | 'FLOW' */
+  window._tecHintStructure    = null;    /* HINT mode estimated structure when OHLCV unavailable */
+  window._tecGtPoolAttrs      = null;    /* GeckoTerminal pool attributes (price/vol history) */
+  window._tecDataAvailability = {        /* diagnostics panel data source flags */
+    poolFound:     false,
+    gtOhlcv:       false,
+    dexOhlcv:      false,
+    mcHistory:     false,
+    txHistory:     false,
+    holderHistory: false
+  };
   var fetched    = {};
   var apiResults = [];   /* badge HTML */
   var diagItems  = [];   /* diagnostic panel entries { cls, icon, html } */
@@ -2072,6 +2082,7 @@ async function fetchFromCA(ca) {
       fetched.marketCap = pair.fdv || pair.marketCap || NaN;
       fetched.poolAddress = pair.pairAddress || '';
       window._tecPoolAddress = fetched.poolAddress;
+      window._tecDataAvailability.poolFound = true;
 
       /* ── LP Locked / Burned from DexScreener ── */
       /* Scan ALL pairs — PumpSwap pool may not be the highest-liquidity pair */
@@ -2111,6 +2122,7 @@ async function fetchFromCA(ca) {
         m5: { buys: (txns.m5 && txns.m5.buys)  || 0, sells: (txns.m5 && txns.m5.sells) || 0 }
       };
       window._tecDexTxns = fetched._dexTxns; /* global reference for SA fallback */
+      window._tecDataAvailability.txHistory = true;
 
       var pc = pair.priceChange || {};
       if (pc.m5  !== undefined && pc.m5  !== null) fetched.perf5m  = parseFloat(pc.m5);
@@ -2584,6 +2596,12 @@ async function fetchFromCA(ca) {
       if (gtParallel[0].status === 'fulfilled' && gtParallel[0].value &&
           gtParallel[0].value.data && gtParallel[0].value.data.attributes) {
         gtPoolAttrs = gtParallel[0].value.data.attributes;
+        window._tecGtPoolAttrs = gtPoolAttrs; /* store globally for HINT mode floor estimation */
+        if (gtPoolAttrs.price_change_percentage &&
+            (gtPoolAttrs.price_change_percentage.h1 != null ||
+             gtPoolAttrs.price_change_percentage.h24 != null)) {
+          window._tecDataAvailability.mcHistory = true;
+        }
       }
       var gtVolM5 = 0, gtVolH1 = 0, gtPriceM5 = null;
       if (gtPoolAttrs) {
@@ -2668,7 +2686,10 @@ async function fetchFromCA(ca) {
           structuralAnalysis: gtStructuralAnalysis
         };
         window._tecOhlcvSource = 'GeckoTerminal';
-        if (gtStructuralAnalysis) window._tecEngineMode = 'STRUCTURE';
+        if (gtStructuralAnalysis) {
+          window._tecEngineMode = 'STRUCTURE';
+          window._tecDataAvailability.gtOhlcv = true;
+        }
         if (gtMacroFloor > 0 || gtLocalFloor > 0) {
           addBadge('GeckoTerminal', 'ok');
           addDiag('ok', 'GeckoTerminal',
@@ -2741,6 +2762,7 @@ async function fetchFromCA(ca) {
             };
             window._tecOhlcvSource = 'DEX Screener';
             window._tecEngineMode  = 'STRUCTURE';
+            window._tecDataAvailability.dexOhlcv = true;
             addBadge('DEX Screener OHLCV', 'ok');
             addDiag('ok', 'DEX Screener OHLCV',
               'OHLCV candle fallback succeeded (' + dexNorm.length + ' candles). ' +
@@ -2753,16 +2775,41 @@ async function fetchFromCA(ca) {
     }
   }
 
-  /* ── Flow mode final notice ── */
+  /* ── HINT MODE: attempt estimated structure when OHLCV unavailable ── */
   if (window._tecEngineMode !== 'STRUCTURE') {
-    addBadge('Structure Engine', 'fail');
-    addDiag('partial', 'Structure Engine',
-      'FLOW MODE: Candle data could not be loaded from GeckoTerminal or DEX Screener. ' +
-      'Possible causes: (1) Pool not yet indexed by GeckoTerminal (common for coins under ~30 min old). ' +
-      '(2) CORS proxy failures on the OHLCV endpoints — try re-fetching. ' +
-      '(3) DEX Screener does not expose a public OHLCV endpoint for this pair. ' +
-      'Floor/Ceiling estimates are LP-depth-based approximations. ' +
-      'Check the Diagnostics panel above for the specific error from each source.');
+    var _hint = computeHintStructure(fetched);
+    if (_hint) {
+      window._tecHintStructure = _hint;
+      window._tecEngineMode    = 'HINT';
+      window._tecDataAvailability.mcHistory     = window._tecDataAvailability.mcHistory || _hint.hasPriceHistory;
+      window._tecDataAvailability.txHistory     = window._tecDataAvailability.txHistory || _hint.hasTxHistory;
+      window._tecDataAvailability.holderHistory = _hint.hasHolderHist;
+      var _hintSources = [
+        _hint.hasPriceHistory ? 'MC price history' : '',
+        _hint.hasTxHistory    ? 'transaction data'  : '',
+        _hint.hasHolderHist   ? 'holder history'    : '',
+        _hint.hasVolHistory   ? 'volume data'       : ''
+      ].filter(Boolean).join(', ');
+      addBadge('Structure Engine', 'partial');
+      addDiag('partial', 'Structure Engine',
+        'HINT MODE ACTIVE: OHLCV candles unavailable, but usable market history detected. ' +
+        'Estimated Floor MC: ' + formatUSD(_hint.estimatedFloorMC) + ' | ' +
+        'Entry Range: ' + formatUSD(_hint.entryRangeLow) + ' – ' + formatUSD(_hint.entryRangeHigh) + '. ' +
+        'Floor confidence: ' + _hint.floorStrength + '. ' +
+        'Data used: ' + _hintSources + '. ' +
+        'Max confidence tier: C (OHLCV required for A/B/S).');
+    } else {
+      window._tecDataAvailability.txHistory = !!(window._tecDexTxns &&
+        (window._tecDexTxns.h1 || window._tecDexTxns.m5));
+      addBadge('Structure Engine', 'fail');
+      addDiag('partial', 'Structure Engine',
+        'FLOW MODE: Candle data could not be loaded from GeckoTerminal or DEX Screener, ' +
+        'and insufficient market history for HINT mode. ' +
+        'Possible causes: (1) Pool not yet indexed by GeckoTerminal (common for coins under ~30 min old). ' +
+        '(2) CORS proxy failures on the OHLCV endpoints — try re-fetching. ' +
+        '(3) DEX Screener does not expose a public OHLCV endpoint for this pair. ' +
+        'LP-depth-based floor estimates are shown as a rough reference only.');
+    }
   }
 
   /* ── 5b. JUPITER PRICE API ─ SOL price (for Total Fees SOL→USD conversion) ── */
@@ -4670,6 +4717,216 @@ function buildSecurityBriefingHTML(d) {
    Input:  candles15m — array of [timestamp, open, high, low, close, volume]
    Output: rich analysis object used by buildEntryBriefingHTML + text export
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   HINT MODE — Estimated structure when OHLCV candles are unavailable.
+   Uses MC price-change history, LP depth, tx data and holder history to
+   estimate floor MC + recommended entry range with reduced confidence.
+   Returns null when insufficient data → caller falls to FLOW mode.
+   ═══════════════════════════════════════════════════════════════════════ */
+function computeHintStructure(fetched) {
+  var currentMC = fetched.marketCap || 0;
+  if (!currentMC || currentMC <= 0) return null;
+
+  var liquidity = fetched.liquidity || 0;
+  var lmcRatio  = fetched.lmcRatio  || 0;
+  var buyPct    = fetched.buyPercent
+    || parseFloat((el('fBuy')||{}).value||'50') || 50;
+
+  /* ── Price history from GeckoTerminal pool attributes ── */
+  var h1Chg = null, h6Chg = null, h24Chg = null;
+  var gtPcp = window._tecGtPoolAttrs && window._tecGtPoolAttrs.price_change_percentage;
+  if (gtPcp) {
+    if (gtPcp.h1  != null) h1Chg  = parseFloat(gtPcp.h1);
+    if (gtPcp.h6  != null) h6Chg  = parseFloat(gtPcp.h6);
+    if (gtPcp.h24 != null) h24Chg = parseFloat(gtPcp.h24);
+  }
+
+  /* ── Volume history from GT ── */
+  var volH1  = 0, volH24 = 0;
+  var gtVol  = window._tecGtPoolAttrs && window._tecGtPoolAttrs.volume_usd;
+  if (gtVol) {
+    volH1  = parseFloat(gtVol.h1  || 0) || 0;
+    volH24 = parseFloat(gtVol.h24 || 0) || 0;
+  }
+
+  /* ── Holder history (from globals set during GT fetch or form fields) ── */
+  var hCurr = window._tecHolderCount || parseInt((el('fHolders')  ||{}).value||'0') || 0;
+  var hH1v  = window._tecHolderH1   || parseInt((el('fHoldersH1') ||{}).value||'0') || 0;
+  var hH6v  = window._tecHolderH6   || parseInt((el('fHoldersH6') ||{}).value||'0') || 0;
+  var hH24v = window._tecHolderH24  || parseInt((el('fHoldersH24')||{}).value||'0') || 0;
+
+  /* ── Data availability flags ── */
+  var hasPriceHistory = (h1Chg !== null && !isNaN(h1Chg))
+                     || (h6Chg !== null && !isNaN(h6Chg))
+                     || (h24Chg !== null && !isNaN(h24Chg));
+  var hasVolHistory   = volH1 > 0 || volH24 > 0;
+  var hasTxHistory    = !!(window._tecDexTxns &&
+                          (window._tecDexTxns.h1 || window._tecDexTxns.m5));
+  var hasHolderHist   = hCurr > 0 && (hH1v > 0 || hH6v > 0 || hH24v > 0);
+
+  /* Need at least one source beyond raw LP depth */
+  if (!hasPriceHistory && !hasTxHistory && !hasVolHistory && !hasHolderHist) return null;
+
+  /* ── Reconstruct historical MC snapshots from price-change percentages ── */
+  var histMCs = [currentMC];
+  if (h1Chg  !== null && !isNaN(h1Chg)  && h1Chg  > -99) histMCs.push(currentMC / (1 + h1Chg  / 100));
+  if (h6Chg  !== null && !isNaN(h6Chg)  && h6Chg  > -99) histMCs.push(currentMC / (1 + h6Chg  / 100));
+  if (h24Chg !== null && !isNaN(h24Chg) && h24Chg > -99) histMCs.push(currentMC / (1 + h24Chg / 100));
+  var histMin = Math.min.apply(null, histMCs);
+  var histMax = Math.max.apply(null, histMCs);
+
+  /* ── LP depth floor proxy ── */
+  var lpFloor = 0;
+  if (liquidity > 0 && lmcRatio > 0) {
+    lpFloor = (liquidity / (lmcRatio / 100)) * 0.70;
+  } else if (liquidity > 0) {
+    lpFloor = liquidity * 4 * 0.70;
+  }
+
+  /* ── Blend historical low + LP proxy into estimated floor ── */
+  var estimatedFloorMC;
+  if (hasPriceHistory && lpFloor > 0) {
+    var lpRatio = lpFloor / currentMC;
+    if (lpRatio >= 0.25 && lpRatio <= 0.95) {
+      estimatedFloorMC = histMCs.length >= 3
+        ? histMin * 0.55 + lpFloor * 0.45
+        : histMin * 0.40 + lpFloor * 0.60;
+    } else {
+      estimatedFloorMC = histMin;
+    }
+  } else if (hasPriceHistory) {
+    estimatedFloorMC = histMin;
+  } else {
+    estimatedFloorMC = lpFloor > 0 ? lpFloor : currentMC * 0.65;
+  }
+  /* Sanity bounds: 15 % – 92 % of current MC */
+  estimatedFloorMC = Math.max(estimatedFloorMC, currentMC * 0.15);
+  estimatedFloorMC = Math.min(estimatedFloorMC, currentMC * 0.92);
+
+  var pullbackDepth  = ((currentMC - estimatedFloorMC) / currentMC) * 100;
+  var entryRangeLow  = estimatedFloorMC * 1.01;
+  var entryRangeHigh = estimatedFloorMC * 1.10;
+
+  /* ── Floor strength ── */
+  var floorSources = 0;
+  if (hasPriceHistory && histMCs.length >= 3) floorSources += 2;
+  else if (hasPriceHistory)                   floorSources += 1;
+  if (lpFloor > 0)  floorSources++;
+  if (hasTxHistory) floorSources++;
+  var floorStrength, floorColor;
+  if      (floorSources >= 3) { floorStrength = 'Moderate Confidence';     floorColor = '#ffeb3b'; }
+  else if (floorSources >= 2) { floorStrength = 'Low Confidence Estimate'; floorColor = '#ff9800'; }
+  else                        { floorStrength = 'Rough Estimate';          floorColor = '#ff4757'; }
+
+  /* ── Buy pressure ── */
+  var bpScore = buyPct >= 65 ? 78 : buyPct >= 55 ? 63 : buyPct >= 45 ? 48 : buyPct >= 35 ? 33 : 18;
+  var bpLabel = buyPct >= 65 ? 'Strong' : buyPct >= 55 ? 'Moderate' : buyPct < 45 ? 'Weak' : 'Neutral';
+
+  /* ── Demand signal from tx momentum ── */
+  var demandSignal = 'Insufficient Data', demandColor = 'var(--text-muted)';
+  var dTx = window._tecDexTxns;
+  if (dTx && dTx.m5 && dTx.h1) {
+    var m5b = parseInt(dTx.m5.buys) || 0;
+    var h1b = parseInt(dTx.h1.buys) || 0;
+    var h1s = parseInt(dTx.h1.sells) || 0;
+    if (h1b > 0 && m5b > 0) {
+      var prevBPS = Math.max(0.1, (h1b - m5b) / 11);
+      var mom     = ((m5b - prevBPS) / prevBPS) * 100;
+      demandSignal = mom > 50 ? 'Surging' : mom > 15 ? 'Increasing' : mom > -15 ? 'Neutral' : mom > -40 ? 'Declining' : 'Weak';
+      demandColor  = mom > 50 ? '#00ffcc' : mom > 15 ? '#00e676' : mom > -15 ? '#ffeb3b' : mom > -40 ? '#ff9800' : '#ff4757';
+    } else if (h1b > 0) {
+      var bR = h1b / Math.max(1, h1b + h1s);
+      demandSignal = bR >= 0.60 ? 'Moderate Buy Bias' : bR >= 0.45 ? 'Neutral' : 'Sell Bias';
+      demandColor  = bR >= 0.60 ? '#00e676' : bR >= 0.45 ? '#ffeb3b' : '#ff9800';
+    }
+  } else {
+    demandSignal = buyPct >= 60 ? 'Moderate Buy Bias' : buyPct <= 40 ? 'Sell Bias' : 'Balanced';
+    demandColor  = buyPct >= 60 ? '#00e676' : buyPct <= 40 ? '#ff9800' : '#ffeb3b';
+  }
+
+  /* ── Volume concentration signal ── */
+  var volSignal = null, volColor = 'var(--text-muted)';
+  if (volH1 > 0 && volH24 > 0) {
+    var vRatio = volH1 / Math.max(0.01, volH24 / 24);
+    if      (vRatio >= 2.5) { volSignal = 'Volume Surge (' + vRatio.toFixed(1) + '× avg)';          volColor = '#00ffcc'; }
+    else if (vRatio >= 1.5) { volSignal = 'Above-Average Volume (' + vRatio.toFixed(1) + '× avg)'; volColor = '#00e676'; }
+    else if (vRatio >= 0.7) { volSignal = 'Normal Volume (' + vRatio.toFixed(1) + '× avg)';         volColor = '#ffeb3b'; }
+    else                    { volSignal = 'Low Volume (' + vRatio.toFixed(1) + '× avg)';            volColor = '#ff9800'; }
+  }
+
+  /* ── Holder trend ── */
+  var holderTrend = null, holderColor = 'var(--text-muted)';
+  if (hasHolderHist) {
+    var refH    = hH24v || hH6v || hH1v;
+    var refLabel= hH24v ? '24h' : hH6v ? '6h' : '1h';
+    var hGrowth = (hCurr - refH) / Math.max(1, refH) * 100;
+    holderTrend = hGrowth > 20 ? ('Strong Growth (+' + hGrowth.toFixed(0) + '% vs ' + refLabel + ')')
+                : hGrowth > 5  ? ('Growing (+' + hGrowth.toFixed(0) + '% vs ' + refLabel + ')')
+                : hGrowth > -5 ? ('Stable (' + (hGrowth >= 0 ? '+' : '') + hGrowth.toFixed(0) + '% vs ' + refLabel + ')')
+                :                ('Declining (' + hGrowth.toFixed(0) + '% vs ' + refLabel + ')');
+    holderColor = hGrowth > 5 ? '#00e676' : hGrowth > -5 ? '#ffeb3b' : '#ff4757';
+  }
+
+  /* ── Confidence Tier (hard-capped at C for HINT mode) ── */
+  var rawInputs = [], rawWeights = [];
+  if (hasPriceHistory && histMCs.length >= 3) { rawInputs.push(60);       rawWeights.push(0.35); }
+  else if (hasPriceHistory)                   { rawInputs.push(45);       rawWeights.push(0.25); }
+  rawInputs.push(bpScore); rawWeights.push(0.30);
+  if (hasTxHistory) {
+    var dScore = demandSignal === 'Surging' ? 80 : demandSignal === 'Increasing' ? 68
+               : (demandSignal === 'Neutral' || demandSignal === 'Moderate Buy Bias' || demandSignal === 'Balanced') ? 55 : 35;
+    rawInputs.push(dScore); rawWeights.push(0.25);
+  }
+  if (volSignal) {
+    var vScore = volSignal.startsWith('Volume Surge') ? 75 : volSignal.startsWith('Above') ? 65
+               : volSignal.startsWith('Normal') ? 52 : 35;
+    rawInputs.push(vScore); rawWeights.push(0.10);
+  }
+  var totalW   = rawWeights.reduce(function(s,w){return s+w;},0);
+  var rawScore = rawInputs.reduce(function(s,v,i){return s+v*rawWeights[i];},0) / (totalW || 1);
+  var hintTierScore = Math.min(Math.round(rawScore), 64); /* cap: A/B/S not available */
+  var hintTier, hintTierLabel, hintTierColor;
+  if      (hintTierScore >= 55) { hintTier = 'C'; hintTierLabel = 'Speculative Setup';   hintTierColor = '#ffeb3b'; }
+  else if (hintTierScore >= 40) { hintTier = 'D'; hintTierLabel = 'Below Average Setup'; hintTierColor = '#ff9800'; }
+  else                          { hintTier = 'F'; hintTierLabel = 'Weak Setup';           hintTierColor = '#ff4757'; }
+
+  /* ── Runner potential (low confidence) ── */
+  var hintRunner   = rawScore >= 68 ? 'Moderate' : rawScore >= 52 ? 'Low-Moderate' : 'Low';
+  var hintRunColor = hintRunner === 'Moderate' ? '#ffeb3b' : '#ff9800';
+
+  return {
+    estimatedFloorMC: estimatedFloorMC,
+    entryRangeLow:    entryRangeLow,
+    entryRangeHigh:   entryRangeHigh,
+    pullbackDepth:    pullbackDepth,
+    floorStrength:    floorStrength,
+    floorColor:       floorColor,
+    lpFloor:          lpFloor,
+    histMCCount:      histMCs.length,
+    histMin:          histMin,
+    histMax:          histMax,
+    hasPriceHistory:  hasPriceHistory,
+    hasTxHistory:     hasTxHistory,
+    hasHolderHist:    hasHolderHist,
+    hasVolHistory:    hasVolHistory,
+    buyPressureScore: bpScore,
+    buyPressureLabel: bpLabel,
+    buyPct:           buyPct,
+    demandSignal:     demandSignal,
+    demandColor:      demandColor,
+    volSignal:        volSignal,
+    volColor:         volColor,
+    holderTrend:      holderTrend,
+    holderColor:      holderColor,
+    hintTier:         hintTier,
+    hintTierLabel:    hintTierLabel,
+    hintTierColor:    hintTierColor,
+    hintTierScore:    hintTierScore,
+    hintRunner:       hintRunner,
+    hintRunColor:     hintRunColor
+  };
+}
+
 function computeStructuralAnalysis(candles15m, poolAttrs) {
   if (!candles15m || candles15m.length < 3) return null;
 
@@ -5710,6 +5967,10 @@ function buildEntryBriefingHTML(d, analysis) {
   if (sa && sa.activeShelfPrice > 0 && d.defCurrent > 0) {
     activeShelfMC = currentMC * (sa.activeShelfPrice / d.defCurrent);
   }
+  /* HINT MODE: use estimated floor when no candle-based shelf is available */
+  if (activeShelfMC === null && window._tecHintStructure) {
+    activeShelfMC = window._tecHintStructure.estimatedFloorMC;
+  }
 
   /* ── Distance from Shelf (structure-based, ATR-adaptive) ── */
   var distFromShelfPct = 0, distLabel = '—', distColor = 'var(--text-muted)', isAirEntry = false;
@@ -5926,10 +6187,15 @@ function buildEntryBriefingHTML(d, analysis) {
           t += '<span style="color:var(--accent-cyan);font-size:0.70rem;font-weight:700;letter-spacing:1px;">⬡ STRUCTURE MODE ACTIVE</span>';
           t += '&nbsp;<span style="color:var(--text-muted);font-size:0.62rem;">OHLCV Source: <strong style="color:var(--accent-cyan);">' + ohlcvSrc + '</strong></span>';
           t += '</div>';
+        } else if (engineMode === 'HINT') {
+          t += '<div style="margin-bottom:7px;padding:6px 10px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.07);">';
+          t += '<div style="color:#ff9800;font-size:0.72rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">⚡ HINT MODE ACTIVE &nbsp;·&nbsp; OHLCV UNAVAILABLE &nbsp;·&nbsp; ESTIMATED STRUCTURE</div>';
+          t += '<div style="color:var(--text-muted);font-size:0.68rem;">OHLCV candles unavailable — floor and entry range estimated from MC price history, LP depth, and transaction data. Maximum confidence tier: C.</div>';
+          t += '</div>';
         } else {
           t += '<div style="margin-bottom:7px;padding:6px 10px;border-left:3px solid #ff4757;background:rgba(255,71,87,0.07);">';
           t += '<div style="color:#ff4757;font-size:0.72rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">⚡ FLOW MODE ACTIVE &nbsp;·&nbsp; STRUCTURE DATA UNAVAILABLE &nbsp;·&nbsp; Confidence Reduced</div>';
-          t += '<div style="color:var(--text-muted);font-size:0.68rem;">Both GeckoTerminal and DEX Screener OHLCV unavailable. Analysis based on transaction flow data only. Maximum confidence tier: B.</div>';
+          t += '<div style="color:var(--text-muted);font-size:0.68rem;">No OHLCV candles and insufficient market history for estimation. Analysis based on transaction flow and LP depth only. Maximum confidence tier: B.</div>';
           t += '</div>';
         }
 
@@ -5949,6 +6215,28 @@ function buildEntryBriefingHTML(d, analysis) {
           t += '<span style="color:' + ic + ';">' + (item.ok ? item.value : 'Missing') + '</span></span>';
         });
         t += '</div></div>';
+
+        /* ── Diagnostics Panel (collapsible) ── */
+        var _da  = window._tecDataAvailability || {};
+        var _gC  = function(ok) { return ok ? '#00e676' : '#ff4757'; };
+        var _modeLabel = engineMode === 'STRUCTURE' ? '<span style="color:var(--accent-cyan);">STRUCTURE</span>'
+                       : engineMode === 'HINT'      ? '<span style="color:#ff9800;">HINT</span>'
+                       :                              '<span style="color:#ff4757;">FLOW</span>';
+        t += '<div style="margin-bottom:8px;">';
+        t += '<div onclick="window._pfToggle(this);" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:5px 8px;background:rgba(0,0,0,0.18);border-radius:4px;border:1px solid rgba(255,255,255,0.06);user-select:none;">';
+        t += '<span style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;"><i class="fa-solid fa-satellite-dish" style="margin-right:4px;"></i>Data Source Diagnostics</span>';
+        t += '<span class="pf-arr" style="color:var(--text-muted);font-size:0.8rem;display:inline-block;transition:transform 0.2s;">›</span>';
+        t += '</div>';
+        t += '<div style="display:none;padding:8px 10px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 4px 4px;">';
+        t += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 16px;font-size:0.65rem;">';
+        t += '<span style="color:var(--text-muted);">Pool Found: <strong style="color:' + _gC(_da.poolFound) + ';">' + (_da.poolFound ? 'YES' : 'NO') + '</strong></span>';
+        t += '<span style="color:var(--text-muted);">Mode Active: ' + _modeLabel + '</span>';
+        t += '<span style="color:var(--text-muted);">GeckoTerminal OHLCV: <strong style="color:' + _gC(_da.gtOhlcv) + ';">' + (_da.gtOhlcv ? 'SUCCESS' : 'FAIL') + '</strong></span>';
+        t += '<span style="color:var(--text-muted);">DEX Screener Candles: <strong style="color:' + _gC(_da.dexOhlcv) + ';">' + (_da.dexOhlcv ? 'SUCCESS' : 'FAIL') + '</strong></span>';
+        t += '<span style="color:var(--text-muted);">MC History: <strong style="color:' + _gC(_da.mcHistory) + ';">' + (_da.mcHistory ? 'AVAILABLE' : 'UNAVAILABLE') + '</strong></span>';
+        t += '<span style="color:var(--text-muted);">Transaction History: <strong style="color:' + _gC(_da.txHistory) + ';">' + (_da.txHistory ? 'AVAILABLE' : 'UNAVAILABLE') + '</strong></span>';
+        t += '<span style="color:var(--text-muted);">Holder History: <strong style="color:' + _gC(_da.holderHistory) + ';">' + (_da.holderHistory ? 'AVAILABLE' : 'UNAVAILABLE') + '</strong></span>';
+        t += '</div></div></div>';
 
         /* ═══════════════════════════════════════════════════════
            STRUCTURE MODE — full candle-based analysis
@@ -6091,9 +6379,100 @@ function buildEntryBriefingHTML(d, analysis) {
           t += '<br><span style="color:var(--text-muted);font-size:0.68rem;">Tier reflects setup quality, not a guaranteed outcome. S/A tiers = best available — not certainties.</span>';
 
         /* ═══════════════════════════════════════════════════════
-           FLOW MODE — transaction data only, no candles
+           HINT MODE — estimated structure, OHLCV unavailable
+           ═══════════════════════════════════════════════════════ */
+        } else if (engineMode === 'HINT' && window._tecHintStructure) {
+          var hs = window._tecHintStructure;
+
+          /* ── MANDATORY: Estimated Floor & Recommended Entry Range ── */
+          t += '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.28);border-radius:6px;">';
+          t += '<div style="font-size:0.62rem;color:#ff9800;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:7px;"><i class="fa-solid fa-crosshairs" style="margin-right:5px;"></i>Estimated Floor &amp; Entry Range</div>';
+          t += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">';
+          t += '<div>';
+          t += '<div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.6px;">Estimated Floor / Shelf MC</div>';
+          t += '<div style="font-size:0.95rem;font-weight:700;color:var(--safe);">' + formatUSD(hs.estimatedFloorMC) + '</div>';
+          t += '<div style="font-size:0.60rem;color:' + hs.floorColor + ';">' + hs.floorStrength + '</div>';
+          t += '</div>';
+          t += '<div>';
+          t += '<div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.6px;">Recommended Entry Range</div>';
+          t += '<div style="font-size:0.90rem;font-weight:700;color:#00e676;">' + formatUSD(hs.entryRangeLow) + ' – ' + formatUSD(hs.entryRangeHigh) + '</div>';
+          t += '<div style="font-size:0.60rem;color:var(--text-muted);">Floor +1% to +10%</div>';
+          t += '</div>';
+          t += '</div>';
+          t += '<div style="font-size:0.62rem;color:var(--text-muted);">';
+          t += 'Pullback to floor: <strong style="color:var(--caution);">' + hs.pullbackDepth.toFixed(1) + '%</strong>';
+          if (hs.lpFloor > 0) t += ' &nbsp;|&nbsp; LP Depth Proxy: <strong>' + formatUSD(hs.lpFloor) + '</strong>';
+          if (hs.hasPriceHistory) t += ' &nbsp;|&nbsp; Price snapshots: <strong>' + hs.histMCCount + '</strong> (' + formatUSD(hs.histMin) + ' – ' + formatUSD(hs.histMax) + ')';
+          t += '</div></div>';
+
+          /* ── Demand & Pressure ── */
+          var hBpC = hs.buyPressureScore >= 65 ? 'var(--safe)' : hs.buyPressureScore >= 50 ? 'var(--caution)' : '#ff4757';
+          t += 'Buy Pressure: <strong style="color:' + hBpC + ';">' + hs.buyPressureLabel + '</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + hs.buyPressureScore + '/100 · ' + hs.buyPct.toFixed(0) + '% buy dominance)</span><br>';
+          t += 'Demand Signal: <strong style="color:' + hs.demandColor + ';">' + hs.demandSignal + '</strong><br>';
+          if (hs.volSignal) {
+            t += 'Volume Signal: <strong style="color:' + hs.volColor + ';">' + hs.volSignal + '</strong><br>';
+          }
+          if (hs.holderTrend) {
+            t += 'Holder Trend: <strong style="color:' + hs.holderColor + ';">' + hs.holderTrend + '</strong><br>';
+          }
+          if (tps) {
+            var htpC = tps.score >= 80 ? 'var(--safe)' : tps.score >= 60 ? 'var(--caution)' : '#ff4757';
+            t += 'Transaction Pressure: <strong style="color:' + htpC + ';">' + tps.score + '/100</strong>';
+            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + tps.label + ' · ' + tps.pct + '% buy dom. — ' + tps.source + ')</span><br>';
+          }
+
+          /* ── Candle-dependent metrics — unavailable ── */
+          t += '<div style="margin:6px 0;padding:4px 8px;background:rgba(0,0,0,0.2);border-radius:3px;">';
+          t += '<span style="color:var(--text-muted);font-size:0.65rem;font-weight:700;letter-spacing:0.5px;">CANDLE-DEPENDENT METRICS — UNAVAILABLE IN HINT MODE</span><br>';
+          var naH = 'color:rgba(255,255,255,0.25);font-style:italic;font-size:0.70rem;';
+          t += '<span style="' + naH + '">Acceptance Score: N/A &nbsp;·&nbsp; Demand Return: N/A &nbsp;·&nbsp; Bounce Velocity: N/A</span><br>';
+          t += '<span style="' + naH + '">Shelf Type: N/A &nbsp;·&nbsp; Structure Sequence: N/A &nbsp;·&nbsp; Shelf Defenses: N/A</span>';
+          t += '</div>';
+
+          /* ── Runner Potential ── */
+          t += 'Runner Potential: <strong style="color:' + hs.hintRunColor + ';">' + hs.hintRunner + '</strong>';
+          t += ' <span style="padding:1px 5px;border-radius:3px;font-size:0.60rem;font-weight:700;color:#111;background:#ff9800;">Low Confidence Estimate</span><br>';
+
+          /* ── Confidence Tier ── */
+          t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + hs.hintTierColor + ';background:rgba(0,0,0,0.2);">';
+          t += 'Confidence Tier (Hint): <strong style="color:' + hs.hintTierColor + ';font-size:1.15em;letter-spacing:2px;">' + hs.hintTier + '</strong>';
+          t += ' &nbsp;<strong style="color:' + hs.hintTierColor + ';">' + hs.hintTierLabel + '</strong>';
+          t += '<br><span style="color:#ff9800;font-size:0.68rem;font-style:italic;">A/B/S tiers require OHLCV candle data. Maximum tier in Hint Mode: C.</span>';
+          t += '</div>';
+
+        /* ═══════════════════════════════════════════════════════
+           FLOW MODE — transaction data only, no candles or history
            ═══════════════════════════════════════════════════════ */
         } else {
+          /* ── LP Depth estimated floor (always attempted in Flow mode) ── */
+          var fCurMC  = d.marketCap || 0;
+          var fLpFlr  = 0;
+          if (d.liquidity > 0 && d.lmcRatio > 0) {
+            fLpFlr = (d.liquidity / (d.lmcRatio / 100)) * 0.70;
+          } else if (d.liquidity > 0) {
+            fLpFlr = d.liquidity * 4 * 0.70;
+          } else {
+            fLpFlr = fCurMC * 0.65;
+          }
+          if (fCurMC > 0 && fLpFlr > 0) {
+            var fEntLow  = fLpFlr * 1.01;
+            var fEntHigh = fLpFlr * 1.10;
+            var fPb      = ((fCurMC - fLpFlr) / fCurMC) * 100;
+            t += '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(255,71,87,0.05);border:1px solid rgba(255,71,87,0.22);border-radius:6px;">';
+            t += '<div style="font-size:0.62rem;color:#ff8a80;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:7px;"><i class="fa-solid fa-crosshairs" style="margin-right:5px;"></i>LP-Depth Floor Estimate (Flow Mode)</div>';
+            t += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:5px;">';
+            t += '<div><div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.6px;">Estimated Floor MC (LP proxy)</div>';
+            t += '<div style="font-size:0.95rem;font-weight:700;color:var(--caution);">' + formatUSD(fLpFlr) + '</div>';
+            t += '<div style="font-size:0.60rem;color:#ff9800;">Rough Estimate — no candle or price history</div></div>';
+            t += '<div><div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.6px;">Risk-Adjusted Entry Zone</div>';
+            t += '<div style="font-size:0.90rem;font-weight:700;color:var(--caution);">' + formatUSD(fEntLow) + ' – ' + formatUSD(fEntHigh) + '</div>';
+            t += '<div style="font-size:0.60rem;color:var(--text-muted);">Floor +1% to +10% · Use with caution</div></div>';
+            t += '</div>';
+            t += '<div style="font-size:0.62rem;color:var(--text-muted);">Pullback to LP floor: <strong style="color:var(--caution);">' + fPb.toFixed(1) + '%</strong> &nbsp;|&nbsp; Based on liquidity depth only — no historical price data available.</div>';
+            t += '</div>';
+          }
+
           /* Demand Expansion (3-tier fallback) */
           var dTx = window._tecDexTxns;
           var h1b = dTx ? (parseInt(dTx.h1.buys)  || 0) : 0;
@@ -6780,10 +7159,11 @@ function buildRecommendedEntryChecklist(d, analysis) {
   var secS = window._tecSecScore   || 0;
   var secTC= secT==='A'?'#00ffcc':secT==='B'?'#00e676':secT==='C'?'#ffeb3b':'#ff4757';
 
-  /* Structure */
-  var strT = sa ? (sa.confidenceTier || '—') : '—';
-  var strV = sa ? (sa.tierLabel      || '—') : '—';
-  var strS = sa ? (sa.tierScore      || 0)   : 0;
+  /* Structure (HINT mode fallback when no candles) */
+  var _hs  = window._tecHintStructure || null;
+  var strT = sa ? (sa.confidenceTier || '—') : (_hs ? _hs.hintTier      : '—');
+  var strV = sa ? (sa.tierLabel      || '—') : (_hs ? _hs.hintTierLabel  : '—');
+  var strS = sa ? (sa.tierScore      || 0)   : (_hs ? _hs.hintTierScore  : 0);
   var strTC= strT==='S'?'#00ffcc':strT==='A'?'#00e676':strT==='B'?'#ffeb3b':strT==='C'?'#ff9800':'#ff4757';
 
   /* Attention */
@@ -8602,6 +8982,10 @@ function buildSetupText(d, analysis) {
   if (txtSA && txtSA.activeShelfPrice > 0 && d.defCurrent > 0) {
     txtActiveShelfMC = txtCurrentMC * (txtSA.activeShelfPrice / d.defCurrent);
   }
+  /* HINT MODE: use estimated floor when no candle-based shelf available */
+  if (txtActiveShelfMC === null && window._tecHintStructure) {
+    txtActiveShelfMC = window._tecHintStructure.estimatedFloorMC;
+  }
 
   /* ── Distance from shelf & classification ── */
   var txtDistShelf = txtActiveShelfMC && txtActiveShelfMC > 0 && txtCurrentMC > 0
@@ -8684,8 +9068,26 @@ function buildSetupText(d, analysis) {
     lines.push('    Overhead Supply: ' + txtSA.overheadRisk + ' (' + txtSA.overheadDensityPct + '% closes above)');
     if (txtSA.runnerPotential) lines.push('    Runner Potential: ' + txtSA.runnerPotential + ' (Score: ' + (txtSA.runnerScore || '—') + ')');
     lines.push('    Confidence Tier: ' + txtSA.confidenceTier + ' — ' + txtSA.tierLabel + ' (Score: ' + txtSA.tierScore + '/100)');
+  } else if (window._tecHintStructure) {
+    var _htx = window._tecHintStructure;
+    lines.push('05. HINT MODE — Estimated Structure (OHLCV Unavailable):');
+    lines.push('    Estimated Floor MC: ' + formatUSD(_htx.estimatedFloorMC) + ' (' + _htx.floorStrength + ')');
+    lines.push('    Recommended Entry Range: ' + formatUSD(_htx.entryRangeLow) + ' \u2013 ' + formatUSD(_htx.entryRangeHigh) + ' (Floor +1\u202f\u2013\u202f+10%)');
+    lines.push('    Pullback to Floor: ' + _htx.pullbackDepth.toFixed(1) + '%');
+    if (_htx.hasPriceHistory) lines.push('    MC Price Snapshots: ' + _htx.histMCCount + ' data points | Range: ' + formatUSD(_htx.histMin) + ' \u2013 ' + formatUSD(_htx.histMax));
+    if (_htx.lpFloor > 0) lines.push('    LP Depth Proxy Floor: ' + formatUSD(_htx.lpFloor));
+    lines.push('    Buy Pressure: ' + _htx.buyPressureLabel + ' (' + _htx.buyPressureScore + '/100 — ' + _htx.buyPct.toFixed(0) + '% buy dominance)');
+    lines.push('    Demand Signal: ' + _htx.demandSignal);
+    if (_htx.volSignal) lines.push('    Volume Signal: ' + _htx.volSignal);
+    if (_htx.holderTrend) lines.push('    Holder Trend: ' + _htx.holderTrend);
+    lines.push('    Runner Potential: ' + _htx.hintRunner + ' (Low Confidence Estimate)');
+    lines.push('    Confidence Tier: ' + _htx.hintTier + ' \u2014 ' + _htx.hintTierLabel + ' (Score: ' + _htx.hintTierScore + '/100)');
+    lines.push('    \u26a0 HINT MODE: Candle data unavailable. Floor/entry estimated from MC history, LP depth, tx data. Max tier: C (A/B/S require OHLCV).');
+    lines.push('    Distance from Estimated Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  \u26a0 POOR RISK/REWARD' : ''));
   } else {
-    lines.push('05. Distance from Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  ⚠ POOR RISK/REWARD' : ''));
+    lines.push('05. FLOW MODE \u2014 No Candle Data:');
+    lines.push('    Distance from Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  \u26a0 POOR RISK/REWARD' : ''));
+    lines.push('    \u26a0 FLOW MODE: No structural data. Analysis based on transaction flow only. Floor estimates are LP-depth approximations.');
   }
   lines.push('06. TP1 (' + txtTp1Pct + '%): ' + formatUSD(tp1MC) + ' MC (+' + (((tp1MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)  |  TP2 (' + txtTp2Pct + '%): ' + formatUSD(tp2MC) + ' MC (+' + (((tp2MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)');
 
@@ -8838,7 +9240,8 @@ el('exportTxtBtn').addEventListener('click', function() {
     L.push('');
     /* Recommended Entry Checklist summary */
     var _secT2 = window._tecSecTier || '—';
-    var _strT2 = (a.data.structuralAnalysis ? a.data.structuralAnalysis.confidenceTier : null) || '—';
+    var _strT2 = (a.data.structuralAnalysis ? a.data.structuralAnalysis.confidenceTier : null)
+              || (window._tecHintStructure ? window._tecHintStructure.hintTier : null) || '—';
     var _attT2 = _txAB.attTier;
     var _sN = _secT2==='A'?100:_secT2==='B'?75:_secT2==='C'?50:25;
     var _stN= _strT2==='S'?100:_strT2==='A'?85:_strT2==='B'?65:_strT2==='C'?45:25;
@@ -10096,8 +10499,8 @@ function wlBuildEntry(existingId, existingDateAdded) {
     overallTier:      window._tecOverallTier  || '—',
     overallColor:     window._tecOverallColor || 'var(--text-muted)',
     overallRec:       window._tecOverallRec   || '—',
-    confidenceTier:   sa ? (sa.confidenceTier  || '—') : '—',
-    runnerPotential:  sa ? (sa.runnerPotential  || '—') : '—',
+    confidenceTier:   sa ? (sa.confidenceTier  || '—') : (window._tecHintStructure ? window._tecHintStructure.hintTier : '—'),
+    runnerPotential:  sa ? (sa.runnerPotential  || '—') : (window._tecHintStructure ? window._tecHintStructure.hintRunner : '—'),
     entryVerdict:     currentAnalysis.status || '—',
     securityVerdict:  wlGetSecurityVerdict(d),
     secTier:          window._tecSecTier    || '—',
@@ -10126,8 +10529,8 @@ function wlSyncEntry(id) {
     overallTier:      window._tecOverallTier  || orig.overallTier  || '—',
     overallColor:     window._tecOverallColor || orig.overallColor || 'var(--text-muted)',
     overallRec:       window._tecOverallRec   || orig.overallRec   || '—',
-    confidenceTier:   sa ? (sa.confidenceTier || '—') : orig.confidenceTier,
-    runnerPotential:  sa ? (sa.runnerPotential || '—') : orig.runnerPotential,
+    confidenceTier:   sa ? (sa.confidenceTier || '—') : (window._tecHintStructure ? window._tecHintStructure.hintTier : orig.confidenceTier),
+    runnerPotential:  sa ? (sa.runnerPotential || '—') : (window._tecHintStructure ? window._tecHintStructure.hintRunner : orig.runnerPotential),
     entryVerdict:     currentAnalysis.status || orig.entryVerdict,
     securityVerdict:  wlGetSecurityVerdict(d),
     secTier:          window._tecSecTier    || orig.secTier || '—',

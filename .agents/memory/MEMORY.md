@@ -1,0 +1,1 @@
+- [HINT MODE refactor](hint-mode-refactor.md) — Three-mode engine (STRUCTURE/HINT/FLOW), trigger logic, data sources, tier caps, and all fallback injection points.
