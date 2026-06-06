@@ -1186,6 +1186,28 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
         </div>
       </div>
 
+      <div style="margin-top:10px;padding:8px 10px;background:rgba(0,212,255,0.04);border-radius:6px;border-left:3px solid rgba(0,212,255,0.3);">
+        <div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.9px;margin-bottom:6px;"><i class="fa-solid fa-sliders" style="margin-right:5px;"></i>SOCIAL SCAN POST LIMITS <span style="font-weight:400;color:var(--text-muted);text-transform:none;">— how many posts to fetch per scan type</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Quick — X posts</label>
+            <input class="settings-input" type="number" id="sQuickScanX" value="15" min="5" max="100" step="1">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Quick — Reddit</label>
+            <input class="settings-input" type="number" id="sQuickScanRd" value="10" min="5" max="50" step="1">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Deep — X posts</label>
+            <input class="settings-input" type="number" id="sDeepScanX" value="50" min="10" max="200" step="5">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="settings-label">Deep — Reddit</label>
+            <input class="settings-input" type="number" id="sDeepScanRd" value="25" min="5" max="100" step="5">
+          </div>
+        </div>
+      </div>
+
       <div class="settings-section-label" style="margin-top:14px;">Flagged Wallets <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(known ruggers, snipers &amp; cabal — auto-highlighted in QEC holder scans)</span></div>
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:flex-end;">
         <div style="flex:1;min-width:180px;">
@@ -1290,7 +1312,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
     </div>
     <div class="card-body collapsible collapsed" id="attHistoryBody" style="max-height:0;">
       <div class="wl-controls" style="flex-wrap:wrap;gap:6px;align-items:center;">
-        <span style="font-size:0.62rem;color:var(--text-muted);">Snapshots stored after each scan. Re-scanning the same CA shows momentum changes.</span>
+        <span style="font-size:0.62rem;color:var(--text-muted);">Snapshots stored after each full analysis. Re-scanning the same CA shows momentum changes.</span>
         <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="attHistClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
       </div>
       <div id="attHistEmpty" class="wl-empty" style="padding:20px 0;">
@@ -1298,6 +1320,26 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
         No attention snapshots yet.<br>Run an analysis on any coin to begin tracking.
       </div>
       <div id="attHistGrid" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- ── Social Scan History Card ── -->
+  <div class="card" id="socialScanHistCard">
+    <div class="card-title collapsed" id="socialScanHistToggle">
+      <i class="fa-solid fa-satellite-dish" style="color:var(--accent-cyan);"></i> Social Scan Log
+      <span class="wl-count" id="socialScanHistCount">0</span>
+      <i class="fa-solid fa-chevron-down toggle-icon"></i>
+    </div>
+    <div class="card-body collapsible collapsed" id="socialScanHistBody" style="max-height:0;">
+      <div class="wl-controls" style="flex-wrap:wrap;gap:6px;align-items:center;">
+        <span style="font-size:0.62rem;color:var(--text-muted);">Per-CA log of every social scan — provider, post counts, and density trend over time.</span>
+        <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="socialScanHistClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
+      </div>
+      <div id="socialScanHistEmpty" class="wl-empty" style="padding:20px 0;">
+        <i class="fa-solid fa-satellite-dish"></i>
+        No social scans logged yet.<br>Use <strong>Scan Social</strong> or <strong>Deep Scan</strong> buttons to start.
+      </div>
+      <div id="socialScanHistGrid" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>
     </div>
   </div>
 
@@ -1978,7 +2020,9 @@ var DEFAULT_SETTINGS = {
   tp1: 50, tp2: 90,
   wFullSec: 35,   wFullStr: 35,   wFullAtt: 30,
   wPartSec: 38,   wPartStr: 38,   wPartAtt: 24,
-  wProxSec: 42.5, wProxStr: 42.5, wProxAtt: 15
+  wProxSec: 42.5, wProxStr: 42.5, wProxAtt: 15,
+  quickScanX: 15, quickScanRd: 10,
+  deepScanX: 50,  deepScanRd: 25
 };
 
 var settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -2037,6 +2081,10 @@ function applySettingsToUI() {
   el('sWProxSec').value = settings.wProxSec;
   el('sWProxStr').value = settings.wProxStr;
   el('sWProxAtt').value = settings.wProxAtt;
+  el('sQuickScanX').value  = settings.quickScanX  || 15;
+  el('sQuickScanRd').value = settings.quickScanRd || 10;
+  el('sDeepScanX').value   = settings.deepScanX   || 50;
+  el('sDeepScanRd').value  = settings.deepScanRd  || 25;
   try {
     el('sHeliusKey').value    = localStorage.getItem('tec_helius_key')       || '';
     el('sDefadeKey').value    = localStorage.getItem('tec_defade_key')       || '';
@@ -2068,7 +2116,11 @@ function readSettingsFromUI() {
     tp1: n('sTp1'), tp2: n('sTp2'),
     wFullSec: n('sWFullSec'), wFullStr: n('sWFullStr'), wFullAtt: n('sWFullAtt'),
     wPartSec: n('sWPartSec'), wPartStr: n('sWPartStr'), wPartAtt: n('sWPartAtt'),
-    wProxSec: n('sWProxSec'), wProxStr: n('sWProxStr'), wProxAtt: n('sWProxAtt')
+    wProxSec: n('sWProxSec'), wProxStr: n('sWProxStr'), wProxAtt: n('sWProxAtt'),
+    quickScanX:  n('sQuickScanX')  || 15,
+    quickScanRd: n('sQuickScanRd') || 10,
+    deepScanX:   n('sDeepScanX')   || 50,
+    deepScanRd:  n('sDeepScanRd')  || 25
   };
 }
 
@@ -7928,8 +7980,9 @@ async function runSocialScan(isDeep) {
   }
 
   var queries  = { ca: ca || null, ticker: tickerSym, name: nameQ };
-  var xLimit   = isDeep ? 50 : 15;
-  var rdLimit  = isDeep ? 25 : 10;
+  var _s = (window._tecSettings || settings);
+  var xLimit   = isDeep ? (_s.deepScanX  || 50) : (_s.quickScanX  || 15);
+  var rdLimit  = isDeep ? (_s.deepScanRd || 25) : (_s.quickScanRd || 10);
   var sinceTs  = ca ? getLastSocialScanTimestamp(ca) : null;
   var isIncremental = sinceTs !== null;
 
@@ -7982,10 +8035,21 @@ async function runSocialScan(isDeep) {
   populateSocialFormFields(xResult, rdResult);
   window._tecSocialRaw = { x: xResult, reddit: rdResult, scanTs: Date.now(), isDeep: isDeep };
 
-  /* ── Store incremental timestamp ── */
+  /* ── Store incremental timestamp + scan history ── */
   var xCount  = (xResult.tweets || []).length;
   var rdCount = (rdResult.posts  || []).length;
   if (ca && (xCount > 0 || rdCount > 0)) saveSocialScanTimestamp(ca);
+  socialScanHistSave({
+    ca: ca, coin: ticker, isDeep: isDeep,
+    provider: xResult.ok ? xResult.provider : null,
+    xQuery:   xResult.ok ? xResult.usedQuery : null,
+    xCount: xCount, rdCount: rdCount,
+    xLimit: xLimit, rdLimit: rdLimit,
+    mentionDensityLabel: null, mentionDensityRatio: 0,
+    authorConcLabel: null,
+    xError:  (!xResult.ok && xResult.error) ? xResult.error : null,
+    rdError: (!rdResult.ok && rdResult.error) ? rdResult.error : null
+  });
 
   /* ── Build status message ── */
   var parts = [];
@@ -9508,6 +9572,21 @@ el('settingsToggle').addEventListener('click', function() {
 el('attHistoryToggle').addEventListener('click', function() {
   var body = el('attHistoryBody');
   var toggle = el('attHistoryToggle');
+  var isCollapsed = body.classList.contains('collapsed');
+  if (isCollapsed) {
+    body.classList.remove('collapsed');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    toggle.classList.remove('collapsed');
+  } else {
+    body.classList.add('collapsed');
+    body.style.maxHeight = '0';
+    toggle.classList.add('collapsed');
+  }
+});
+
+el('socialScanHistToggle').addEventListener('click', function() {
+  var body = el('socialScanHistBody');
+  var toggle = el('socialScanHistToggle');
   var isCollapsed = body.classList.contains('collapsed');
   if (isCollapsed) {
     body.classList.remove('collapsed');
@@ -11975,6 +12054,136 @@ function attHistRender() {
   }).join('');
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   SOCIAL SCAN HISTORY
+   ═══════════════════════════════════════════════════════════════ */
+var SSH_KEY = 'tec_social_scan_hist';
+var SSH_MAX = 100;
+var _sshData = [];
+
+function socialScanHistLoad() {
+  try {
+    var raw = localStorage.getItem(SSH_KEY);
+    _sshData = raw ? JSON.parse(raw) : [];
+  } catch(e) { _sshData = []; }
+}
+
+function socialScanHistSave(entry) {
+  entry.id = Date.now() + Math.floor(Math.random() * 1000);
+  entry.ts = Date.now();
+  _sshData.unshift(entry);
+  if (_sshData.length > SSH_MAX) _sshData.length = SSH_MAX;
+  try { localStorage.setItem(SSH_KEY, JSON.stringify(_sshData)); } catch(e) {}
+  socialScanHistRender();
+}
+
+function socialScanHistClearAll() {
+  _sshData = [];
+  try { localStorage.removeItem(SSH_KEY); } catch(e) {}
+  socialScanHistRender();
+}
+
+function socialScanHistClearOne(id) {
+  _sshData = _sshData.filter(function(e){ return e.id !== id; });
+  try { localStorage.setItem(SSH_KEY, JSON.stringify(_sshData)); } catch(e) {}
+  socialScanHistRender();
+}
+
+function socialScanHistRender() {
+  var grid    = el('socialScanHistGrid');
+  var empty   = el('socialScanHistEmpty');
+  var countEl = el('socialScanHistCount');
+  if (!grid) return;
+  if (countEl) countEl.textContent = _sshData.length || '0';
+  if (!_sshData.length) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  /* Group entries by CA (or coin name if no CA) so density trend is visible */
+  var caGroups = {};
+  _sshData.forEach(function(e) {
+    var key = e.ca || e.coin || 'unknown';
+    if (!caGroups[key]) caGroups[key] = [];
+    caGroups[key].push(e);
+  });
+
+  grid.innerHTML = _sshData.map(function(e, idx) {
+    var dt  = new Date(e.ts);
+    var dtS = (dt.getMonth()+1)+'/'+dt.getDate()+' '+
+              dt.getHours().toString().padStart(2,'0')+':'+
+              dt.getMinutes().toString().padStart(2,'0');
+
+    var scanBadgeColor = e.isDeep ? '#9c88ff' : 'var(--accent-cyan)';
+    var scanLabel      = e.isDeep ? 'DEEP' : 'QUICK';
+    var caKey          = e.ca || e.coin || 'unknown';
+    var groupEntries   = caGroups[caKey] || [];
+    /* Find the next entry for this CA in chronological order (lower index = newer) */
+    var myPos  = groupEntries.indexOf(e);
+    var prevE  = myPos < groupEntries.length - 1 ? groupEntries[myPos + 1] : null;
+
+    /* Density trend vs previous scan for same CA */
+    var trendHTML = '';
+    if (prevE) {
+      var xDelta  = e.xCount - prevE.xCount;
+      var rdDelta = e.rdCount - prevE.rdCount;
+      var elapsed = Math.round((e.ts - prevE.ts) / 60000);
+      var elStr   = elapsed < 60 ? elapsed + 'm ago' : Math.round(elapsed/60) + 'h ago';
+      var totalDelta = xDelta + rdDelta;
+      var dColor = totalDelta > 5 ? '#00e676' : totalDelta < -5 ? '#ff4757' : '#ffeb3b';
+      var dSign  = totalDelta >= 0 ? '+' : '';
+      trendHTML = '<div style="margin-top:4px;padding:3px 7px;background:rgba(0,0,0,0.2);border-radius:3px;border-left:2px solid '+dColor+';">' +
+        '<span style="font-size:0.56rem;color:var(--text-muted);">vs '+elStr+': </span>' +
+        '<span style="font-size:0.58rem;font-weight:700;color:'+dColor+';">'+dSign+xDelta+' X  /  '+dSign+rdDelta+' Reddit</span>' +
+        '</div>';
+    }
+
+    /* Provider display */
+    var provBadge = '';
+    if (e.provider === 'twitterapi.io') {
+      provBadge = '<span style="font-size:0.52rem;padding:1px 5px;border-radius:3px;background:rgba(0,212,255,0.12);color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.3);">TwitterAPI.io</span>';
+    } else if (e.provider === 'apify') {
+      provBadge = '<span style="font-size:0.52rem;padding:1px 5px;border-radius:3px;background:rgba(255,214,0,0.12);color:#ffd600;border:1px solid rgba(255,214,0,0.3);">Apify</span>';
+    } else if (e.xError) {
+      provBadge = '<span style="font-size:0.52rem;padding:1px 5px;border-radius:3px;background:rgba(255,61,113,0.1);color:#ff3d71;border:1px solid rgba(255,61,113,0.25);">X failed</span>';
+    } else {
+      provBadge = '<span style="font-size:0.52rem;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.05);color:var(--text-muted);">No API key</span>';
+    }
+
+    var xPct  = e.xLimit  ? Math.round((e.xCount  / e.xLimit)  * 100) : 0;
+    var rdPct = e.rdLimit ? Math.round((e.rdCount / e.rdLimit) * 100) : 0;
+
+    return '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border-left:3px solid '+scanBadgeColor+';">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+            '<span style="font-size:0.68rem;font-weight:700;color:var(--text-primary);">'+(e.coin||'?')+'</span>' +
+            (e.ca ? '<span style="font-size:0.55rem;color:var(--text-muted);font-family:monospace;">'+e.ca.slice(0,8)+'…'+e.ca.slice(-6)+'</span>' : '') +
+            '<span style="font-size:0.52rem;font-weight:800;color:'+scanBadgeColor+';padding:1px 5px;border-radius:3px;border:1px solid '+scanBadgeColor+'66;">'+scanLabel+'</span>' +
+            provBadge +
+          '</div>' +
+          '<div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+            '<span style="font-size:0.60rem;color:var(--text-muted);">🐦 <strong style="color:var(--text-primary);">'+e.xCount+'</strong><span style="color:var(--text-muted);">/'+e.xLimit+'</span>' +
+              (xPct > 0 ? ' <span style="font-size:0.50rem;color:'+(xPct>=80?'#00e676':xPct>=40?'#ffeb3b':'#ff9800')+';">('+xPct+'%)</span>' : '')+
+            '</span>' +
+            '<span style="font-size:0.60rem;color:var(--text-muted);">🔴 <strong style="color:var(--text-primary);">'+e.rdCount+'</strong><span style="color:var(--text-muted);">/'+e.rdLimit+'</span>' +
+              (rdPct > 0 ? ' <span style="font-size:0.50rem;color:'+(rdPct>=80?'#00e676':rdPct>=40?'#ffeb3b':'#ff9800')+';">('+rdPct+'%)</span>' : '')+
+            '</span>' +
+            (e.xQuery ? '<span style="font-size:0.52rem;color:var(--text-muted);">query: <em>'+e.xQuery+'</em></span>' : '') +
+          '</div>' +
+          trendHTML +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">' +
+          '<span style="font-size:0.55rem;color:var(--text-muted);">'+dtS+'</span>' +
+          '<button onclick="socialScanHistClearOne('+e.id+')" style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:0.7rem;padding:2px 4px;line-height:1;" title="Remove">✕</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
 loadSettings();
 loadSmartWallets();
 loadFlaggedWallets();
@@ -11982,6 +12191,8 @@ renderTable();
 wlLoad();
 attHistLoad();
 attHistRender();
+socialScanHistLoad();
+socialScanHistRender();
 
 /* ── Sync QEC vol/fees fields whenever main form values change ──────────────
    Uses Object.defineProperty to intercept both programmatic .value assignments
