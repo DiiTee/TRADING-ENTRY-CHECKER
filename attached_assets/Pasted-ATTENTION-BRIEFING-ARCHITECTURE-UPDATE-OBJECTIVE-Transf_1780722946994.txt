@@ -1,0 +1,657 @@
+ATTENTION BRIEFING ARCHITECTURE UPDATE
+
+OBJECTIVE 
+
+Transform Attention Briefing from a proxy-based momentum estimator into a true Attention Intelligence Engine capable of detecting:
+
+- Attention Ignition
+- Attention Velocity
+- Attention Acceleration
+- Attention Persistence
+- Attention Quality
+- Source Expansion
+- Narrative Growth
+
+The goal is to identify attention BEFORE it fully manifests in holder growth, volume growth, and market cap expansion.
+
+Refine the Attention Briefing architecture to account for the reality that free social data sources are not always available.
+
+The system must NOT assume that social data will always exist.
+
+Instead, Attention Briefing should dynamically adapt its confidence, weighting, and scoring based on available data.
+
+
+CRITICAL REQUIREMENTS
+
+DO NOT REMOVE EXISTING ATTENTION BRIEFING FEATURES.
+
+Preserve:
+
+- Holder Momentum
+- Holder Divergence
+- Attention Efficiency
+- Narrative Strength
+- Lifecycle Analysis
+- Existing proxy calculations
+
+These remain valuable fallback signals.
+
+Real social attention should ENHANCE and partially blend with existing proxy metrics, not completely replace them.
+
+--------------------------------------------------
+
+CORE DESIGN PRINCIPLE
+
+Real Social Mode should be treated as an enhancement layer.
+
+Proxy Mode should remain fully functional.
+
+The app must continue producing useful Attention Briefings even when social data is unavailable.
+
+--------------------------------------------------
+
+ATTENTION MODES
+
+MODE 1:
+FULL SOCIAL MODE
+
+Requirements:
+
+- X/Twitter data available
+AND
+- Telegram data available
+
+Use FULL SOCIAL MODE only if:
+
+- Social sources return usable data
+  AND
+- Social metrics contribute at least 50% of the Attention Score
+
+Confidence:
+HIGH
+
+Overall Tier Weighting:
+
+Security Briefing = 35%
+Structure Briefing = 35%
+Attention Briefing = 30%
+
+Display:
+
+Mode: FULL SOCIAL
+
+--------------------------------------------------
+
+MODE 2:
+PARTIAL SOCIAL MODE
+
+Requirements:
+
+At least one social source available:
+
+Examples:
+
+- X only
+- Telegram only
+- Reddit only
+- X + Reddit
+- Telegram + Reddit
+
+Confidence:
+MEDIUM
+
+Overall Tier Weighting:
+
+Security Briefing = 38%
+Structure Briefing = 38%
+Attention Briefing = 24%
+
+Display:
+
+Mode: PARTIAL SOCIAL
+
+--------------------------------------------------
+
+MODE 3:
+PROXY MODE
+
+Requirements:
+
+No usable social data available.
+
+Confidence:
+LOW
+
+Overall Tier Weighting:
+
+Security Briefing = 42.5%
+Structure Briefing = 42.5%
+Attention Briefing = 15%
+
+Display:
+
+Mode: PROXY
+
+--------------------------------------------------
+
+SOCIAL SOURCE PRIORITY
+
+TIER 1 (PRIMARY SIGNAL SOURCES)
+
+1. X / Twitter
+
+Purpose:
+
+- Attention Velocity
+- Attention Acceleration
+- Early Narrative Detection
+- Source Expansion
+
+Data Collected:
+
+- Coin Name mentions
+- Ticker mentions
+- Contract Address mentions
+- Timestamp
+- Author
+- Post text
+- Engagement metrics (if available)
+
+Official Documentation:
+
+https://developer.x.com/en/docs/x-api
+
+--------------------------------------------------
+
+2. Telegram
+
+Purpose:
+
+- Early narrative spread
+- Insider chatter
+- Source expansion
+- Virality detection
+
+Data Collected:
+
+- Coin Name mentions
+- Ticker mentions
+- Contract Address mentions
+- Timestamp
+- Channel
+- Message
+- Forward count (if available)
+
+Official Documentation:
+
+https://core.telegram.org/api
+
+Telethon:
+
+https://docs.telethon.dev/en/stable/
+
+--------------------------------------------------
+
+TIER 2 (CONFIRMATION SOURCES)
+
+3. Reddit
+
+Purpose:
+
+- Narrative validation
+- Persistence confirmation
+- Community expansion
+
+Data Collected:
+
+- Coin Name mentions
+- Ticker mentions
+- Contract Address mentions
+- Timestamp
+- Author
+- Subreddit
+- Post/comment
+
+Official Documentation:
+
+https://www.reddit.com/dev/api/
+
+PRAW:
+
+https://praw.readthedocs.io/en/stable/
+
+--------------------------------------------------
+
+OPTIONAL SOURCES
+
+4. Google Trends
+
+Purpose:
+
+- Search interest confirmation
+- Narrative validation
+
+Use as bonus signal only.
+
+Documentation:
+
+https://github.com/GeneralMills/pytrends
+
+--------------------------------------------------
+
+5. GDELT
+
+Purpose:
+
+- Narrative expansion
+- Mainstream attention detection
+
+Use as bonus signal only.
+
+Documentation:
+
+https://www.gdeltproject.org/
+
+https://blog.gdeltproject.org/gdelt-2-0-our-global-world-in-realtime/
+
+--------------------------------------------------
+
+ATTENTION TIME WINDOWS
+
+Calculate:
+
+- Mentions 15m
+
+- Mentions 30m
+
+- Mentions 1h
+
+- Mentions 3h
+
+- Mentions 24h
+
+- Unique Posters 1h
+
+- Unique Posters 24h
+
+- Unique Sources 1h
+
+- Unique Sources 24h
+
+---
+
+ATTENTION VELOCITY
+
+Measure:
+
+Current Attention Rate
+vs
+Previous Attention Rate
+
+Output:
+
+EXPLODING
+STRONG
+STEADY
+WEAK
+DECLINING
+
+Example:
+
+Attention Velocity:
+EXPLODING (+220%)
+
+---
+
+ATTENTION ACCELERATION
+
+Measure:
+
+Current Velocity
+vs
+Previous Velocity
+
+Output:
+
+VERY HIGH
+HIGH
+MODERATE
+LOW
+NEGATIVE
+
+Example:
+
+Attention Acceleration:
+HIGH (+300%)
+
+---
+
+ATTENTION PERSISTENCE
+
+Determine whether attention sustains over time.
+
+Examples:
+
+Growing Across Multiple Periods:
+PERSISTENT
+
+Single Spike Then Collapse:
+FLASH HYPE
+
+Steady Decay:
+FADING
+
+---
+
+SOURCE EXPANSION
+
+Measure:
+
+- Unique posters
+- Unique channels
+- Unique communities
+- Cross-platform spread
+
+Output:
+
+STRONG
+MODERATE
+LIMITED
+
+--------------------------------------------------
+
+ATTENTION QUALITY ENGINE (NEW)
+
+Raw mention counts are NOT enough.
+
+Add:
+
+Attention Quality Score
+
+Measure:
+
+- Unique poster ratio
+- Repeat poster ratio
+- Source diversity
+- Cross-platform diversity
+- Engagement concentration
+
+Examples:
+
+100 mentions from 5 accounts
+→ LOW QUALITY
+
+30 mentions from 25 accounts
+→ HIGH QUALITY
+
+--------------------------------------------------
+
+WEIGHTED ATTENTION EVENTS (MANDATORY)
+
+Not all mentions should contribute equally.
+
+Base Event Weights:
+
+X Ticker Mention:
+0.7
+
+X Contract Address Mention:
+1.0
+
+Telegram Mention:
+1.2
+
+Reddit Mention:
+0.5
+
+Google Trends Spike:
+Bonus Multiplier
+
+GDELT Mention:
+Narrative Multiplier
+
+--------------------------------------------------
+
+QUALITY MODIFIERS
+
+Unique Author:
+Quality Bonus
+
+Cross-Platform Mention:
+Expansion Bonus
+
+Forward / Retweet Activity:
+Acceleration Bonus
+
+Independent Source Confirmation:
+Credibility Bonus
+
+--------------------------------------------------
+
+ATTENTION SCORE COMPOSITION
+
+FULL SOCIAL MODE
+
+Velocity:
+35%
+
+Acceleration:
+20%
+
+Persistence:
+15%
+
+Attention Quality:
+15%
+
+Source Expansion:
+10%
+
+Narrative Strength:
+5%
+
+Raw mention count should have minimal influence.
+
+Growth rate is more important than popularity.
+
+--------------------------------------------------
+
+SOCIAL + PROXY BLENDING
+
+Do NOT fully replace proxy signals.
+
+Blend:
+
+Social Signals:
+70%
+
+Proxy Signals:
+30%
+
+Reason:
+
+Attention without market reaction is weaker.
+
+Market reaction without attention is incomplete.
+
+Both should contribute.
+
+--------------------------------------------------
+
+ATTENTION HISTORY WATCHLIST
+
+Store snapshot after every scan.
+(The Attention History Watchlist can be cleared individually or at once, to free storage)
+
+Store:
+
+- Coin Name
+- Contract Address
+- Timestamp
+- Attention Score
+- Mode
+- Confidence
+- Velocity
+- Acceleration
+- Persistence
+- Quality
+- Source Expansion
+- Narrative Strength
+
+Mentions:
+15m
+30m
+1h
+3h
+24h
+
+Unique Posters
+Unique Channels
+Unique Sources
+
+Narrative Score
+Lifecycle Stage
+
+--------------------------------------------------
+
+RE-SCAN COMPARISON ENGINE
+
+When a coin is scanned again:
+
+Calculate:
+
+- Mention Growth
+- Velocity Change
+- Acceleration Change
+- Source Growth
+- Quality Change
+- Persistence Change
+
+Output:
+
+Attention Trend:
+RISING
+STABLE
+FADING
+EXPLODING
+
+--------------------------------------------------
+
+FINAL ATTENTION BRIEFING OUTPUT
+
+Example: 
+
+ATTENTION BRIEFING
+
+Attention Tier: A
+Score: 28/30
+
+Verdict:
+HIGH ATTENTION POTENTIAL
+
+---
+
+Attention Velocity:
+EXPLODING (+220%)
+
+---
+
+Attention Acceleration:
+HIGH (+300%)
+
+---
+
+Attention Persistence:
+PERSISTENT
+
+---
+
+Attention Quality:
+HIGH
+
+---
+
+Source Expansion:
+STRONG
+
+18 Unique Posters
+12 Channels
+3 Platforms
+
+---
+
+Mentions
+
+15m: 12
+30m: 19
+1h: 31
+3h: 72
+24h: 181
+
+---
+
+Narrative Strength:
+8/10
+
+---
+
+Mode:
+FULL SOCIAL MODE
+
+Confidence:
+HIGH
+
+--------------------------------------------------
+
+FAILURE HANDLING
+
+If one social source fails:
+
+Do NOT automatically enter Proxy Mode.
+
+Attempt to use remaining sources.
+
+Examples:
+
+X unavailable
+Telegram available
+→ PARTIAL SOCIAL MODE
+
+Telegram unavailable
+X available
+→ PARTIAL SOCIAL MODE
+
+Reddit unavailable
+X + Telegram available
+→ FULL SOCIAL MODE
+
+Only enter PROXY MODE when no usable social source data exists.
+
+--------------------------------------------------
+
+EXPECTED RESULT
+
+Attention Briefing should identify:
+
+- Emerging attention
+- Accelerating attention
+- High-quality attention
+- Persistent attention
+- Expanding attention
+- Early narrative ignition
+
+before those signals fully appear in holder growth, transaction growth, and market cap expansion.
+
+IMPORTANT: 
+The Attention Briefing should remain fully functional at all times.
+
+When social data exists:
+- Detect early attention ignition
+- Detect acceleration
+- Detect narrative spread
+
+When social data is unavailable:
+- Continue operating using proxy metrics
+
+The system should degrade gracefully instead of becoming unusable.
+
