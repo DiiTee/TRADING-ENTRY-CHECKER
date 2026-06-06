@@ -1193,6 +1193,26 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
     </div>
   </div>
 
+  <!-- ── Attention History Card ── -->
+  <div class="card" id="attHistoryCard">
+    <div class="card-title collapsed" id="attHistoryToggle">
+      <i class="fa-solid fa-clock-rotate-left"></i> Attention History
+      <span class="wl-count" id="attHistCount">0</span>
+      <i class="fa-solid fa-chevron-down toggle-icon"></i>
+    </div>
+    <div class="card-body collapsible collapsed" id="attHistoryBody" style="max-height:0;">
+      <div class="wl-controls" style="flex-wrap:wrap;gap:6px;align-items:center;">
+        <span style="font-size:0.62rem;color:var(--text-muted);">Snapshots stored after each scan. Re-scanning the same CA shows momentum changes.</span>
+        <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="attHistClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
+      </div>
+      <div id="attHistEmpty" class="wl-empty" style="padding:20px 0;">
+        <i class="fa-solid fa-satellite-dish"></i>
+        No attention snapshots yet.<br>Run an analysis on any coin to begin tracking.
+      </div>
+      <div id="attHistGrid" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title" style="cursor:default;"><i class="fa-solid fa-paste"></i> Coin Input</div>
     <div class="card-body">
@@ -1321,6 +1341,51 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
           <label>Social Buzz (0–5)</label>
           <input type="number" id="fBuzz" placeholder="e.g. 4" min="0" max="5" step="0.1">
         </div>
+
+        <!-- ── Social Data Inputs (full-width collapsible panel) ── -->
+        <div class="form-group" style="grid-column:1/-1;margin-top:4px;">
+          <div onclick="toggleSocialDataPanel()" style="cursor:pointer;padding:8px 12px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.18);border-radius:5px;display:flex;align-items:center;justify-content:space-between;user-select:none;">
+            <span style="font-size:0.68rem;font-weight:700;color:var(--accent-cyan);letter-spacing:1px;text-transform:uppercase;"><i class="fa-solid fa-satellite-dish" style="margin-right:6px;"></i>Social Data Inputs <span style="font-size:0.58rem;color:var(--text-muted);font-weight:400;text-transform:none;"> — optional · enhances Attention Briefing</span></span>
+            <span id="socialDataChevron" style="color:var(--accent-cyan);font-size:0.7rem;transition:transform 0.2s;">▼</span>
+          </div>
+          <div id="socialDataPanel" style="display:none;margin-top:6px;padding:12px;background:rgba(0,0,0,0.15);border-radius:5px;border:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">Enter mention counts from your monitoring tools (Telegram bots, X search, Reddit, etc.). All fields are optional. Any data entered will activate Social Mode and enhance the Attention Briefing with real signals.</div>
+            <div style="font-size:0.62rem;font-weight:700;color:#1DA1F2;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(29,161,242,0.2);"><i class="fa-brands fa-x-twitter" style="margin-right:5px;"></i>X / Twitter</div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;">
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 15m</label><input type="number" id="fSocXM15" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 30m</label><input type="number" id="fSocXM30" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 1h</label><input type="number" id="fSocXM1h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 3h</label><input type="number" id="fSocXM3h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 24h</label><input type="number" id="fSocXM24h" placeholder="0" min="0" step="1"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;">
+              <div class="form-group"><label style="font-size:0.56rem;">Unique Authors 1h</label><input type="number" id="fSocXUp1h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Unique Authors 24h</label><input type="number" id="fSocXUp24h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Retweets / Engagements</label><input type="number" id="fSocXRt" placeholder="0" min="0" step="1"></div>
+            </div>
+            <div style="font-size:0.62rem;font-weight:700;color:#2CA5E0;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(44,165,224,0.2);"><i class="fa-brands fa-telegram" style="margin-right:5px;"></i>Telegram</div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;">
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 15m</label><input type="number" id="fSocTgM15" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 30m</label><input type="number" id="fSocTgM30" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 1h</label><input type="number" id="fSocTgM1h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 3h</label><input type="number" id="fSocTgM3h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 24h</label><input type="number" id="fSocTgM24h" placeholder="0" min="0" step="1"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;">
+              <div class="form-group"><label style="font-size:0.56rem;">Unique Channels 1h</label><input type="number" id="fSocTgCh1h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Unique Channels 24h</label><input type="number" id="fSocTgCh24h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Forwards</label><input type="number" id="fSocTgFwd" placeholder="0" min="0" step="1"></div>
+            </div>
+            <div style="font-size:0.62rem;font-weight:700;color:#FF4500;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(255,69,0,0.2);"><i class="fa-brands fa-reddit-alien" style="margin-right:5px;"></i>Reddit</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 1h</label><input type="number" id="fSocRdM1h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Mentions 24h</label><input type="number" id="fSocRdM24h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Unique Posters 1h</label><input type="number" id="fSocRdUp1h" placeholder="0" min="0" step="1"></div>
+              <div class="form-group"><label style="font-size:0.56rem;">Unique Posters 24h</label><input type="number" id="fSocRdUp24h" placeholder="0" min="0" step="1"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="form-group">
           <label>Bots</label>
           <input type="number" id="fBots" placeholder="e.g. 18" min="0" step="1">
@@ -6989,12 +7054,179 @@ function computeAttentionBriefing(d, analysis) {
     attDivSignal='Price rising while attention declines — late-stage pump warning'; attDivColor='#ff4757';
   }
 
+  /* ════════════════════════════════════════════════════════════════════
+     SOCIAL INTELLIGENCE ENGINE — Enhancement Layer
+     Real social data blends with proxy signals when available.
+     Proxy mode remains fully functional when social data is absent.
+     ════════════════════════════════════════════════════════════════════ */
+
+  /* ── Collect social data from form fields ── */
+  var socX = {
+    m15:  d.socXM15  || 0, m30:  d.socXM30  || 0, h1:   d.socXM1h  || 0,
+    h3:   d.socXM3h  || 0, h24:  d.socXM24h || 0,
+    up1h: d.socXUp1h || 0, up24h:d.socXUp24h|| 0, rt:   d.socXRt   || 0
+  };
+  socX.available = socX.h1 > 0 || socX.h24 > 0;
+
+  var socTg = {
+    m15:  d.socTgM15  || 0, m30:  d.socTgM30  || 0, h1:   d.socTgM1h  || 0,
+    h3:   d.socTgM3h  || 0, h24:  d.socTgM24h || 0,
+    ch1h: d.socTgCh1h || 0, ch24h:d.socTgCh24h|| 0, fwd:  d.socTgFwd  || 0
+  };
+  socTg.available = socTg.h1 > 0 || socTg.h24 > 0;
+
+  var socRd = {
+    h1:   d.socRdM1h  || 0, h24:  d.socRdM24h || 0,
+    up1h: d.socRdUp1h || 0, up24h:d.socRdUp24h|| 0
+  };
+  socRd.available = socRd.h1 > 0 || socRd.h24 > 0;
+
+  /* ── Mode Detection ── */
+  var anySocial = socX.available || socTg.available || socRd.available;
+  var attMode, attConfidence;
+  if (socX.available && socTg.available) {
+    attMode = 'FULL SOCIAL'; attConfidence = 'HIGH';
+  } else if (anySocial) {
+    attMode = 'PARTIAL SOCIAL'; attConfidence = 'MEDIUM';
+  } else {
+    attMode = 'PROXY'; attConfidence = 'LOW';
+  }
+  window._tecAttentionMode = attMode;
+
+  /* ── Weighted Mention Aggregation ──
+     X ticker: 0.7 | X CA: 1.0 (avg 0.85) | Telegram: 1.2 | Reddit: 0.5 */
+  var wMentions = {
+    m15: socX.m15 * 0.85 + socTg.m15 * 1.2,
+    m30: socX.m30 * 0.85 + socTg.m30 * 1.2,
+    h1:  socX.h1  * 0.85 + socTg.h1  * 1.2 + socRd.h1  * 0.5,
+    h3:  socX.h3  * 0.85 + socTg.h3  * 1.2,
+    h24: socX.h24 * 0.85 + socTg.h24 * 1.2 + socRd.h24 * 0.5
+  };
+
+  /* ── Attention Velocity — current rate vs prior rate ── */
+  var socialVelLabel = null, socialVelPct = null, socialVelColor = 'var(--text-muted)';
+  if (anySocial && wMentions.h1 > 0) {
+    var _recentRate = wMentions.m15 > 0 ? wMentions.m15 * 4 : wMentions.h1;
+    var _priorBase  = wMentions.m30 > wMentions.m15 ? (wMentions.m30 - wMentions.m15) * 2 : _recentRate * 0.8;
+    var _priorRate  = _priorBase > 0 ? _priorBase : 0.001;
+    socialVelPct = Math.round(((_recentRate - _priorRate) / _priorRate) * 100);
+    if      (socialVelPct >= 150) { socialVelLabel = 'EXPLODING'; socialVelColor = '#00ffcc'; }
+    else if (socialVelPct >= 50)  { socialVelLabel = 'STRONG';    socialVelColor = '#00e676'; }
+    else if (socialVelPct >= -10) { socialVelLabel = 'STEADY';    socialVelColor = '#ffeb3b'; }
+    else if (socialVelPct >= -30) { socialVelLabel = 'WEAK';      socialVelColor = '#ff9800'; }
+    else                           { socialVelLabel = 'DECLINING'; socialVelColor = '#ff4757'; }
+  }
+
+  /* ── Attention Acceleration — change in velocity over time ── */
+  var socialAccLabel = null, socialAccPct = null, socialAccColor = 'var(--text-muted)';
+  if (anySocial && wMentions.h1 > 0 && wMentions.h3 > 0) {
+    var _vel1     = wMentions.m15 > 0 ? wMentions.m15 * 4 : wMentions.h1;
+    var _pastWin  = wMentions.h1 > 0 && wMentions.m30 > 0 ? (wMentions.h1 - wMentions.m30) : wMentions.h1 * 0.5;
+    var _vel2     = _pastWin > 0 ? _pastWin * 2 : 0.001;
+    socialAccPct  = Math.round(((_vel1 - _vel2) / Math.abs(_vel2)) * 100);
+    if      (socialAccPct >= 200) { socialAccLabel = 'VERY HIGH'; socialAccColor = '#00ffcc'; }
+    else if (socialAccPct >= 75)  { socialAccLabel = 'HIGH';      socialAccColor = '#00e676'; }
+    else if (socialAccPct >= 10)  { socialAccLabel = 'MODERATE';  socialAccColor = '#ffeb3b'; }
+    else if (socialAccPct >= -20) { socialAccLabel = 'LOW';       socialAccColor = '#ff9800'; }
+    else                           { socialAccLabel = 'NEGATIVE';  socialAccColor = '#ff4757'; }
+  }
+
+  /* ── Attention Persistence — does attention sustain over time? ── */
+  var socialPersLabel = null, socialPersColor = 'var(--text-muted)';
+  if (anySocial && wMentions.h24 > 0 && wMentions.h1 > 0) {
+    var _gc = 0;
+    if (wMentions.m15 > 0 && wMentions.m30 > wMentions.m15 * 1.1) _gc++;
+    if (wMentions.m30 > 0 && wMentions.h1  > wMentions.m30 * 1.5) _gc++;
+    if (wMentions.h1  > 0 && wMentions.h3  > wMentions.h1  * 2.2) _gc++;
+    if (wMentions.h3  > 0 && wMentions.h24 > wMentions.h3  * 4)   _gc++;
+    var _spikeR = wMentions.h24 > 0 ? wMentions.h1 / wMentions.h24 : 0;
+    if      (_gc >= 3) {
+      socialPersLabel = 'PERSISTENT';  socialPersColor = '#00e676';
+    } else if (_spikeR > 0.45 && wMentions.m15 < wMentions.h1 * 0.04) {
+      socialPersLabel = 'FLASH HYPE';  socialPersColor = '#ffeb3b';
+    } else if (wMentions.m15 < (wMentions.h1 / 4) * 0.5) {
+      socialPersLabel = 'FADING';      socialPersColor = '#ff9800';
+    } else {
+      socialPersLabel = 'STEADY';      socialPersColor = '#ffeb3b';
+    }
+  } else if (anySocial) {
+    socialPersLabel = 'INSUFFICIENT DATA'; socialPersColor = 'var(--text-muted)';
+  }
+
+  /* ── Attention Quality Engine — unique poster ratio matters ── */
+  var _totMent1h   = socX.h1   + socTg.h1   + socRd.h1;
+  var _totUniq1h   = socX.up1h + socTg.ch1h + socRd.up1h;
+  var platformsActive = (socX.available?1:0) + (socTg.available?1:0) + (socRd.available?1:0);
+  var attQualLabel = null, attQualScore = 0, attQualColor = 'var(--text-muted)';
+  if (anySocial && _totMent1h > 0) {
+    var _uRatio   = _totUniq1h > 0 ? _totUniq1h / _totMent1h : 0.3;
+    var _divBonus = platformsActive * 12;
+    var _engBonus = (socX.rt > 0 || socTg.fwd > 0) ? 10 : 0;
+    attQualScore  = Math.min(100, Math.round(_uRatio * 65 + _divBonus + _engBonus));
+    if      (attQualScore >= 65) { attQualLabel = 'HIGH';   attQualColor = '#00e676'; }
+    else if (attQualScore >= 35) { attQualLabel = 'MEDIUM'; attQualColor = '#ffeb3b'; }
+    else                          { attQualLabel = 'LOW';    attQualColor = '#ff4757'; }
+  } else if (anySocial) {
+    attQualScore = 40; attQualLabel = 'MEDIUM'; attQualColor = '#ffeb3b';
+  }
+
+  /* ── Source Expansion ── */
+  var _totUniq1hSrc = socX.up1h + socTg.ch1h + socRd.up1h;
+  var srcExpLabel = null, srcExpColor = 'var(--text-muted)';
+  if (anySocial) {
+    if      (platformsActive >= 3 || _totUniq1hSrc >= 20) { srcExpLabel = 'STRONG';   srcExpColor = '#00e676'; }
+    else if (platformsActive >= 2 || _totUniq1hSrc >= 8)  { srcExpLabel = 'MODERATE'; srcExpColor = '#ffeb3b'; }
+    else                                                   { srcExpLabel = 'LIMITED';  srcExpColor = '#ff9800'; }
+  }
+
+  /* ── Social Score Composition (FULL SOCIAL mode weights)
+     Velocity 35% | Acceleration 20% | Persistence 15%
+     Quality 15%  | Source Expansion 10% | Narrative 5%  ── */
+  var socialScore = 0;
+  if (anySocial) {
+    var _vc  = socialVelPct  !== null ? Math.min(100,Math.max(0, 50 + socialVelPct  * 0.22)) : 50;
+    var _ac  = socialAccPct  !== null ? Math.min(100,Math.max(0, 50 + socialAccPct  * 0.15)) : 50;
+    var _pc  = socialPersLabel === 'PERSISTENT' ? 90 : socialPersLabel === 'FLASH HYPE' ? 55
+             : socialPersLabel === 'FADING' ? 25 : socialPersLabel === 'STEADY' ? 65 : 50;
+    var _qc  = attQualScore  > 0 ? attQualScore  : 50;
+    var _sc  = srcExpLabel === 'STRONG' ? 90 : srcExpLabel === 'MODERATE' ? 60 : srcExpLabel === 'LIMITED' ? 30 : 50;
+    var _nc  = (naScore / 10) * 100;
+    socialScore = Math.min(100,Math.max(0,Math.round(
+      _vc*0.35 + _ac*0.20 + _pc*0.15 + _qc*0.15 + _sc*0.10 + _nc*0.05
+    )));
+  }
+
+  /* ── Social + Proxy Blending (Social 70% / Proxy 30%) ── */
+  var _proxyPct = corePct * 100;
+  var _blendPct;
+  if (attMode === 'PROXY') {
+    _blendPct = _proxyPct;
+  } else {
+    _blendPct = socialScore * 0.70 + _proxyPct * 0.30;
+    /* Validate FULL SOCIAL: social must contribute >= 50% of final score */
+    if (attMode === 'FULL SOCIAL' && (socialScore * 0.70) < (_blendPct * 0.50)) {
+      attMode = 'PARTIAL SOCIAL'; attConfidence = 'MEDIUM';
+      window._tecAttentionMode = attMode;
+    }
+  }
+  _blendPct = Math.min(100, Math.max(0, _blendPct));
+
+  /* ── Re-tier using blended score ── */
+  var _fCorePct   = _blendPct / 100;
+  var _fCoreScore = Math.round(_fCorePct * maxScore);
+  var attTier, attVerdict, attTierColor, attVerdictColor;
+  if      (_fCorePct >= 0.87) { attTier='A'; attVerdict='HIGH ATTENTION POTENTIAL';     attTierColor='#00ffcc'; attVerdictColor='#00e676'; }
+  else if (_fCorePct >= 0.70) { attTier='B'; attVerdict='STRONG ATTENTION POTENTIAL';   attTierColor='#00e676'; attVerdictColor='#ffeb3b'; }
+  else if (_fCorePct >= 0.50) { attTier='C'; attVerdict='MODERATE ATTENTION POTENTIAL'; attTierColor='#ffeb3b'; attVerdictColor='#ff9800'; }
+  else if (_fCorePct >= 0.33) { attTier='D'; attVerdict='WEAK ATTENTION POTENTIAL';     attTierColor='#ff9800'; attVerdictColor='#ff9800'; }
+  else                         { attTier='F'; attVerdict='ATTENTION DEFICIT / AVOID';   attTierColor='#ff4757'; attVerdictColor='#ff4757'; }
+
   return {
     naScore, naCategory, naNotes,
     velScore, velClass, velNotes,
     disScore, disClass, disNotes,
     frScore, frClass, frNotes,
-    coreScore, maxScore, corePct,
+    coreScore: _fCoreScore, maxScore, corePct: _fCorePct,
     attTier, attVerdict, attTierColor, attVerdictColor,
     lifecycle, lifecycleColor, lifecycleDesc,
     attEfficiency, attEfficiencyColor, attEfficiencyDesc,
@@ -7003,18 +7235,43 @@ function computeAttentionBriefing(d, analysis) {
     attPersistence, attPersColor,
     metaLabel, metaStrength, metaColor,
     attDivSignal, attDivColor,
-    hldCh1pct, hldCh6pct, hldCh24pct, hldH1, hldH6, hldH24, holderCount
+    hldCh1pct, hldCh6pct, hldCh24pct, hldH1, hldH6, hldH24, holderCount,
+    attMode, attConfidence,
+    socialVelLabel, socialVelPct, socialVelColor,
+    socialAccLabel, socialAccPct, socialAccColor,
+    socialPersLabel, socialPersColor,
+    attQualLabel, attQualScore, attQualColor,
+    srcExpLabel, srcExpColor,
+    platformsActive,
+    totMentions1h: _totMent1h, totUnique1h: _totUniq1hSrc,
+    wMentions, socX, socTg, socRd
   };
 }
 
 function buildAttentionBriefingHTML(d, analysis) {
   var ab = computeAttentionBriefing(d, analysis);
   window._tecAttentionBriefing = ab;
+  attHistSave(ab, d);
 
   var score = ab.coreScore, maxS = ab.maxScore;
   var pct   = Math.round(ab.corePct * 100);
 
   var nt = '';
+
+  /* ── Mode + Confidence Badge ── */
+  var _modeColor = ab.attMode === 'FULL SOCIAL' ? '#00ffcc' : ab.attMode === 'PARTIAL SOCIAL' ? '#ffeb3b' : '#9fa8da';
+  var _modeIcon  = ab.attMode === 'FULL SOCIAL' ? 'fa-satellite-dish' : ab.attMode === 'PARTIAL SOCIAL' ? 'fa-signal' : 'fa-chart-line';
+  var _confColor = ab.attConfidence === 'HIGH' ? '#00e676' : ab.attConfidence === 'MEDIUM' ? '#ffeb3b' : '#9fa8da';
+  nt += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:4px;">';
+  nt += '<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(0,0,0,0.25);border-radius:20px;border:1px solid '+_modeColor+'33;">';
+  nt += '<i class="fa-solid '+_modeIcon+'" style="font-size:0.6rem;color:'+_modeColor+';"></i>';
+  nt += '<span style="font-size:0.62rem;font-weight:700;color:'+_modeColor+';letter-spacing:0.8px;">'+ab.attMode+'</span>';
+  nt += '</div>';
+  nt += '<div style="display:flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,0,0,0.25);border-radius:20px;border:1px solid '+_confColor+'33;">';
+  nt += '<span style="font-size:0.58rem;color:var(--text-muted);">Confidence:</span>';
+  nt += '<span style="font-size:0.62rem;font-weight:700;color:'+_confColor+';">'+ab.attConfidence+'</span>';
+  nt += '</div>';
+  nt += '</div>';
 
   /* ── Tier header ── */
   nt += '<div style="padding:12px 14px;background:rgba(0,0,0,0.25);border-radius:6px;margin-bottom:10px;">';
@@ -7062,6 +7319,73 @@ function buildAttentionBriefingHTML(d, analysis) {
     nt += '</div>';
   });
   nt += '</div>';
+
+  /* ── Social Intelligence Section (FULL SOCIAL / PARTIAL SOCIAL only) ── */
+  if (ab.attMode !== 'PROXY') {
+    nt += '<div style="margin-bottom:10px;">';
+    nt += '<div style="font-size:0.59rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(0,212,255,0.15);"><i class="fa-solid fa-chart-line" style="margin-right:4px;"></i>Social Intelligence</div>';
+
+    /* Velocity + Acceleration */
+    nt += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">';
+    if (ab.socialVelLabel) {
+      nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.socialVelColor+';">';
+      nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">ATTENTION VELOCITY</div>';
+      nt += '<div style="display:flex;align-items:baseline;gap:5px;">';
+      nt += '<strong style="font-size:0.85rem;color:'+ab.socialVelColor+';letter-spacing:1px;">'+ab.socialVelLabel+'</strong>';
+      if (ab.socialVelPct !== null) nt += '<span style="font-size:0.60rem;color:'+ab.socialVelColor+';">'+(ab.socialVelPct>0?'+':'')+Math.round(ab.socialVelPct)+'%</span>';
+      nt += '</div></div>';
+    }
+    if (ab.socialAccLabel) {
+      nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.socialAccColor+';">';
+      nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">ATTENTION ACCELERATION</div>';
+      nt += '<div style="display:flex;align-items:baseline;gap:5px;">';
+      nt += '<strong style="font-size:0.85rem;color:'+ab.socialAccColor+';letter-spacing:1px;">'+ab.socialAccLabel+'</strong>';
+      if (ab.socialAccPct !== null) nt += '<span style="font-size:0.60rem;color:'+ab.socialAccColor+';">'+(ab.socialAccPct>0?'+':'')+Math.round(ab.socialAccPct)+'%</span>';
+      nt += '</div></div>';
+    }
+    nt += '</div>';
+
+    /* Persistence + Quality + Source Expansion */
+    nt += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">';
+    if (ab.socialPersLabel) {
+      nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.socialPersColor+';">';
+      nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">PERSISTENCE</div>';
+      nt += '<strong style="font-size:0.75rem;color:'+ab.socialPersColor+';letter-spacing:0.8px;">'+ab.socialPersLabel+'</strong>';
+      nt += '</div>';
+    }
+    if (ab.attQualLabel) {
+      nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.attQualColor+';">';
+      nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">ATT. QUALITY</div>';
+      nt += '<div style="display:flex;align-items:baseline;gap:4px;">';
+      nt += '<strong style="font-size:0.75rem;color:'+ab.attQualColor+';">'+ab.attQualLabel+'</strong>';
+      nt += '<span style="font-size:0.55rem;color:rgba(255,255,255,0.3);">'+ab.attQualScore+'/100</span>';
+      nt += '</div></div>';
+    }
+    if (ab.srcExpLabel) {
+      nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.srcExpColor+';">';
+      nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">SRC EXPANSION</div>';
+      nt += '<strong style="font-size:0.75rem;color:'+ab.srcExpColor+';">'+ab.srcExpLabel+'</strong>';
+      if (ab.platformsActive > 0) nt += '<div style="font-size:0.54rem;color:rgba(255,255,255,0.3);margin-top:1px;">'+ab.platformsActive+' platform'+(ab.platformsActive!==1?'s':'')+' · '+ab.totUnique1h+' uniq src</div>';
+      nt += '</div>';
+    }
+    nt += '</div>';
+
+    /* Weighted Mention Time Windows */
+    if (ab.wMentions && (ab.wMentions.h1 > 0 || ab.wMentions.h24 > 0)) {
+      nt += '<div style="padding:7px 10px;background:rgba(0,0,0,0.2);border-radius:4px;margin-bottom:6px;">';
+      nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:5px;">WEIGHTED MENTIONS</div>';
+      nt += '<div style="display:flex;gap:14px;flex-wrap:wrap;">';
+      var _wm = ab.wMentions;
+      if (_wm.m15>0) nt += '<div style="text-align:center;"><div style="font-size:0.54rem;color:rgba(255,255,255,0.35);">15m</div><div style="font-size:0.80rem;font-weight:700;color:var(--text-primary);">'+Math.round(_wm.m15)+'</div></div>';
+      if (_wm.m30>0) nt += '<div style="text-align:center;"><div style="font-size:0.54rem;color:rgba(255,255,255,0.35);">30m</div><div style="font-size:0.80rem;font-weight:700;color:var(--text-primary);">'+Math.round(_wm.m30)+'</div></div>';
+      if (_wm.h1 >0) nt += '<div style="text-align:center;"><div style="font-size:0.54rem;color:rgba(255,255,255,0.35);">1h</div><div style="font-size:0.80rem;font-weight:700;color:var(--accent-cyan);">'+Math.round(_wm.h1)+'</div></div>';
+      if (_wm.h3 >0) nt += '<div style="text-align:center;"><div style="font-size:0.54rem;color:rgba(255,255,255,0.35);">3h</div><div style="font-size:0.80rem;font-weight:700;color:var(--text-primary);">'+Math.round(_wm.h3)+'</div></div>';
+      if (_wm.h24>0) nt += '<div style="text-align:center;"><div style="font-size:0.54rem;color:rgba(255,255,255,0.35);">24h</div><div style="font-size:0.80rem;font-weight:700;color:var(--text-primary);">'+Math.round(_wm.h24)+'</div></div>';
+      nt += '</div></div>';
+    }
+
+    nt += '</div>'; /* end social intelligence section */
+  }
 
   nt += '<div style="border-top:1px solid rgba(255,255,255,0.07);margin:8px 0;"></div>';
 
@@ -7172,12 +7496,24 @@ function buildRecommendedEntryChecklist(d, analysis) {
   var attS = ab ? Math.round(ab.corePct * 100) : 0;
   var attTC= ab ? ab.attTierColor : 'var(--text-muted)';
 
-  /* Overall weighted score: Security 35% + Structure 35% + Attention 30% */
+  /* Dynamic weights based on Attention Mode
+     FULL SOCIAL:    Sec 35%  · Str 35%  · Att 30%
+     PARTIAL SOCIAL: Sec 38%  · Str 38%  · Att 24%
+     PROXY:          Sec 42.5% · Str 42.5% · Att 15% */
+  var _aMode = window._tecAttentionMode || 'PROXY';
+  var _wSec, _wStr, _wAtt, _wLabel;
+  if (_aMode === 'FULL SOCIAL') {
+    _wSec=0.35;  _wStr=0.35;  _wAtt=0.30; _wLabel='Sec 35% · Str 35% · Att 30%';
+  } else if (_aMode === 'PARTIAL SOCIAL') {
+    _wSec=0.38;  _wStr=0.38;  _wAtt=0.24; _wLabel='Sec 38% · Str 38% · Att 24%';
+  } else {
+    _wSec=0.425; _wStr=0.425; _wAtt=0.15; _wLabel='Sec 42.5% · Str 42.5% · Att 15%';
+  }
   var secNum = secT==='A'?100:secT==='B'?75:secT==='C'?50:25;
   var strNum = strT==='S'?100:strT==='A'?85:strT==='B'?65:strT==='C'?45:25;
   var attNum = attT==='A'?100:attT==='B'?75:attT==='C'?50:attT==='D'?33:15;
   var hasData= secT!=='—' || strT!=='—' || attT!=='—';
-  var oScore = hasData ? Math.round(secNum*0.35 + strNum*0.35 + attNum*0.30) : 0;
+  var oScore = hasData ? Math.round(secNum*_wSec + strNum*_wStr + attNum*_wAtt) : 0;
 
   var oTier, oRec, oColor, oDesc;
   if      (oScore >= 88) { oTier='A'; oRec='STRONG ENTRY CANDIDATE';      oColor='#00ffcc'; oDesc='Strong Security + Structure + Attention alignment. Highest-conviction setup.'; }
@@ -7221,7 +7557,7 @@ function buildRecommendedEntryChecklist(d, analysis) {
   html += '<div>';
   html += '<div style="font-size:0.60rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;">OVERALL TIER</div>';
   html += '<div style="font-size:0.80rem;font-weight:900;color:'+oColor+';letter-spacing:1px;">'+oRec+'</div>';
-  if (hasData) html += '<div style="font-size:0.58rem;color:var(--text-muted);">Weighted Score: '+oScore+'/100 &nbsp;(Sec 35% · Str 35% · Att 30%)</div>';
+  if (hasData) html += '<div style="font-size:0.58rem;color:var(--text-muted);">Weighted Score: '+oScore+'/100 &nbsp;('+_wLabel+')</div>';
   html += '</div></div>';
   html += '<div style="font-size:0.61rem;color:rgba(255,255,255,0.4);">'+oDesc+'</div>';
   html += '</div>';
@@ -8090,6 +8426,26 @@ function analyzeCoin() {
     singleBundlePct: parseFloat(el('fSingleBundle').value) || 0,
     smartWallets: parseInt(el('fSmart').value) || 0,
     socialBuzz: parseFloat(el('fBuzz').value) || 0,
+    socXM15:   parseInt(el('fSocXM15')  ? el('fSocXM15').value  : '') || 0,
+    socXM30:   parseInt(el('fSocXM30')  ? el('fSocXM30').value  : '') || 0,
+    socXM1h:   parseInt(el('fSocXM1h')  ? el('fSocXM1h').value  : '') || 0,
+    socXM3h:   parseInt(el('fSocXM3h')  ? el('fSocXM3h').value  : '') || 0,
+    socXM24h:  parseInt(el('fSocXM24h') ? el('fSocXM24h').value : '') || 0,
+    socXUp1h:  parseInt(el('fSocXUp1h') ? el('fSocXUp1h').value : '') || 0,
+    socXUp24h: parseInt(el('fSocXUp24h')? el('fSocXUp24h').value: '') || 0,
+    socXRt:    parseInt(el('fSocXRt')   ? el('fSocXRt').value   : '') || 0,
+    socTgM15:  parseInt(el('fSocTgM15') ? el('fSocTgM15').value : '') || 0,
+    socTgM30:  parseInt(el('fSocTgM30') ? el('fSocTgM30').value : '') || 0,
+    socTgM1h:  parseInt(el('fSocTgM1h') ? el('fSocTgM1h').value : '') || 0,
+    socTgM3h:  parseInt(el('fSocTgM3h') ? el('fSocTgM3h').value : '') || 0,
+    socTgM24h: parseInt(el('fSocTgM24h')? el('fSocTgM24h').value: '') || 0,
+    socTgCh1h: parseInt(el('fSocTgCh1h')? el('fSocTgCh1h').value: '') || 0,
+    socTgCh24h:parseInt(el('fSocTgCh24h')?el('fSocTgCh24h').value:'') || 0,
+    socTgFwd:  parseInt(el('fSocTgFwd') ? el('fSocTgFwd').value : '') || 0,
+    socRdM1h:  parseInt(el('fSocRdM1h') ? el('fSocRdM1h').value : '') || 0,
+    socRdM24h: parseInt(el('fSocRdM24h')? el('fSocRdM24h').value: '') || 0,
+    socRdUp1h: parseInt(el('fSocRdUp1h')? el('fSocRdUp1h').value: '') || 0,
+    socRdUp24h:parseInt(el('fSocRdUp24h')?el('fSocRdUp24h').value:'') || 0,
     bots: parseInt(el('fBots').value) || 0,
     snipers: parseInt(el('fSnipers').value) || 0,
     first20: parseFloat(el('fFirst20').value) || 0,
@@ -10425,7 +10781,12 @@ var WL_FIELDS  = [
   'fBuzz','fBots','fSnipers','fFirst20','fHolders','fFakeHolders','fFakeVol',
   'fPerf5m','fLiqLocked','fLiqBurned','fMintable','fFreezable','fDevSold',
   'fDevWallet','fBondingCurve','fBondingPct','fAMM','fSellTax','fHoneypot',
-  'fVol24h','fTotalFeeSOL','fTotalFeeUSD','fPattern','fNarrative','fNotes','fRugScore'
+  'fVol24h','fTotalFeeSOL','fTotalFeeUSD','fPattern','fNarrative','fNotes','fRugScore',
+  'fSocXM15','fSocXM30','fSocXM1h','fSocXM3h','fSocXM24h',
+  'fSocXUp1h','fSocXUp24h','fSocXRt',
+  'fSocTgM15','fSocTgM30','fSocTgM1h','fSocTgM3h','fSocTgM24h',
+  'fSocTgCh1h','fSocTgCh24h','fSocTgFwd',
+  'fSocRdM1h','fSocRdM24h','fSocRdUp1h','fSocRdUp24h'
 ];
 
 /* ── Storage ── */
@@ -10847,11 +11208,160 @@ async function refreshCurrentAnalysis() {
   if (refBtn) refBtn.addEventListener('click', refreshCurrentAnalysis);
 })();
 
+/* ── Social Data Panel toggle ─────────────────────────────────────────────── */
+function toggleSocialDataPanel() {
+  var panel = el('socialDataPanel');
+  var chev  = el('socialDataChevron');
+  if (!panel) return;
+  var open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATTENTION HISTORY — snapshot storage + re-scan comparison engine
+   ═══════════════════════════════════════════════════════════════════════════ */
+var ATT_HIST_KEY  = 'tec_att_history';
+var ATT_HIST_MAX  = 50;
+var _attHistData  = [];
+
+function attHistLoad() {
+  try { _attHistData = JSON.parse(localStorage.getItem(ATT_HIST_KEY) || '[]'); } catch(e) { _attHistData = []; }
+}
+
+function attHistSave(ab, d) {
+  if (!ab || !d) return;
+  attHistLoad();
+  var ca   = (d.ca   || '').trim();
+  var coin = (d.coin || 'Unknown').trim();
+  var now  = Date.now();
+
+  var snap = {
+    id:        now,
+    ts:        now,
+    coin:      coin,
+    ca:        ca,
+    attTier:   ab.attTier,
+    attMode:   ab.attMode,
+    attConf:   ab.attConfidence,
+    corePct:   Math.round(ab.corePct * 100),
+    velLabel:  ab.socialVelLabel,
+    velPct:    ab.socialVelPct,
+    accLabel:  ab.socialAccLabel,
+    persLabel: ab.socialPersLabel,
+    qualLabel: ab.attQualLabel,
+    srcLabel:  ab.srcExpLabel,
+    naScore:   ab.naScore,
+    naCategory:ab.naCategory,
+    lifecycle: ab.lifecycle,
+    wm_h1:     Math.round(ab.wMentions ? ab.wMentions.h1  : 0),
+    wm_h24:    Math.round(ab.wMentions ? ab.wMentions.h24 : 0),
+    totUniq:   ab.totUnique1h  || 0,
+    platforms: ab.platformsActive || 0
+  };
+
+  /* Re-scan comparison — find most recent snapshot for same CA */
+  var prevSnap = null;
+  if (ca) {
+    for (var _i = 0; _i < _attHistData.length; _i++) {
+      if (_attHistData[_i].ca === ca) { prevSnap = _attHistData[_i]; break; }
+    }
+  }
+  snap.prevSnap = prevSnap ? {
+    ts:      prevSnap.ts,
+    corePct: prevSnap.corePct,
+    velLabel:prevSnap.velLabel,
+    wm_h1:   prevSnap.wm_h1,
+    wm_h24:  prevSnap.wm_h24
+  } : null;
+
+  _attHistData.unshift(snap);
+  if (_attHistData.length > ATT_HIST_MAX) _attHistData.length = ATT_HIST_MAX;
+  try { localStorage.setItem(ATT_HIST_KEY, JSON.stringify(_attHistData)); } catch(e) {}
+  attHistRender();
+}
+
+function attHistClearAll() {
+  _attHistData = [];
+  try { localStorage.removeItem(ATT_HIST_KEY); } catch(e) {}
+  attHistRender();
+}
+
+function attHistClearOne(id) {
+  _attHistData = _attHistData.filter(function(s){ return s.id !== id; });
+  try { localStorage.setItem(ATT_HIST_KEY, JSON.stringify(_attHistData)); } catch(e) {}
+  attHistRender();
+}
+
+function attHistRender() {
+  var grid    = el('attHistGrid');
+  var empty   = el('attHistEmpty');
+  var countEl = el('attHistCount');
+  if (!grid) return;
+  if (countEl) countEl.textContent = _attHistData.length || '0';
+  if (!_attHistData.length) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  grid.innerHTML = _attHistData.map(function(s) {
+    var tc  = s.attTier==='A'?'#00ffcc':s.attTier==='B'?'#00e676':s.attTier==='C'?'#ffeb3b':s.attTier==='D'?'#ff9800':'#ff4757';
+    var mc  = s.attMode==='FULL SOCIAL'?'#00ffcc':s.attMode==='PARTIAL SOCIAL'?'#ffeb3b':'#9fa8da';
+    var dt  = new Date(s.ts);
+    var dtS = (dt.getMonth()+1)+'/'+dt.getDate()+' '+dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');
+
+    var deltaHTML = '';
+    if (s.prevSnap) {
+      var elapsed    = Math.round((s.ts - s.prevSnap.ts) / 60000);
+      var elStr      = elapsed < 60 ? elapsed+'m ago' : Math.round(elapsed/60)+'h ago';
+      var scoreDelta = s.corePct - s.prevSnap.corePct;
+      var dColor     = scoreDelta > 5 ? '#00e676' : scoreDelta < -5 ? '#ff4757' : '#ffeb3b';
+      var dSign      = scoreDelta > 0 ? '+' : '';
+      var attTrend   = scoreDelta > 8 ? 'EXPLODING' : scoreDelta > 3 ? 'RISING' : scoreDelta > -3 ? 'STABLE' : scoreDelta > -8 ? 'FADING' : 'DECLINING';
+      var velDelta   = s.wm_h1 - s.prevSnap.wm_h1;
+      var velSign    = velDelta >= 0 ? '+' : '';
+      deltaHTML = '<div style="margin-top:5px;padding:4px 8px;background:rgba(0,0,0,0.25);border-radius:3px;border-left:2px solid '+dColor+';">';
+      deltaHTML += '<span style="font-size:0.56rem;color:var(--text-muted);">vs '+elStr+': </span>';
+      deltaHTML += '<span style="font-size:0.60rem;font-weight:700;color:'+dColor+';">'+attTrend+'</span>';
+      deltaHTML += '<span style="font-size:0.56rem;color:'+dColor+';"> ('+dSign+scoreDelta+'%)</span>';
+      if (s.wm_h1 > 0 || s.prevSnap.wm_h1 > 0) deltaHTML += '<span style="font-size:0.56rem;color:rgba(255,255,255,0.3);margin-left:6px;">Mentions 1h: '+velSign+Math.round(velDelta)+'</span>';
+      deltaHTML += '</div>';
+    }
+
+    var tagsHTML = '';
+    if (s.velLabel)  tagsHTML += '<span style="font-size:0.54rem;color:rgba(255,255,255,0.4);padding:1px 5px;background:rgba(255,255,255,0.05);border-radius:3px;">'+s.velLabel+'</span> ';
+    if (s.persLabel) tagsHTML += '<span style="font-size:0.54rem;color:rgba(255,255,255,0.4);padding:1px 5px;background:rgba(255,255,255,0.05);border-radius:3px;">'+s.persLabel+'</span>';
+
+    return '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border-left:3px solid '+tc+';">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:1.3rem;font-weight:900;color:'+tc+';line-height:1;">'+s.attTier+'</span>' +
+          '<div>' +
+            '<div style="font-size:0.70rem;font-weight:700;color:var(--text-primary);">'+(s.coin||'?')+'</div>' +
+            '<div style="font-size:0.56rem;color:var(--text-muted);">'+(s.ca?s.ca.slice(0,8)+'…':'No CA')+' · '+dtS+'</div>' +
+            (tagsHTML ? '<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">'+tagsHTML+'</div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">' +
+          '<span style="font-size:0.55rem;font-weight:700;color:'+mc+';padding:2px 5px;border-radius:8px;border:1px solid '+mc+'33;">'+s.attMode+'</span>' +
+          '<span style="font-size:0.65rem;font-weight:700;color:'+tc+';">'+s.corePct+'%</span>' +
+          '<button onclick="attHistClearOne('+s.id+')" style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:0.7rem;padding:2px 4px;line-height:1;" title="Remove">✕</button>' +
+        '</div>' +
+      '</div>' +
+      deltaHTML +
+    '</div>';
+  }).join('');
+}
+
 loadSettings();
 loadSmartWallets();
 loadFlaggedWallets();
 renderTable();
 wlLoad();
+attHistLoad();
+attHistRender();
 
 /* ── Sync QEC vol/fees fields whenever main form values change ──────────────
    Uses Object.defineProperty to intercept both programmatic .value assignments
