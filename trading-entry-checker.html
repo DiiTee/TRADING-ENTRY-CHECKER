@@ -567,6 +567,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .qec-ci-val { color:var(--accent-cyan); font-weight:700; font-size:0.7rem; white-space:nowrap; }
 @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes checkSlideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+/* Prevent any child from blowing out the page width */
+html, body { overflow-x: hidden; max-width: 100%; }
 @keyframes pulseGlow { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
@@ -587,6 +589,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
   /* Verdict */
   .verdict-badge { font-size: 0.88rem; padding: 7px 16px; letter-spacing: 1px; }
   .verdict-info { min-width: 0; width: 100%; }
+  /* Card overflow containment */
+  .card { overflow: hidden; }
 }
 @media (max-width: 480px) {
   .app { padding: 8px; }
@@ -4691,10 +4695,10 @@ function buildSecurityBriefingHTML(d) {
   nt += '<div style="font-size:2.4rem;font-weight:900;color:'+secTC+';letter-spacing:3px;line-height:1;">'+secTier+'</div>';
   nt += '<div style="color:var(--text-muted);font-size:0.62rem;margin-top:2px;">'+totalPts+'/'+maxPts+' pts</div>';
   nt += '</div>';
-  nt += '<div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.28);border-radius:4px;border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;justify-content:center;">';
+  nt += '<div style="flex:1;min-width:0;padding:8px 12px;background:rgba(0,0,0,0.28);border-radius:4px;border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;justify-content:center;">';
   nt += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:1px;margin-bottom:3px;">FINAL SECURITY VERDICT</div>';
-  nt += '<div style="font-size:1.35rem;font-weight:900;color:'+secVC+';letter-spacing:2px;">'+secVerdict+'</div>';
-  nt += '<div style="color:var(--text-muted);font-size:0.63rem;margin-top:3px;">'+failCnt+' FAIL &nbsp;·&nbsp; '+cautCnt+' CAUTION &nbsp;·&nbsp; '+passCnt+' PASS (of '+SEC.length+' checks)</div>';
+  nt += '<div style="font-size:1.20rem;font-weight:900;color:'+secVC+';letter-spacing:1px;overflow-wrap:break-word;word-break:break-word;">'+secVerdict+'</div>';
+  nt += '<div style="color:var(--text-muted);font-size:0.60rem;margin-top:3px;overflow-wrap:break-word;">'+failCnt+' FAIL · '+cautCnt+' CAUTION · '+passCnt+' PASS (of '+SEC.length+' checks)</div>';
   nt += '</div>';
   nt += '</div>';
 
@@ -4705,7 +4709,7 @@ function buildSecurityBriefingHTML(d) {
   nt += '<span class="risk-badge '+riskCls+'" id="cabRiskBadge" data-base="'+riskCls+'" style="font-size:1.3rem;font-weight:900;letter-spacing:2px;background:none;border:none;padding:0;border-radius:0;">'+cabRisk+' RISK</span>';
   nt += '<div style="font-size:0.61rem;color:var(--text-muted);margin-top:3px;">Concentration &amp; clustering</div>';
   nt += '</div>';
-  nt += '<div style="flex:2;min-width:200px;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+cabalScoreColor+';">';
+  nt += '<div style="flex:2;min-width:0;padding:7px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+cabalScoreColor+';">';
   nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">CABAL SCORE</div>';
   nt += '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">';
   nt += '<span style="font-size:1.5rem;font-weight:900;color:'+cabalScoreColor+';">'+cabalScore+'/10</span>';
@@ -6933,7 +6937,7 @@ function buildEntryBriefingHTML(d, analysis) {
     t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">CURRENT MC</div>';
     t += '<div style="font-size:0.98rem;font-weight:700;color:var(--accent-cyan);">'+formatUSD(currentMC)+'</div>';
     t += '</div>';
-    t += '<div style="flex:2;min-width:190px;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid #00e676;">';
+    t += '<div style="flex:2;min-width:0;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid #00e676;">';
     t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">SAFE ENTRY RANGE</div>';
     t += '<div style="font-size:0.98rem;font-weight:700;color:#00e676;">'+safeEntryStr+'</div>';
     t += '<div style="font-size:0.60rem;color:var(--text-muted);">Preview — full detail in item 05 below</div>';
@@ -6958,10 +6962,10 @@ function buildEntryBriefingHTML(d, analysis) {
     t += '<div style="font-size:2.4rem;font-weight:900;color:'+tierC+';letter-spacing:3px;line-height:1;">'+tierVal+'</div>';
     t += '<div style="color:var(--text-muted);font-size:0.62rem;margin-top:2px;">'+tierSc+'/100</div>';
     t += '</div>';
-    t += '<div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.28);border-radius:4px;border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;justify-content:center;">';
+    t += '<div style="flex:1;min-width:0;padding:8px 12px;background:rgba(0,0,0,0.28);border-radius:4px;border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;justify-content:center;">';
     t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;letter-spacing:1px;margin-bottom:3px;">STRUCTURAL VERDICT</div>';
-    t += '<div style="font-size:1.35rem;font-weight:900;color:'+verdC+';letter-spacing:2px;">'+verdLbl+'</div>';
-    t += '<div style="color:var(--text-muted);font-size:0.63rem;margin-top:3px;">'+tierLbl+'</div>';
+    t += '<div style="font-size:1.20rem;font-weight:900;color:'+verdC+';letter-spacing:1px;overflow-wrap:break-word;word-break:break-word;">'+verdLbl+'</div>';
+    t += '<div style="color:var(--text-muted);font-size:0.60rem;margin-top:3px;overflow-wrap:break-word;">'+tierLbl+'</div>';
     t += '</div>';
     t += '</div>';
     return t;
@@ -8250,14 +8254,14 @@ function buildRecommendedEntryChecklist(d, analysis) {
 
   /* Overall verdict */
   html += '<div style="padding:10px;background:rgba(0,0,0,0.3);border-radius:5px;border-left:4px solid '+oColor+';">';
-  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">';
-  html += '<div style="font-size:1.6rem;font-weight:900;color:'+oColor+';">'+oTier+'</div>';
-  html += '<div>';
+  html += '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:5px;flex-wrap:wrap;">';
+  html += '<div style="font-size:1.6rem;font-weight:900;color:'+oColor+';flex-shrink:0;line-height:1.1;">'+oTier+'</div>';
+  html += '<div style="flex:1;min-width:0;">';
   html += '<div style="font-size:0.60rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;">OVERALL TIER</div>';
-  html += '<div style="font-size:0.80rem;font-weight:900;color:'+oColor+';letter-spacing:1px;">'+oRec+'</div>';
-  if (hasData) html += '<div style="font-size:0.58rem;color:var(--text-muted);">Weighted Score: '+oScore+'/100 &nbsp;('+_wLabel+')</div>';
+  html += '<div style="font-size:0.78rem;font-weight:900;color:'+oColor+';letter-spacing:0.5px;overflow-wrap:break-word;word-break:break-word;line-height:1.3;">'+oRec+'</div>';
+  if (hasData) html += '<div style="font-size:0.57rem;color:var(--text-muted);overflow-wrap:break-word;word-break:break-word;margin-top:2px;">Score: '+oScore+'/100 ('+_wLabel+')</div>';
   html += '</div></div>';
-  html += '<div style="font-size:0.61rem;color:rgba(255,255,255,0.4);">'+oDesc+'</div>';
+  html += '<div style="font-size:0.61rem;color:rgba(255,255,255,0.4);overflow-wrap:break-word;line-height:1.4;">'+oDesc+'</div>';
   html += '</div>';
 
   html += '</div>';
