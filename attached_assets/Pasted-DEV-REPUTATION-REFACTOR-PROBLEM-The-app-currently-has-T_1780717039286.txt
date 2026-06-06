@@ -1,0 +1,146 @@
+DEV REPUTATION REFACTOR
+
+PROBLEM:
+The app currently has TWO different Dev Reputation systems that frequently contradict each other.
+
+1. Quick Entry Checker (QEC) Dev Reputation
+- Uses launch history
+- Deployments
+- Bonded launches
+- Bond rate
+- Rewards earned
+- ATH performance
+- Launch consistency
+- Historical outcomes
+
+2. Security Briefing Dev Reputation
+- Uses RugCheck/security/distribution metrics
+- Does NOT properly consider launch history
+- Often labels a dev as "Good" while QEC labels the same dev as "Risky"
+
+This creates conflicting signals for users.
+
+--------------------------------------------------
+
+OBJECTIVE:
+
+Create ONE unified Dev Reputation engine and use it everywhere.
+
+The Security Briefing Dev Reputation and QEC Dev Reputation must always return the same result for the same developer.
+
+--------------------------------------------------
+
+NEW ARCHITECTURE:
+
+Create a single master function:
+
+computeDevReputationUnified()
+
+Return:
+
+{
+  score,
+  tier,
+  confidence,
+  positives,
+  negatives,
+  breakdown
+}
+
+--------------------------------------------------
+
+PRIMARY DATA SOURCES (MOST IMPORTANT):
+
+Use historical developer performance (currently used in QEC) as the foundation. 
+
+Include:
+
+- Total deployments
+- Total bonded launches
+- Bond rate
+- Launch success rate
+- Rewards earned
+- Average ATH multiple
+- Best ATH multiple
+- Consistency of launches
+- Number of launches reaching key milestones
+  (2x, 5x, 10x, etc.)
+
+Weight these metrics heavily.
+
+--------------------------------------------------
+
+SECONDARY DATA SOURCES:
+
+Use current security/distribution signals as modifiers only.
+
+Include:
+
+- RugCheck score
+- Mint authority
+- Freeze authority
+- Bundle concentration
+- Fake volume
+- Fake holders
+- Distribution quality
+
+These should ADJUST the score, not dominate it.
+
+--------------------------------------------------
+
+IMPORTANT:
+
+Dev Reputation should measure the DEVELOPER.
+
+The rest of the Security Briefing should measure the TOKEN.
+
+Do not allow token-level security metrics to completely override a strong or weak historical developer record.
+
+--------------------------------------------------
+
+UI CHANGES:
+
+Replace all existing Dev Reputation calculations with the unified engine.
+
+Use the same output in:
+
+- Quick Entry Checker
+- Security Briefing
+- Watchlist
+- TXT Export
+- Any Cross-Reference comparisons
+
+Every location must display the exact same:
+- Score
+- Tier
+- Positives
+- Negatives
+
+--------------------------------------------------
+
+TIER EXAMPLES:
+
+90-100 = ELITE
+75-89  = TRUSTED
+60-74  = MODERATE
+40-59  = RISKY
+0-39   = DANGER
+
+(Adjust thresholds if needed.)
+
+--------------------------------------------------
+
+EXPECTED RESULT:
+
+A developer can no longer appear:
+
+Security Briefing:
+"Good Dev"
+
+while simultaneously appearing:
+
+QEC:
+"Risky Dev"
+
+The entire app must use one source of truth for Dev Reputation.
+

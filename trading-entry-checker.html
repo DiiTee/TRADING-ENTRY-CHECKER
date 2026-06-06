@@ -3620,59 +3620,140 @@ async function fetchHeliusTopHolders(ca) {
 
 /* ═══════════════════════════════════════════════════════════════ */
 
-/* ─── Dev Reputation ─── */
-function computeDevReputation(d) {
-  var score = 60;
-  var factors = [];
-  var covCount = 0, covTotal = 7;
+/* ─── Dev Reputation — Unified Engine ────────────────────────────────────────
+   Single source of truth used by Security Briefing, QEC panel, Watchlist,
+   and TXT export.  Never call the old per-location scoring again.
 
-  var rugNum = null;
-  if (d.rugScore) { rugNum = parseInt(d.rugScore, 10); if (!isNaN(rugNum)) covCount++; else rugNum = null; }
-  if (d.devAddress) covCount++;
-  if (d.devWallet !== undefined && d.devWallet !== null) covCount++;
-  if (d.devSold !== undefined && d.devSold !== null) covCount++;
-  if (d.bundleClusterPct !== undefined && d.bundleClusterPct !== null) covCount++;
-  if (d.fakeVol !== undefined && d.fakeVol !== null) covCount++;
-  if (d.fakeHolders !== undefined && d.fakeHolders !== null) covCount++;
+   PRIMARY  (history-based, ±50 pts): bond rate · ATH · rewards · 5×+ wins · churn
+   SECONDARY (security modifier, capped ±20 pts): RugCheck · mint/freeze · LP ·
+                                                    bundles · fake vol · dev wallet
+   Base: 50 (neutral — unknown dev with average token)
+   Tiers: ELITE 90+ · TRUSTED 75-89 · MODERATE 60-74 · RISKY 40-59 · DANGER <40
+   ─────────────────────────────────────────────────────────────────────────── */
+function computeDevReputationUnified(d) {
+  d = d || {};
+  var info     = window._devInfo || {};
+  var dep      = info.deployed      || 0;
+  var bon      = info.bonded        || 0;
+  var bondRt   = info.bondRate      != null ? info.bondRate
+               : (dep > 0 && bon > 0 ? (bon / dep) * 100 : null);
+  var rewards  = info.rewards       || 0;
+  var bestATH  = info.bestATH       || 0;
+  var avgMult  = info.avgMultiple   || 0;
+  var history  = info.launchHistory || [];
+  var lastLt   = info.lastLaunchTime || '';
+  var hasHistory = dep > 0 || bon > 0 || rewards > 0 || bestATH > 0 || history.length > 0;
 
-  if (rugNum !== null) {
-    if (rugNum >= 80)      { score += 15; factors.push({ t:'pos', txt:'RugCheck score excellent ('+rugNum+'/100)' }); }
-    else if (rugNum >= 60) { score +=  5; factors.push({ t:'pos', txt:'RugCheck score acceptable ('+rugNum+'/100)' }); }
-    else if (rugNum >= 40) { score -= 10; factors.push({ t:'neg', txt:'RugCheck moderate risk ('+rugNum+'/100)' }); }
-    else                   { score -= 25; factors.push({ t:'neg', txt:'RugCheck high risk ('+rugNum+'/100)' }); }
+  var score = 50;
+  var positives = [], negatives = [], factors = [];
+
+  /* ── PRIMARY: historical developer performance (±50 pts) ── */
+  var histPts = 0;
+  if (hasHistory) {
+    /* Bond rate — most important signal (0 / -15 to +25) */
+    if (bondRt !== null) {
+      if      (bondRt >= 20) { histPts += 25; positives.push('Strong bond rate (' + bondRt.toFixed(1) + '%)'); }
+      else if (bondRt >= 12) { histPts += 18; positives.push('Good bond rate ('   + bondRt.toFixed(1) + '%)'); }
+      else if (bondRt >=  6) { histPts += 10; }
+      else if (bondRt >=  2) { histPts +=  3; negatives.push('Low bond rate (' + bondRt.toFixed(1) + '%) — mostly rugs'); }
+      else                   { histPts -= 15; negatives.push('Very low bond rate (' + bondRt.toFixed(1) + '%) — serial rugger pattern'); }
+    }
+    /* ATH quality (0 to +15) */
+    if      (avgMult >= 20)     { histPts += 15; positives.push('Avg ATH ' + avgMult.toFixed(1) + 'x per launch'); }
+    else if (avgMult >= 10)     { histPts += 10; }
+    else if (avgMult >=  5)     { histPts +=  7; }
+    else if (avgMult >=  2)     { histPts +=  3; }
+    else if (bestATH >= 400000) { histPts += 15; positives.push('Best ATH $' + (bestATH/1000).toFixed(0) + 'K MC'); }
+    else if (bestATH >= 200000) { histPts += 10; }
+    else if (bestATH >= 100000) { histPts +=  7; }
+    else if (bestATH >=  50000) { histPts +=  4; }
+    else if (bestATH >=  20000) { histPts +=  2; }
+    /* Deployment churn penalty */
+    if      (dep >= 200) { histPts -= 10; negatives.push(dep + ' total deployments — very high serial rug risk'); }
+    else if (dep >= 100) { histPts -=  5; negatives.push(dep + ' total deployments — high serial churn'); }
+    /* SOL rewards (0 to +10) */
+    if      (rewards >= 500) { histPts += 10; positives.push(rewards.toFixed(0) + ' SOL rewards earned'); }
+    else if (rewards >= 200) { histPts +=  7; }
+    else if (rewards >=  50) { histPts +=  4; }
+    else if (rewards >=  10) { histPts +=  2; }
+    /* Launch consistency: 5×+ wins (0 to +8) */
+    var strong = history.filter(function(l) { return l.entryMC > 0 && l.athMC >= l.entryMC * 5; });
+    if      (strong.length >= 3) { histPts += 8; positives.push(strong.length + ' launches with 5×+ ATH'); }
+    else if (strong.length >= 2) { histPts += 5; }
+    else if (strong.length >= 1) { histPts += 3; }
+
+    histPts = Math.max(-30, Math.min(50, histPts));
+    score  += histPts;
   }
 
-  if (d.mintable   === 'Yes') { score -= 20; factors.push({ t:'neg', txt:'Mint authority active — supply not fixed' }); }
-  if (d.freezable  === 'Yes') { score -= 15; factors.push({ t:'neg', txt:'Freeze authority active — wallets can be frozen' }); }
+  /* ── SECONDARY: token security signals (modifier, capped -20 / +10) ── */
+  var secMod = 0;
+  var rugNum = null;
+  if (d.rugScore) { rugNum = parseInt(d.rugScore, 10); if (isNaN(rugNum)) rugNum = null; }
 
-  if (d.devSold === 'Yes')            { score += 10; factors.push({ t:'pos', txt:'Developer sold position — no dev dump pressure' }); }
-  else if ((d.devWallet||0) > 5)      { score -= 15; factors.push({ t:'neg', txt:'Dev holds '+(d.devWallet||0).toFixed(1)+'% unsold — significant dump risk' }); }
-  else if ((d.devWallet||0) > 2)      { score -=  5; factors.push({ t:'neu', txt:'Dev holds '+(d.devWallet||0).toFixed(1)+'% — moderate, watch for exits' }); }
-  else                                { score +=  5; factors.push({ t:'pos', txt:'Dev wallet minimal ('+(d.devWallet||0).toFixed(1)+'%) — low threat' }); }
-
-  if (d.liqBurned === 'Yes')          { score += 10; factors.push({ t:'pos', txt:'LP burned — rug-pull via LP removal impossible' }); }
-  else if (d.liqLocked === 'Yes')     { score +=  5; factors.push({ t:'pos', txt:'LP locked — reduced rug risk' }); }
-  else                                { score -= 15; factors.push({ t:'neg', txt:'LP unprotected — liquidity can be removed anytime' }); }
-
+  if (rugNum !== null) {
+    if      (rugNum >= 80) { secMod += 10; positives.push('RugCheck excellent (' + rugNum + '/100)'); }
+    else if (rugNum >= 60) { secMod +=  5; }
+    else if (rugNum >= 40) { secMod -=  5; }
+    else                   { secMod -= 15; negatives.push('RugCheck high risk (' + rugNum + '/100)'); }
+  }
+  if (d.mintable  === 'Yes') { secMod -=  8; negatives.push('Mint authority active — supply not fixed'); }
+  if (d.freezable === 'Yes') { secMod -=  5; negatives.push('Freeze authority active — wallets can be frozen'); }
+  if (d.devSold === 'Yes')           { secMod +=  3; positives.push('Dev sold position — no dump pressure'); }
+  else if ((d.devWallet||0) > 5)     { secMod -=  5; negatives.push('Dev holds ' + (d.devWallet||0).toFixed(1) + '% unsold — dump risk'); }
+  else if ((d.devWallet||0) > 2)     { /* neutral — no modifier */ }
+  if (d.liqBurned === 'Yes')         { secMod +=  5; positives.push('LP burned — rug-pull impossible'); }
+  else if (d.liqLocked === 'Yes')    { secMod +=  3; positives.push('LP locked — reduced rug risk'); }
+  else                               { secMod -=  5; negatives.push('LP unprotected — can be removed anytime'); }
   var bc = d.bundleClusterPct || 0;
-  if (bc > 25)                          { score -= 20; factors.push({ t:'neg', txt:'High bundle cluster ('+bc.toFixed(1)+'%) — coordinated insider risk' }); }
-  else if (bc > 12)                     { score -= 10; factors.push({ t:'neg', txt:'Moderate bundle presence ('+bc.toFixed(1)+'%)' }); }
-  else if (bc === 0 && d.bundle === 0)  { score +=  5; factors.push({ t:'pos', txt:'No bundle wallets — organic distribution' }); }
+  if      (bc > 25)                        { secMod -=  8; negatives.push('High bundle cluster (' + bc.toFixed(1) + '%)'); }
+  else if (bc > 12)                        { secMod -=  4; }
+  else if (bc === 0 && d.bundle === 0)     { secMod +=  3; positives.push('No bundle wallets — organic distribution'); }
+  if      ((d.fakeVol||0) > 15 || (d.fakeHolders||0) > 15) { secMod -= 8; negatives.push('Significant wash trading detected'); }
+  else if ((d.fakeVol||0) > 8  || (d.fakeHolders||0) > 8)  { secMod -= 4; }
 
-  if ((d.fakeVol||0) > 15 || (d.fakeHolders||0) > 15) { score -= 15; factors.push({ t:'neg', txt:'Significant wash trading — metrics artificially inflated' }); }
-  else if ((d.fakeVol||0) > 8 || (d.fakeHolders||0) > 8) { score -= 8; factors.push({ t:'neu', txt:'Moderate wash trading signal — treat volume stats cautiously' }); }
+  secMod = Math.max(-20, Math.min(10, secMod));
+  score  = Math.max(0, Math.min(100, Math.round(score + secMod)));
 
-  score = Math.max(0, Math.min(100, score));
-  var label = score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 55 ? 'Neutral' : score >= 35 ? 'Questionable' : 'High Risk';
-  var color = score >= 75 ? '#00e676' : score >= 55 ? '#ffeb3b' : score >= 35 ? '#ff9800' : '#ff4757';
+  /* ── Tiers ── */
+  var tier, tierColor, label;
+  if      (score >= 90) { tier = 'ELITE';    tierColor = '#00ffcc'; label = 'Elite';    }
+  else if (score >= 75) { tier = 'TRUSTED';  tierColor = '#00e676'; label = 'Trusted';  }
+  else if (score >= 60) { tier = 'MODERATE'; tierColor = '#ffeb3b'; label = 'Moderate'; }
+  else if (score >= 40) { tier = 'RISKY';    tierColor = '#ff9800'; label = 'Risky';    }
+  else                  { tier = 'DANGER';   tierColor = '#ff4757'; label = 'Danger';   }
 
-  var covPct   = Math.round((covCount / covTotal) * 100);
-  var confScore = covPct;
-  if (!d.rugScore) confScore = Math.max(0, confScore - 15);
-  var confLabel = confScore >= 70 ? 'High Confidence' : confScore >= 45 ? 'Medium Confidence' : 'Low Confidence';
+  /* Build backward-compat factors array */
+  positives.forEach(function(p) { factors.push({ t: 'pos', txt: p }); });
+  negatives.forEach(function(n) { factors.push({ t: 'neg', txt: n }); });
 
-  return { score:score, label:label, color:color, factors:factors, covPct:covPct, confScore:confScore, confLabel:confLabel };
+  /* Confidence / coverage */
+  var covCount = 0, covTotal = 8;
+  if (d.rugScore)                                                    covCount++;
+  if (d.devAddress)                                                  covCount++;
+  if (d.devWallet    !== undefined && d.devWallet    !== null)       covCount++;
+  if (d.devSold      !== undefined && d.devSold      !== null)       covCount++;
+  if (d.bundleClusterPct !== undefined && d.bundleClusterPct !== null) covCount++;
+  if (d.fakeVol      !== undefined && d.fakeVol      !== null)       covCount++;
+  if (d.fakeHolders  !== undefined && d.fakeHolders  !== null)       covCount++;
+  if (hasHistory)                                                    covCount++;
+  var covPct    = Math.round((covCount / covTotal) * 100);
+  var confLabel = hasHistory
+    ? (covPct >= 70 ? 'High Confidence' : 'Medium Confidence')
+    : (covPct >= 50 ? 'Medium Confidence — No History' : 'Low Confidence — No History');
+
+  return {
+    score, tier, tierColor, label,
+    color: tierColor,          /* backward compat */
+    positives, negatives, factors,
+    hasHistory, dep, bon, bondRt, rewards, bestATH, avgMult, history, lastLt,
+    covPct, confLabel, confScore: covPct,
+    breakdown: { histPts, secMod }
+  };
 }
+
+/* Backward-compat alias — all existing callers keep working unchanged */
+function computeDevReputation(d) { return computeDevReputationUnified(d); }
 
 /* ─── Self-Snipe Evidence Engine ───────────────────────────────────────────
    PRIMARY signal: Soul Scanner bundle text — a bundle at 0s after launch that
@@ -4031,8 +4112,8 @@ function buildSecurityBriefingHTML(d) {
     note: frzS==='PASS'?'Wallets cannot be frozen':frzS==='FAIL'?'Developer can freeze holder wallets':'Authority status unknown' });
 
   /* 4 — Dev Reputation */
-  var drS = devRep.score >= 70 ? 'PASS' : devRep.score >= 45 ? 'CAUTION' : 'FAIL';
-  SEC.push({ label:'Dev Reputation', val: devRep.label+' ('+devRep.score+')',
+  var drS = devRep.score >= 75 ? 'PASS' : devRep.score >= 40 ? 'CAUTION' : 'FAIL';
+  SEC.push({ label:'Dev Reputation', val: devRep.tier+' ('+devRep.score+'/100)',
     pts: drS==='PASS'?2:drS==='CAUTION'?1:0, status:drS,
     note: 'Confidence: '+devRep.confLabel+' ('+devRep.covPct+'% data coverage)' });
 
@@ -4331,12 +4412,8 @@ function buildSecurityBriefingHTML(d) {
   var _diLastLt  = _di.lastLaunchTime || '';
   var _diHasData = _diDep > 0 || _diBon > 0 || _diRewards > 0 || _diBestATH > 0 || _diHistory.length > 0;
 
-  /* QEC-style tier for the combined score */
-  var _diTier, _diTierColor;
-  if      (devRep.score >= 70) { _diTier = 'TRUSTED';  _diTierColor = '#00e676'; }
-  else if (devRep.score >= 50) { _diTier = 'MODERATE'; _diTierColor = '#ffeb3b'; }
-  else if (devRep.score >= 30) { _diTier = 'RISKY';    _diTierColor = '#ff9800'; }
-  else                         { _diTier = 'DANGER';   _diTierColor = '#ff4757'; }
+  /* Tier comes directly from unified engine */
+  var _diTier = devRep.tier, _diTierColor = devRep.tierColor;
 
   nt += '<div style="margin-bottom:9px;padding:8px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+devRep.color+';">';
   /* Header row */
@@ -4383,24 +4460,11 @@ function buildSecurityBriefingHTML(d) {
   }
   /* Launch history (bonus/warn lines + table — mirrors QEC panel) */
   if (_diHasData) {
-    var _bonusLines = [], _warnLines = [];
-    if (_diBondRt !== null) {
-      if      (_diBondRt >= 20) _bonusLines.push('Strong bond rate ('+_diBondRt.toFixed(1)+'%)');
-      else if (_diBondRt >= 12) _bonusLines.push('Good bond rate ('+_diBondRt.toFixed(1)+'%)');
-      else if (_diBondRt < 2)   _warnLines.push('Very low bond rate ('+_diBondRt.toFixed(1)+'%) — serial rugger pattern');
-      else if (_diBondRt < 6)   _warnLines.push('Low bond rate ('+_diBondRt.toFixed(1)+'%) — mostly rugs');
-    }
-    if      (_diAvgMult >= 20) _bonusLines.push('Avg ATH '+_diAvgMult.toFixed(1)+'x per launch');
-    else if (_diBestATH >= 400000) _bonusLines.push('Best ATH $'+(_diBestATH/1000).toFixed(0)+'K');
-    if      (_diDep >= 200) _warnLines.push(_diDep+' total deployments — very high serial rug risk');
-    else if (_diDep >= 100) _warnLines.push(_diDep+' total deployments — high serial churn');
-    if (_diRewards >= 500) _bonusLines.push(_diRewards.toFixed(0)+' SOL rewards earned');
-    var _strong = _diHistory.filter(function(l) { return l.entryMC > 0 && l.athMC >= l.entryMC * 5; });
-    if (_strong.length >= 3) _bonusLines.push(_strong.length+' launches with 5×+ ATH');
-    if (_bonusLines.length > 0)
-      nt += '<div style="font-size:0.62rem;color:var(--safe);margin-bottom:3px;">'+_bonusLines.map(function(b){ return '✓ '+b; }).join(' &nbsp;·&nbsp; ')+'</div>';
-    if (_warnLines.length > 0)
-      nt += '<div style="font-size:0.62rem;color:#ff9800;margin-bottom:4px;">'+_warnLines.map(function(w){ return '⚠ '+w; }).join(' &nbsp;·&nbsp; ')+'</div>';
+    /* Use unified engine's positives/negatives — no duplicate logic */
+    if (devRep.positives.length > 0)
+      nt += '<div style="font-size:0.62rem;color:var(--safe);margin-bottom:3px;">'+devRep.positives.map(function(b){ return '✓ '+b; }).join(' &nbsp;·&nbsp; ')+'</div>';
+    if (devRep.negatives.length > 0)
+      nt += '<div style="font-size:0.62rem;color:#ff9800;margin-bottom:4px;">'+devRep.negatives.map(function(w){ return '⚠ '+w; }).join(' &nbsp;·&nbsp; ')+'</div>';
     /* Launch history table */
     if (_diHistory.length > 0) {
       function _fmtMC(v) { if (!v) return '—'; if (v>=1e6) return '$'+(v/1e6).toFixed(1)+'M'; if (v>=1e3) return '$'+(v/1e3).toFixed(0)+'K'; return '$'+v.toFixed(0); }
@@ -8309,7 +8373,7 @@ function buildSetupText(d, analysis) {
   txtSEC.push({ label:'LP Status',           status: _lpOk ? 'PASS' : 'FAIL',       note: d.liqBurned === 'Yes' ? 'LP burned' : d.liqLocked === 'Yes' ? 'LP locked' : 'Unprotected' });
   txtSEC.push({ label:'Mint Authority',       status: d.mintable  === 'No' ? 'PASS' : d.mintable  === 'Yes' ? 'FAIL' : 'CAUTION', note: d.mintable  || 'Unknown' });
   txtSEC.push({ label:'Freeze Authority',     status: d.freezable === 'No' ? 'PASS' : d.freezable === 'Yes' ? 'FAIL' : 'CAUTION', note: d.freezable || 'Unknown' });
-  txtSEC.push({ label:'Dev Reputation',       status: txtDevRep.score >= 70 ? 'PASS' : txtDevRep.score >= 45 ? 'CAUTION' : 'FAIL', note: txtDevRep.label + ' (' + txtDevRep.score + '/100)' });
+  txtSEC.push({ label:'Dev Reputation',       status: txtDevRep.score >= 75 ? 'PASS' : txtDevRep.score >= 40 ? 'CAUTION' : 'FAIL', note: txtDevRep.tier + ' (' + txtDevRep.score + '/100)' });
   var _dwS = d.devSold === 'Yes' ? 'PASS' : (d.devWallet || 0) > 5 ? 'FAIL' : 'CAUTION';
   txtSEC.push({ label:'Dev Wallet',           status: _dwS,  note: d.devSold === 'Yes' ? 'Sold' : (d.devWallet || 0).toFixed(1) + '% held' });
   var _t10S = (d.top10 || 0) <= 25 ? 'PASS' : (d.top10 || 0) <= 40 ? 'CAUTION' : 'FAIL';
@@ -8368,7 +8432,7 @@ function buildSetupText(d, analysis) {
   });
 
   lines.push('');
-  lines.push('Dev Reputation: ' + txtDevRep.label + ' (' + txtDevRep.score + '/100) — ' + txtDevRep.confLabel + ' (Coverage: ' + txtDevRep.covPct + '%)');
+  lines.push('Dev Reputation: ' + txtDevRep.tier + ' (' + txtDevRep.score + '/100) — ' + txtDevRep.confLabel + ' (Coverage: ' + txtDevRep.covPct + '%)');
   if (txtDevRep.factors.length > 0) {
     txtDevRep.factors.forEach(function(f) {
       var icon = f.t === 'pos' ? '  ✓' : f.t === 'neg' ? '  ✗' : '  ·';
@@ -9604,58 +9668,16 @@ function qecSetDevAddress(address, devDeployed, devBonded) {
   var history = info.launchHistory || [];
   var lastLt  = info.lastLaunchTime || '';
 
-  /* ── Reputation scoring (0 – 100) ── */
-  var score = 0;
-  var bonusLines = [], warnLines = [];
-
-  /* Bond rate (0 – 30 pts) — most important signal */
-  if (bondRt !== null) {
-    if      (bondRt >= 20) { score += 30; bonusLines.push('Strong bond rate (' + bondRt.toFixed(1) + '%)'); }
-    else if (bondRt >= 12) { score += 20; bonusLines.push('Good bond rate ('   + bondRt.toFixed(1) + '%)'); }
-    else if (bondRt >= 6)  { score += 12; }
-    else if (bondRt >= 2)  { score += 6;  warnLines.push('Low bond rate ('     + bondRt.toFixed(1) + '%) — mostly rugs'); }
-    else                   { score += 0;  warnLines.push('Very low bond rate (' + bondRt.toFixed(1) + '%) — serial rugger pattern'); }
-  }
-
-  /* ATH quality (0 – 25 pts) — avg multiple if available, else best ATH */
-  if      (avgMult >= 20)   { score += 25; bonusLines.push('Avg ATH ' + avgMult.toFixed(1) + 'x per launch'); }
-  else if (avgMult >= 10)   { score += 18; }
-  else if (avgMult >= 5)    { score += 12; }
-  else if (avgMult >= 2)    { score += 7; }
-  else if (bestATH >= 400000) { score += 25; bonusLines.push('Best ATH $' + (bestATH/1000).toFixed(0) + 'K'); }
-  else if (bestATH >= 200000) { score += 20; }
-  else if (bestATH >= 100000) { score += 15; }
-  else if (bestATH >= 50000)  { score += 10; }
-  else if (bestATH >= 20000)  { score += 5; }
-
-  /* Deployment volume / churn risk (0 – 20 pts) */
-  if      (!dep || dep < 10)  { score += 20; /* new / unknown — no serial history */ }
-  else if (dep < 30)           { score += 15; }
-  else if (dep < 100)          { score += 10; }
-  else if (dep < 200)          { score += 5;  warnLines.push(dep + ' total deployments — high serial churn'); }
-  else                         { score += 2;  warnLines.push(dep + ' total deployments — very high serial rug risk'); }
-
-  /* SOL rewards earned (0 – 15 pts) — proxy for track record */
-  if      (rewards >= 500) { score += 15; bonusLines.push(rewards.toFixed(0) + ' SOL rewards earned'); }
-  else if (rewards >= 200) { score += 12; }
-  else if (rewards >= 50)  { score += 8; }
-  else if (rewards >= 10)  { score += 4; }
-
-  /* Consistency: launches with ATH ≥ 5× entry MC (0 – 10 pts) */
-  var strong = history.filter(function(l) { return l.entryMC > 0 && l.athMC >= l.entryMC * 5; });
-  if      (strong.length >= 3) { score += 10; bonusLines.push(strong.length + ' launches with 5×+ ATH'); }
-  else if (strong.length >= 2) { score += 7; }
-  else if (strong.length >= 1) { score += 4; }
-
-  score = Math.min(100, score);
-
-  var tier, tierColor;
-  if      (score >= 70) { tier = 'TRUSTED';  tierColor = '#00e676'; }
-  else if (score >= 50) { tier = 'MODERATE'; tierColor = '#ffeb3b'; }
-  else if (score >= 30) { tier = 'RISKY';    tierColor = '#ff9800'; }
-  else                  { tier = 'DANGER';   tierColor = '#ff4757'; }
-
-  var hasData = dep > 0 || bon > 0 || rewards > 0 || bestATH > 0 || history.length > 0;
+  /* ── Unified reputation engine ── */
+  var _qecD = (currentAnalysis && currentAnalysis.data) ? currentAnalysis.data : {};
+  var devRep = computeDevReputationUnified(_qecD);
+  /* Surface the unified result into local vars for the render below */
+  var score      = devRep.score;
+  var tier       = devRep.tier;
+  var tierColor  = devRep.tierColor;
+  var bonusLines = devRep.positives;
+  var warnLines  = devRep.negatives;
+  var hasData    = devRep.hasHistory;
 
   /* ── Flagged wallet warning ── */
   var flagged = checkFlaggedWallet(address);
