@@ -619,6 +619,28 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
   .briefing-list li { font-size: 0.74rem; }
 }
 
+/* ── Mobile responsive grid utilities for JS-built briefing sections ──────── */
+.mob-grid-2  { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+.mob-grid-3  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 6px; }
+.mob-rec-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.mob-qec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+@media (max-width: 600px) {
+  /* Three-panel recommendation grid → single column */
+  .mob-rec-grid { grid-template-columns: 1fr; gap: 6px; }
+  /* 3-col social signal grid → 2 columns */
+  .mob-grid-3  { grid-template-columns: 1fr 1fr; }
+  /* QEC key metrics → single column */
+  .mob-qec-grid { grid-template-columns: 1fr; }
+  /* Tighten briefing spacing */
+  .briefing-section { margin-top: 10px; padding-top: 10px; }
+  .verdict-section { gap: 12px; padding: 14px 12px; }
+}
+@media (max-width: 380px) {
+  /* On very small phones collapse all grids to single column */
+  .mob-grid-2  { grid-template-columns: 1fr; }
+  .mob-grid-3  { grid-template-columns: 1fr; }
+}
+
 /* ── Bubblemaps Integration ── */
 .bm-section { margin-top: 4px; }
 .bm-hybrid-risk {
@@ -1351,33 +1373,33 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
           <div id="socialDataPanel" style="display:none;margin-top:6px;padding:12px;background:rgba(0,0,0,0.15);border-radius:5px;border:1px solid rgba(255,255,255,0.06);">
             <div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">Enter mention counts from your monitoring tools (Telegram bots, X search, Reddit, etc.). All fields are optional. Any data entered will activate Social Mode and enhance the Attention Briefing with real signals.</div>
             <div style="font-size:0.62rem;font-weight:700;color:#1DA1F2;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(29,161,242,0.2);"><i class="fa-brands fa-x-twitter" style="margin-right:5px;"></i>X / Twitter</div>
-            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:6px;">
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 15m</label><input type="number" id="fSocXM15" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 30m</label><input type="number" id="fSocXM30" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 1h</label><input type="number" id="fSocXM1h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 3h</label><input type="number" id="fSocXM3h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 24h</label><input type="number" id="fSocXM24h" placeholder="0" min="0" step="1"></div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-bottom:12px;">
               <div class="form-group"><label style="font-size:0.56rem;">Unique Authors 1h</label><input type="number" id="fSocXUp1h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Unique Authors 24h</label><input type="number" id="fSocXUp24h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Retweets / Engagements</label><input type="number" id="fSocXRt" placeholder="0" min="0" step="1"></div>
             </div>
             <div style="font-size:0.62rem;font-weight:700;color:#2CA5E0;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(44,165,224,0.2);"><i class="fa-brands fa-telegram" style="margin-right:5px;"></i>Telegram</div>
-            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:6px;">
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 15m</label><input type="number" id="fSocTgM15" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 30m</label><input type="number" id="fSocTgM30" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 1h</label><input type="number" id="fSocTgM1h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 3h</label><input type="number" id="fSocTgM3h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 24h</label><input type="number" id="fSocTgM24h" placeholder="0" min="0" step="1"></div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-bottom:12px;">
               <div class="form-group"><label style="font-size:0.56rem;">Unique Channels 1h</label><input type="number" id="fSocTgCh1h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Unique Channels 24h</label><input type="number" id="fSocTgCh24h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Forwards</label><input type="number" id="fSocTgFwd" placeholder="0" min="0" step="1"></div>
             </div>
             <div style="font-size:0.62rem;font-weight:700;color:#FF4500;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(255,69,0,0.2);"><i class="fa-brands fa-reddit-alien" style="margin-right:5px;"></i>Reddit</div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;">
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 1h</label><input type="number" id="fSocRdM1h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Mentions 24h</label><input type="number" id="fSocRdM24h" placeholder="0" min="0" step="1"></div>
               <div class="form-group"><label style="font-size:0.56rem;">Unique Posters 1h</label><input type="number" id="fSocRdUp1h" placeholder="0" min="0" step="1"></div>
@@ -6272,7 +6294,7 @@ function buildEntryBriefingHTML(d, analysis) {
         t += '&nbsp;<strong style="color:' + covC + ';font-size:0.85rem;">Data Coverage: ' + cov.pct + '%</strong>';
         t += '&nbsp;<span style="padding:1px 5px;border-radius:3px;font-size:0.60rem;font-weight:700;color:#111;background:' + covC + ';">' + cov.quality + '</span>';
         t += '</div>';
-        t += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1px 14px;">';
+        t += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px 14px;">';
         cov.items.forEach(function(item) {
           var ic = item.ok ? '#00e676' : '#ff4757';
           t += '<span style="font-size:0.62rem;color:var(--text-muted);">';
@@ -6293,7 +6315,7 @@ function buildEntryBriefingHTML(d, analysis) {
         t += '<span class="pf-arr" style="color:var(--text-muted);font-size:0.8rem;display:inline-block;transition:transform 0.2s;">›</span>';
         t += '</div>';
         t += '<div style="display:none;padding:8px 10px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.06);border-top:none;border-radius:0 0 4px 4px;">';
-        t += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 16px;font-size:0.65rem;">';
+        t += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:3px 16px;font-size:0.65rem;">';
         t += '<span style="color:var(--text-muted);">Pool Found: <strong style="color:' + _gC(_da.poolFound) + ';">' + (_da.poolFound ? 'YES' : 'NO') + '</strong></span>';
         t += '<span style="color:var(--text-muted);">Mode Active: ' + _modeLabel + '</span>';
         t += '<span style="color:var(--text-muted);">GeckoTerminal OHLCV: <strong style="color:' + _gC(_da.gtOhlcv) + ';">' + (_da.gtOhlcv ? 'SUCCESS' : 'FAIL') + '</strong></span>';
@@ -6452,7 +6474,7 @@ function buildEntryBriefingHTML(d, analysis) {
           /* ── MANDATORY: Estimated Floor & Recommended Entry Range ── */
           t += '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.28);border-radius:6px;">';
           t += '<div style="font-size:0.62rem;color:#ff9800;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:7px;"><i class="fa-solid fa-crosshairs" style="margin-right:5px;"></i>Estimated Floor &amp; Entry Range</div>';
-          t += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">';
+          t += '<div class="mob-grid-2" style="gap:8px;margin-bottom:6px;">';
           t += '<div>';
           t += '<div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.6px;">Estimated Floor / Shelf MC</div>';
           t += '<div style="font-size:0.95rem;font-weight:700;color:var(--safe);">' + formatUSD(hs.estimatedFloorMC) + '</div>';
@@ -6526,7 +6548,7 @@ function buildEntryBriefingHTML(d, analysis) {
             var fPb      = ((fCurMC - fLpFlr) / fCurMC) * 100;
             t += '<div style="margin-bottom:10px;padding:10px 12px;background:rgba(255,71,87,0.05);border:1px solid rgba(255,71,87,0.22);border-radius:6px;">';
             t += '<div style="font-size:0.62rem;color:#ff8a80;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:7px;"><i class="fa-solid fa-crosshairs" style="margin-right:5px;"></i>LP-Depth Floor Estimate (Flow Mode)</div>';
-            t += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:5px;">';
+            t += '<div class="mob-grid-2" style="gap:8px;margin-bottom:5px;">';
             t += '<div><div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.6px;">Estimated Floor MC (LP proxy)</div>';
             t += '<div style="font-size:0.95rem;font-weight:700;color:var(--caution);">' + formatUSD(fLpFlr) + '</div>';
             t += '<div style="font-size:0.60rem;color:#ff9800;">Rough Estimate — no candle or price history</div></div>';
@@ -7326,7 +7348,7 @@ function buildAttentionBriefingHTML(d, analysis) {
     nt += '<div style="font-size:0.59rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(0,212,255,0.15);"><i class="fa-solid fa-chart-line" style="margin-right:4px;"></i>Social Intelligence</div>';
 
     /* Velocity + Acceleration */
-    nt += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">';
+    nt += '<div class="mob-grid-2">';
     if (ab.socialVelLabel) {
       nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.socialVelColor+';">';
       nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">ATTENTION VELOCITY</div>';
@@ -7346,7 +7368,7 @@ function buildAttentionBriefingHTML(d, analysis) {
     nt += '</div>';
 
     /* Persistence + Quality + Source Expansion */
-    nt += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">';
+    nt += '<div class="mob-grid-3">';
     if (ab.socialPersLabel) {
       nt += '<div style="padding:7px 9px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+ab.socialPersColor+';">';
       nt += '<div style="font-size:0.56rem;color:var(--text-muted);font-weight:700;letter-spacing:0.7px;margin-bottom:2px;">PERSISTENCE</div>';
@@ -7535,7 +7557,7 @@ function buildRecommendedEntryChecklist(d, analysis) {
   html += '<div style="font-size:0.68rem;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;"><i class="fa-solid fa-list-check" style="margin-right:6px;"></i>Recommended Entry Checklist</div>';
 
   /* Three-briefing side-by-side */
-  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">';
+  html += '<div class="mob-rec-grid">';
   var briefings = [
     { label:'Security',  tier:secT, verdict:secV, score:secS, color:secTC },
     { label:'Structure', tier:strT, verdict:strV, score:strS, color:strTC },
@@ -10166,7 +10188,7 @@ function buildQECResultHTML() {
       '<span class="risk-badge ' + (r.vClass==='go'?'low':r.vClass==='caution'?'medium':'high') + '">' + r.verdict + '</span>' +
     '</div>' +
     '<div class="qec-result-block">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">' +
+      '<div class="mob-qec-grid">' +
         '<div style="text-align:center;">' +
           '<div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px;">Clean H/MC</div>' +
           '<div style="font-size:1.4rem;font-weight:800;font-family:\'Orbitron\',sans-serif;color:' + (r.hmc>5?'var(--safe)':'var(--skip)') + ';">' + r.hmc.toFixed(2) + '</div>' +
