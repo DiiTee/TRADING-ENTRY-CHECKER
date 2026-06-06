@@ -1,0 +1,268 @@
+STRUCTURE BRIEFING MODES REFACTOR
+
+CORE PROBLEM:
+
+The current Structure Briefing falls back to Flow Mode whenever OHLCV candle data cannot be retrieved.
+
+When this happens, the app loses most of its structural intelligence and often cannot provide:
+
+- Shelf/Floor MC
+- Support Zone
+- Recommended Entry Range
+- Acceptance Analysis
+- Demand Return Analysis
+
+This defeats the primary purpose of Structure Briefing.
+
+The MAIN reason Structure Briefing exists is to identify:
+
+1. Where the floor/shelf is.
+2. Whether the floor is holding.
+3. Where a safe entry can be planned.
+
+The app should still attempt to estimate these values even when OHLCV candles are unavailable.
+
+--------------------------------------------------
+
+OBJECTIVE
+
+Do NOT treat:
+
+"No OHLCV data"
+
+as:
+
+"No structure exists"
+
+These are not the same thing.
+
+Many memecoins still have usable structure information through:
+
+- Market cap history
+- Transaction history
+- Volume history
+- Holder growth
+- Buy/sell pressure
+- Historical MC movement
+
+even when formal candle data is unavailable.
+
+--------------------------------------------------
+
+NEW MODE ARCHITECTURE
+
+Replace current:
+
+STRUCTURE MODE
+or
+FLOW MODE
+
+with:
+
+1. STRUCTURE MODE
+2. HINT MODE
+3. FLOW MODE
+
+--------------------------------------------------
+
+STRUCTURE MODE
+
+Requirements:
+
+- OHLCV available
+- Sufficient candle history available
+
+Use existing logic.
+
+Current shelf detection remains unchanged.
+
+Current scoring remains unchanged.
+
+Current structure calculations remain unchanged.
+
+--------------------------------------------------
+
+HINT MODE (NEW)
+
+Trigger when:
+
+- OHLCV unavailable
+BUT
+- Sufficient market history exists
+
+Examples:
+
+- MC history exists
+- Transaction history exists
+- Volume history exists
+- Holder history exists
+
+This should become the primary fallback mode.
+
+--------------------------------------------------
+
+HINT MODE GOAL
+
+Continue estimating:
+
+- Shelf/Floor MC
+- Floor Strength
+- Recommended Entry Range
+- Pullback Depth
+- Demand Return
+- Demand Stability
+- Buy Pressure
+- Support Zone
+
+with reduced confidence.
+
+--------------------------------------------------
+
+MOST IMPORTANT REQUIREMENT
+
+ALWAYS ATTEMPT TO GENERATE:
+
+1. Shelf/Floor MC
+2. Recommended Entry Range
+
+These are mandatory outputs whenever enough historical data exists.
+
+Do not hide them simply because candles are missing.
+
+--------------------------------------------------
+
+HINT MODE FLOOR DETECTION
+
+When candles are unavailable:
+
+Estimate floor using:
+
+- Historical MC clusters
+- Repeated MC bounce zones
+- Areas where sell pressure repeatedly stopped
+- Areas where buy pressure repeatedly returned
+- Long-duration MC consolidation ranges
+- Volume concentration zones
+- Transaction density zones
+
+Goal:
+
+Find the most defended MC region.
+
+Treat this as the estimated shelf/floor.
+
+--------------------------------------------------
+
+HINT MODE ENTRY RANGE
+
+Generate entry range from:
+
+Estimated Shelf/Floor MC
+
+
+The important part is:
+
+Structure Briefing should still provide actionable entry guidance.
+
+--------------------------------------------------
+
+FLOW MODE
+
+Only trigger when:
+
+- No OHLCV
+AND
+- No usable MC history
+AND
+- No usable transaction history
+AND
+- No usable volume history
+
+Flow Mode should be the last resort.
+
+--------------------------------------------------
+
+FLOW MODE REQUIREMENTS
+
+Even in Flow Mode attempt to provide:
+
+- Probable support estimate
+- Estimated floor zone
+- Risk-adjusted entry zone
+
+if enough data exists to infer them.
+
+Only show N/A when genuinely impossible.
+
+--------------------------------------------------
+
+DIAGNOSTICS PANEL
+
+Add a small diagnostics section:
+
+Data Availability:
+
+Pool Found:
+YES / NO
+
+OHLCV Source:
+SUCCESS / FAIL
+
+DEXScreener Candles:
+SUCCESS / FAIL
+
+GeckoTerminal Candles:
+SUCCESS / FAIL
+
+MC History:
+AVAILABLE / UNAVAILABLE
+
+Transaction History:
+AVAILABLE / UNAVAILABLE
+
+Holder History:
+AVAILABLE / UNAVAILABLE
+
+Mode Active:
+STRUCTURE / HINT / FLOW
+
+This will help identify whether failures are:
+
+- API issues
+- Pair discovery issues
+- Missing data issues
+- Actual lack of structure
+
+--------------------------------------------------
+
+SCORING CHANGES
+
+Structure Mode:
+Existing confidence (High confidence)
+
+Hint Mode:
+Reduced confidence
+
+Flow Mode:
+Lowest confidence
+
+Do NOT automatically discard structural analysis because candles are unavailable.
+
+Instead reduce confidence appropriately.
+
+--------------------------------------------------
+
+EXPECTED RESULT
+
+The Structure Briefing should continue fulfilling its primary purpose:
+
+- Identify floor/shelf MC
+- Identify support zone
+- Recommend entry range
+- Estimate risk
+
+regardless of whether OHLCV candles are available.
+
+OHLCV should improve precision.
+
+It should not determine whether structure analysis is possible at all.
