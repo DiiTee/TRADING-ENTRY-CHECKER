@@ -1718,12 +1718,14 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
     <div class="card-title" style="cursor:default;"><i class="fa-solid fa-chart-bar"></i> Analysis Results</div>
     <div class="card-body">
       <div class="verdict-section" id="verdictSection"></div>
-      <div id="pfcSection" style="margin:0 0 10px 0;">
+      <div id="pfcSection" style="margin:0 0 6px 0;">
         <div id="pfcHeader"></div>
         <div id="pfcBody" style="display:none;border:1px solid rgba(255,255,255,0.07);border-top:none;border-radius:0 0 6px 6px;overflow:hidden;">
           <div class="checklist-grid" id="checklistGrid"></div>
         </div>
       </div>
+      <div id="pfaSection" style="margin:0 0 6px 0;"></div>
+      <div id="qecResultSection" style="margin:0 0 6px 0;"></div>
       <div class="btn-group" style="justify-content: center;">
         <button class="btn btn-primary" id="addTableBtn"><i class="fa-solid fa-plus"></i> Add to Table</button>
         <button class="btn btn-secondary" id="exportTxtBtn"><i class="fa-solid fa-file-lines"></i> Export TXT</button>
@@ -9374,7 +9376,11 @@ function renderChecklist() {
       '</div>' +
     '</div>';
 
-  verdictSection.innerHTML = checklistHTML + securityHTML + entryHTML + attentionHTML + preVerdictHTML + qecHTML;
+  verdictSection.innerHTML = checklistHTML + securityHTML + entryHTML + attentionHTML + preVerdictHTML;
+
+  /* ── QEC result goes into its own container (after pfcSection + pfaSection) ── */
+  var qecResultSection = el('qecResultSection');
+  if (qecResultSection) qecResultSection.innerHTML = qecHTML;
 
   /* ── Personal Filter Checklist toggle header ── */
   var pfcH = el('pfcHeader');
@@ -9395,11 +9401,9 @@ function renderChecklist() {
     };
   }
 
-  /* ── Personal Filter Analysis inserted AFTER the Checklist ── */
-  var pfcSection = el('pfcSection');
-  if (pfcSection) {
-    pfcSection.insertAdjacentHTML('afterend', pfaHTML);
-  }
+  /* ── Personal Filter Analysis — update in place (no duplication) ── */
+  var pfaSection = el('pfaSection');
+  if (pfaSection) pfaSection.innerHTML = pfaHTML;
 }
 
 function renderTable() {
@@ -9489,6 +9493,21 @@ function showToast(msg, type) {
 el('settingsToggle').addEventListener('click', function() {
   var body = el('settingsBody');
   var toggle = el('settingsToggle');
+  var isCollapsed = body.classList.contains('collapsed');
+  if (isCollapsed) {
+    body.classList.remove('collapsed');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    toggle.classList.remove('collapsed');
+  } else {
+    body.classList.add('collapsed');
+    body.style.maxHeight = '0';
+    toggle.classList.add('collapsed');
+  }
+});
+
+el('attHistoryToggle').addEventListener('click', function() {
+  var body = el('attHistoryBody');
+  var toggle = el('attHistoryToggle');
   var isCollapsed = body.classList.contains('collapsed');
   if (isCollapsed) {
     body.classList.remove('collapsed');
