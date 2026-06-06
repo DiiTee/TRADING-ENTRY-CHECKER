@@ -6817,7 +6817,6 @@ function buildEntryBriefingHTML(d, analysis) {
     confBanner +
     checklistBlock +
     rowsHTML +
-    '<div class="final-verdict-box ' + sClass + '"><i class="fa-solid ' + verdictIcon + '" style="margin-right:7px;"></i>' + finalVerdict + '</div>' +
     '</div>';
 }
 
@@ -8853,7 +8852,7 @@ function renderChecklist() {
       '</div>' +
     '</div>';
 
-  verdictSection.innerHTML = checklistHTML + securityHTML + entryHTML + attentionHTML + preVerdictHTML + pfaHTML + qecHTML;
+  verdictSection.innerHTML = checklistHTML + securityHTML + entryHTML + attentionHTML + preVerdictHTML + qecHTML;
 
   /* ── Personal Filter Checklist toggle header ── */
   var pfcH = el('pfcHeader');
@@ -8872,6 +8871,12 @@ function renderChecklist() {
       var arr = pfcH.querySelector('.pfc-arr');
       if (arr) arr.style.transform = isOpen ? '' : 'rotate(90deg)';
     };
+  }
+
+  /* ── Personal Filter Analysis inserted AFTER the Checklist ── */
+  var pfcSection = el('pfcSection');
+  if (pfcSection) {
+    pfcSection.insertAdjacentHTML('afterend', pfaHTML);
   }
 }
 
