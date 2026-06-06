@@ -4785,9 +4785,10 @@ function buildSecurityBriefingHTML(d) {
   nt += '</div>';
 
   /* Expose tier for summary panel */
-  window._tecSecTier    = secTier;
-  window._tecSecVerdict = secVerdict;
-  window._tecSecScore   = Math.round(secPct * 100);
+  window._tecSecTier     = secTier;
+  window._tecSecVerdict  = secVerdict;
+  window._tecSecScore    = Math.round(secPct * 100);
+  window._tecDistQuality = { score: _dqScore, label: _dqLabel, lines: _dqLines };
 
   return '<div class="briefing-section">' +
     '<div class="briefing-title"><i class="fa-solid fa-user-secret"></i> Security Briefing</div>' +
@@ -9157,6 +9158,7 @@ function buildSetupText(d, analysis) {
   if (sevOrder[manualRisk] > sevOrder[cabRisk]) cabRisk = manualRisk;
 
   lines.push('SECURITY BRIEFING');
+  lines.push('Security Tier: ' + (window._tecSecTier || '—') + '  |  Score: ' + (window._tecSecScore || 0) + '%  |  Verdict: ' + (window._tecSecVerdict || '—'));
   var _txtCabScore = 10;
   if (bundleClust > 25) _txtCabScore -= 3;    else if (bundleClust > 12) _txtCabScore -= 1.5;
   if (singleB > 15)     _txtCabScore -= 2;    else if (singleB > 8)      _txtCabScore -= 1;
@@ -9164,6 +9166,11 @@ function buildSetupText(d, analysis) {
   if (topH > 12)        _txtCabScore -= 2;    else if (topH > 8)         _txtCabScore -= 1;
   _txtCabScore = Math.round(Math.max(0, Math.min(10, _txtCabScore)) * 10) / 10;
   lines.push('Cabal Risk: ' + cabRisk + '  |  Cabal Score: ' + _txtCabScore + '/10');
+  var _dqTxt = window._tecDistQuality;
+  if (_dqTxt) {
+    lines.push('Distribution Quality: ' + _dqTxt.label + ' (Score: ' + _dqTxt.score + '/100)');
+    _dqTxt.lines.forEach(function(l) { lines.push('   ' + (l.ok ? '✓' : '✗') + ' ' + l.t); });
+  }
   lines.push('');
 
   /* Prepend any manual visual hits as explicit bullet points */
@@ -9306,6 +9313,27 @@ function buildSetupText(d, analysis) {
   /* ── Structure Briefing ── */
   lines.push('STRUCTURE BRIEFING');
   lines.push('');
+  /* ── Confidence Tier / Structural Verdict / Structure Checklist ── */
+  var _sbSA = d.structuralAnalysis || null;
+  var _sbHS = window._tecHintStructure || null;
+  if (_sbSA) {
+    lines.push('Confidence Tier: ' + _sbSA.confidenceTier + ' — ' + _sbSA.tierLabel + ' (Score: ' + _sbSA.tierScore + '/100)');
+    lines.push('Structural Verdict: ' + _sbSA.checklistResult + ' — ' + _sbSA.checklistReason);
+    if (_sbSA.entryChecklist && _sbSA.entryChecklist.length > 0) {
+      lines.push('Structure Checklist:');
+      _sbSA.entryChecklist.forEach(function(c) {
+        var tag = c.status === 'pass' ? 'PASS' : c.status === 'fail' ? 'FAIL' : 'CAUTION';
+        lines.push('   [' + tag + '] ' + c.label + ': ' + c.value);
+        if (c.reason) lines.push('         → ' + c.reason);
+      });
+    }
+  } else if (_sbHS) {
+    lines.push('Confidence Tier: ' + _sbHS.hintTier + ' — ' + _sbHS.hintTierLabel + ' (Score: ' + _sbHS.hintTierScore + '/100)');
+    lines.push('Mode: HINT — Estimated structure (OHLCV unavailable, max tier C)');
+  } else {
+    lines.push('Mode: FLOW — No candle data. Floor estimates from LP depth and tx flow only (max tier B).');
+  }
+  lines.push('');
   var ageMin = analysis.ageMinutes;
   var bigPicture = '';
   if (ageMin !== null && ageMin < 30) bigPicture = 'Extremely fresh launch (' + d.launchAge + ') at ' + formatUSD(d.marketCap) + ' MC — still in raw price discovery.';
@@ -9329,7 +9357,6 @@ function buildSetupText(d, analysis) {
     if (_patExportSecondary) patLine += ' + Secondary: ' + _patExportSecondary.name + ' [' + _patExportSecondary.confidence + ']';
   }
   lines.push(patLine);
-  /* Pattern reasons */
   if (_patExportPrimary && (_patExportPrimary.reasons || []).length > 0) {
     _patExportPrimary.reasons.forEach(function(r) { lines.push('    ' + r); });
   }
@@ -9340,10 +9367,10 @@ function buildSetupText(d, analysis) {
     lines.push('    Secondary reasons:');
     _patExportSecondary.reasons.forEach(function(r) { lines.push('      ' + r); });
   }
-  /* Entry / exit triggers */
-  if (_patExportPrimary && _patExportPrimary.triggers) {
-    lines.push('    Triggers: ' + _patExportPrimary.triggers);
-  }
+
+  /* ── 03. Entry / Exit Triggers ── */
+  var _expTrig = _patExportPrimary && _patExportPrimary.triggers ? _patExportPrimary.triggers : 'Monitor price action for confirmation signal.';
+  lines.push('03. Entry / Exit Triggers: ' + _expTrig);
   lines.push('    Exit: Exit when sell% exceeds 50% on confirmed 5-min close, or MC breaches the floor. TP1 at 2x, TP2 at 3x, trail remainder.');
 
   var txtCurrentMC = d.marketCap || 0;
@@ -9365,7 +9392,6 @@ function buildSetupText(d, analysis) {
   if (txtSA && txtSA.activeShelfPrice > 0 && d.defCurrent > 0) {
     txtActiveShelfMC = txtCurrentMC * (txtSA.activeShelfPrice / d.defCurrent);
   }
-  /* HINT MODE: use estimated floor when no candle-based shelf available */
   if (txtActiveShelfMC === null && window._tecHintStructure) {
     txtActiveShelfMC = window._tecHintStructure.estimatedFloorMC;
   }
@@ -9394,7 +9420,7 @@ function buildSetupText(d, analysis) {
   if (txtMacroMC) shelfLine += ' | Macro Floor: ' + formatUSD(txtMacroMC) + ' (context)';
   shelfLine += ' | LP Floor: ' + formatUSD(txtLpFloor) + ' (rug ref only)';
   if (txtIsAir)  shelfLine += '  ⚠ AIR ENTRY — ' + txtDistShelf.toFixed(1) + '% above shelf';
-  lines.push('03. Support Structure: ' + shelfLine + '  |  Ceiling: ' + ceilLabel);
+  lines.push('04. Support Structure: ' + shelfLine + '  |  Ceiling: ' + ceilLabel);
 
   /* ── Vol/Fees Ratio ── */
   var txtFeeUSD = d.totalFeeUSD || 0;
@@ -9402,7 +9428,7 @@ function buildSetupText(d, analysis) {
   if (txtFeeUSD && txtVol24h) {
     var txtFeeRatio = ((txtFeeUSD / txtVol24h) * 100).toFixed(4);
     var txtFakeVol  = txtFeeUSD < txtVol24h * 0.00033;
-    lines.push('03b. 24h Vol/Fees: ' + formatUSD(txtVol24h) + ' vol | $' + Math.round(txtFeeUSD).toLocaleString() + ' fees | ' + txtFeeRatio + '% ratio' + (txtFakeVol ? '  ⚠ FAKE VOLUME WARNING' : '  ✓ HEALTHY'));
+    lines.push('04b. 24h Vol/Fees: ' + formatUSD(txtVol24h) + ' vol | $' + Math.round(txtFeeUSD).toLocaleString() + ' fees | ' + txtFeeRatio + '% ratio' + (txtFakeVol ? '  ⚠ FAKE VOLUME WARNING' : '  ✓ HEALTHY'));
   }
   /* ── Volume Velocity ── */
   if (d.volM5 > 0 && d.volH1 > 0) {
@@ -9414,16 +9440,16 @@ function buildSetupText(d, analysis) {
     else if (txtVelRatio < 0.7 && txtPm5 !== null && txtPm5 > 0) txtVolVerdict = 'ABORT: FAKE BREAKOUT';
     else if (txtVelRatio < 0.7 && txtPm5 !== null && txtPm5 < 0) txtVolVerdict = 'CAUTION: WAIT FOR DIP';
     else                                                           txtVolVerdict = 'Neutral';
-    lines.push('03c. Volume Velocity: M5=$' + d.volM5.toFixed(0) + ' H1=$' + d.volH1.toFixed(0)
+    lines.push('04c. Volume Velocity: M5=$' + d.volM5.toFixed(0) + ' H1=$' + d.volH1.toFixed(0)
       + ' Ratio=' + txtVelRatio.toFixed(2) + 'x  ' + txtVolVerdict);
   }
-  /* ── Safe Entry + Action Signal ── */
-  lines.push('04. Safe Entry: ' + formatUSD(safeEntryLow) + ' – ' + formatUSD(safeEntryHigh) + '  |  Signal: ' + txtActionSig
+  /* ── 05. Safe Entry + Action Signal ── */
+  lines.push('05. Safe Entry: ' + formatUSD(safeEntryLow) + ' – ' + formatUSD(safeEntryHigh) + '  |  Signal: ' + txtActionSig
     + '  |  Position: ' + txtDistClass + ' (' + txtDistShelf.toFixed(1) + '% from shelf)');
-  /* ── Structural Analysis Scores ── */
+  /* ── 06. Structural Analysis Scores ── */
   if (txtSA) {
     var txtTps = computeTransactionPressureScore(d);
-    lines.push('05. Structural Analysis:');
+    lines.push('06. Structural Analysis Scores:');
     lines.push('    Acceptance Score: ' + txtSA.acceptanceScore + '/100 (' + txtSA.acceptanceClass + ')');
     lines.push('    Demand Return Score: ' + txtSA.demandReturnScore + '/100 (' + (txtSA.demandClass || '—') + ')');
     lines.push('    Demand Expansion: ' + (txtSA.demandExpansionScore || 0) + '/100 (' + (txtSA.demandExpansionQuality || '—') + ' via ' + (txtSA.demandExpansionSource || '—') + ')' + (txtSA.shortTermExpansion !== undefined && txtSA.mediumTermExpansion !== undefined ? ' [ST: ' + txtSA.shortTermExpansion + ' · MT: ' + txtSA.mediumTermExpansion + ']' : ''));
@@ -9453,7 +9479,7 @@ function buildSetupText(d, analysis) {
     lines.push('    Confidence Tier: ' + txtSA.confidenceTier + ' — ' + txtSA.tierLabel + ' (Score: ' + txtSA.tierScore + '/100)');
   } else if (window._tecHintStructure) {
     var _htx = window._tecHintStructure;
-    lines.push('05. HINT MODE — Estimated Structure (OHLCV Unavailable):');
+    lines.push('06. HINT MODE — Estimated Structure (OHLCV Unavailable):');
     lines.push('    Estimated Floor MC: ' + formatUSD(_htx.estimatedFloorMC) + ' (' + _htx.floorStrength + ')');
     lines.push('    Recommended Entry Range: ' + formatUSD(_htx.entryRangeLow) + ' \u2013 ' + formatUSD(_htx.entryRangeHigh) + ' (Floor +1\u202f\u2013\u202f+10%)');
     lines.push('    Pullback to Floor: ' + _htx.pullbackDepth.toFixed(1) + '%');
@@ -9468,18 +9494,25 @@ function buildSetupText(d, analysis) {
     lines.push('    \u26a0 HINT MODE: Candle data unavailable. Floor/entry estimated from MC history, LP depth, tx data. Max tier: C (A/B/S require OHLCV).');
     lines.push('    Distance from Estimated Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  \u26a0 POOR RISK/REWARD' : ''));
   } else {
-    lines.push('05. FLOW MODE \u2014 No Candle Data:');
+    lines.push('06. FLOW MODE \u2014 No Candle Data:');
     lines.push('    Distance from Shelf: ' + txtDistShelf.toFixed(1) + '%  |  Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  \u26a0 POOR RISK/REWARD' : ''));
     lines.push('    \u26a0 FLOW MODE: No structural data. Analysis based on transaction flow only. Floor estimates are LP-depth approximations.');
   }
-  lines.push('06. TP1 (' + txtTp1Pct + '%): ' + formatUSD(tp1MC) + ' MC (+' + (((tp1MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)  |  TP2 (' + txtTp2Pct + '%): ' + formatUSD(tp2MC) + ' MC (+' + (((tp2MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)');
+  /* ── 07. Potential Gain & Risk/Reward ── */
+  lines.push('07. Potential Gain: +' + txtGain.toFixed(1) + '%  |  R/R Ratio: ' + txtRR.toFixed(2) + ':1' + (txtRR > 0 && txtRR < 2 ? '  ⚠ POOR RISK/REWARD — consider waiting' : ''));
+  /* ── 08. TP1 ── */
+  lines.push('08. TP1 (' + txtTp1Pct + '% of way to ceiling): ' + formatUSD(tp1MC) + ' MC (+' + (((tp1MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)');
+  lines.push('    Take partial profits here — sell 30–50% of position and raise stop to break-even.');
+  /* ── 09. TP2 ── */
+  lines.push('09. TP2 (' + txtTp2Pct + '% of way to ceiling): ' + formatUSD(tp2MC) + ' MC (+' + (((tp2MC - txtCurrentMC) / txtCurrentMC) * 100).toFixed(1) + '%)');
+  lines.push('    Exit remaining position or trail a tight stop — approaching the identified ceiling.');
 
   var stratNote = analysis.status === 'SAFE'
     ? 'Scale in at market with 50–60% now, reserves for dip to shelf.'
     : analysis.status === 'CAUTION'
     ? 'Split entry: 25–30% now for exposure, remainder on shelf confirmation.'
     : 'Stand aside — risk profile does not justify live capital.';
-  lines.push('07. Strategy: ' + stratNote);
+  lines.push('10. Strategy: ' + stratNote);
 
   return lines.join('\n');
 }
@@ -9585,57 +9618,58 @@ el('exportTxtBtn').addEventListener('click', function() {
   L.push(' * H/MC Ratio: ' + (isNaN(d.hmcRatio) ? 'N/A' : d.hmcRatio.toFixed(2)));
   L.push(' * L/MC Ratio: ' + pct(d.lmcRatio));
   L.push('');
+  /* ── Overall Tier (computed once for The Setup and ENTRY CHECKER EVALUATION) ── */
+  var _txAB  = window._tecAttentionBriefing;
+  var _secT2 = window._tecSecTier || '—';
+  var _strT2 = (a.data.structuralAnalysis ? a.data.structuralAnalysis.confidenceTier : null)
+             || (window._tecHintStructure ? window._tecHintStructure.hintTier : null) || '—';
+  var _attT2 = _txAB ? _txAB.attTier : '—';
+  var _sN  = _secT2==='A'?100:_secT2==='B'?75:_secT2==='C'?50:25;
+  var _stN = _strT2==='S'?100:_strT2==='A'?85:_strT2==='B'?65:_strT2==='C'?45:25;
+  var _aN  = _attT2==='A'?100:_attT2==='B'?75:_attT2==='C'?50:_attT2==='D'?33:15;
+  var _oS  = Math.round(_sN*0.35 + _stN*0.35 + _aN*0.30);
+  var _oT  = _oS>=88?'A':_oS>=72?'B':_oS>=55?'C':_oS>=38?'D':'F';
+  var _oR  = _oS>=88?'STRONG ENTRY CANDIDATE':_oS>=72?'VIABLE ENTRY — MANAGE RISK':_oS>=55?'SPECULATIVE — SIZE DOWN':_oS>=38?'HIGH RISK — AVOID OR WATCH':'SKIP — NOT RECOMMENDED';
+
   L.push(' * The Setup:');
   buildSetupText(d, a).split('\n').forEach(function(sl) { L.push('   ' + sl); });
+
+  /* ── Attention Briefing + Recommended Entry Checklist (inside The Setup, before Pre-Trade Verdict) ── */
+  if (_txAB) {
+    L.push('');
+    L.push('   ATTENTION BRIEFING');
+    L.push('   Attention Tier: ' + _txAB.attTier + '  |  Score: ' + _txAB.coreScore + '/' + _txAB.maxScore + ' (' + Math.round(_txAB.corePct*100) + '%)');
+    L.push('   Verdict: ' + _txAB.attVerdict);
+    L.push('');
+    L.push('   1. Narrative Strength: ' + _txAB.naScore + '/10 (' + _txAB.naCategory + ')');
+    _txAB.naNotes.forEach(function(n){ L.push('      • ' + n); });
+    L.push('   2. Attention Velocity: ' + _txAB.velScore + '/10 (' + _txAB.velClass + ')');
+    _txAB.velNotes.forEach(function(n){ L.push('      • ' + n); });
+    L.push('   3. Distribution Strength: ' + _txAB.disScore + '/5 (' + _txAB.disClass + ')');
+    _txAB.disNotes.forEach(function(n){ L.push('      • ' + n); });
+    L.push('   4. Narrative Freshness: ' + _txAB.frScore + '/5 (' + _txAB.frClass + ')');
+    _txAB.frNotes.forEach(function(n){ L.push('      • ' + n); });
+    L.push('');
+    L.push('   Attention Lifecycle: ' + _txAB.lifecycle);
+    L.push('      ' + _txAB.lifecycleDesc);
+    L.push('   Attention Efficiency: ' + _txAB.attEfficiency);
+    L.push('      ' + _txAB.attEfficiencyDesc);
+    L.push('   Holder Momentum: ' + (_txAB.hmAvail ? _txAB.hmClass + ' (' + _txAB.hmScore + '/100)' : 'No History'));
+    var _hdLabel2 = _txAB.hdType==='bullish'?'Bullish Divergence':_txAB.hdType==='bearish'?'Bearish Divergence':'Neutral';
+    L.push('   Holder Divergence: ' + _hdLabel2);
+    L.push('');
+    L.push('   Bonus Indicators:');
+    L.push('      Attention Persistence: ' + _txAB.attPersistence);
+    L.push('      Meta Rotation: ' + _txAB.metaLabel + ' — ' + _txAB.metaStrength);
+    if (_txAB.attDivSignal) L.push('      Attention Divergence: ' + _txAB.attDivSignal);
+    L.push('');
+    L.push('   RECOMMENDED ENTRY CHECKLIST');
+    L.push('   Security: Tier ' + _secT2 + '  |  Structure: Tier ' + _strT2 + '  |  Attention: Tier ' + _attT2);
+    L.push('   Overall Tier: ' + _oT + '  |  Score: ' + _oS + '/100  |  Recommendation: ' + _oR);
+  }
   L.push('');
   L.push(' * Pre-Trade Verdict: ' + preVerdict);
   L.push('');
-
-  /* ── Attention Briefing block ── */
-  var _txAB = window._tecAttentionBriefing;
-  if (_txAB) {
-    L.push(sep);
-    L.push('ATTENTION BRIEFING');
-    L.push('Attention Tier: ' + _txAB.attTier + '  |  Score: ' + _txAB.coreScore + '/' + _txAB.maxScore + ' (' + Math.round(_txAB.corePct*100) + '%)');
-    L.push('Verdict: ' + _txAB.attVerdict);
-    L.push('');
-    L.push('1. Narrative Strength: ' + _txAB.naScore + '/10 (' + _txAB.naCategory + ')');
-    _txAB.naNotes.forEach(function(n){ L.push('   • ' + n); });
-    L.push('2. Attention Velocity: ' + _txAB.velScore + '/10 (' + _txAB.velClass + ')');
-    _txAB.velNotes.forEach(function(n){ L.push('   • ' + n); });
-    L.push('3. Distribution Strength: ' + _txAB.disScore + '/5 (' + _txAB.disClass + ')');
-    _txAB.disNotes.forEach(function(n){ L.push('   • ' + n); });
-    L.push('4. Narrative Freshness: ' + _txAB.frScore + '/5 (' + _txAB.frClass + ')');
-    _txAB.frNotes.forEach(function(n){ L.push('   • ' + n); });
-    L.push('');
-    L.push('Attention Lifecycle: ' + _txAB.lifecycle);
-    L.push('   ' + _txAB.lifecycleDesc);
-    L.push('Attention Efficiency: ' + _txAB.attEfficiency);
-    L.push('   ' + _txAB.attEfficiencyDesc);
-    L.push('Holder Momentum: ' + (_txAB.hmAvail ? _txAB.hmClass + ' (' + _txAB.hmScore + '/100)' : 'No History'));
-    var _hdLabel2 = _txAB.hdType==='bullish'?'Bullish Divergence':_txAB.hdType==='bearish'?'Bearish Divergence':'Neutral';
-    L.push('Holder Divergence: ' + _hdLabel2);
-    L.push('');
-    L.push('Bonus Indicators:');
-    L.push('   Attention Persistence: ' + _txAB.attPersistence);
-    L.push('   Meta Rotation: ' + _txAB.metaLabel + ' — ' + _txAB.metaStrength);
-    if (_txAB.attDivSignal) L.push('   Attention Divergence: ' + _txAB.attDivSignal);
-    L.push('');
-    /* Recommended Entry Checklist summary */
-    var _secT2 = window._tecSecTier || '—';
-    var _strT2 = (a.data.structuralAnalysis ? a.data.structuralAnalysis.confidenceTier : null)
-              || (window._tecHintStructure ? window._tecHintStructure.hintTier : null) || '—';
-    var _attT2 = _txAB.attTier;
-    var _sN = _secT2==='A'?100:_secT2==='B'?75:_secT2==='C'?50:25;
-    var _stN= _strT2==='S'?100:_strT2==='A'?85:_strT2==='B'?65:_strT2==='C'?45:25;
-    var _aN = _attT2==='A'?100:_attT2==='B'?75:_attT2==='C'?50:_attT2==='D'?33:15;
-    var _oS = Math.round(_sN*0.35 + _stN*0.35 + _aN*0.30);
-    var _oT = _oS>=88?'A':_oS>=72?'B':_oS>=55?'C':_oS>=38?'D':'F';
-    var _oR = _oS>=88?'STRONG ENTRY CANDIDATE':_oS>=72?'VIABLE ENTRY — MANAGE RISK':_oS>=55?'SPECULATIVE — SIZE DOWN':_oS>=38?'HIGH RISK — AVOID OR WATCH':'SKIP — NOT RECOMMENDED';
-    L.push('RECOMMENDED ENTRY CHECKLIST');
-    L.push('Security: Tier ' + _secT2 + '  |  Structure: Tier ' + _strT2 + '  |  Attention: Tier ' + _attT2);
-    L.push('Overall Tier: ' + _oT + '  |  Score: ' + _oS + '/100  |  Recommendation: ' + _oR);
-  }
 
   /* ── Quick Entry Checker block ── */
   if (window._qecResult) {
@@ -9652,10 +9686,16 @@ el('exportTxtBtn').addEventListener('click', function() {
   /* ── Evaluation block ── */
   L.push(sep);
   L.push(' * ENTRY CHECKER EVALUATION:');
-  L.push('  Personal Filter Analysis');
-  L.push('Score  : ' + Math.round(a.passPct) + '%');
-  L.push('Verdict: ' + a.status);
-  L.push('Passed ' + passedScoring + ' of ' + scoringChecks.length + ' personal filter criteria.');
+  L.push('');
+  L.push('  OVERALL TIER ANALYSIS');
+  L.push('  Overall Tier: ' + _oT + '  |  Score: ' + _oS + '/100');
+  L.push('  Security: Tier ' + _secT2 + '  |  Structure: Tier ' + _strT2 + '  |  Attention: Tier ' + _attT2);
+  L.push('  Recommendation: ' + _oR);
+  L.push('');
+  L.push('  PERSONAL FILTER ANALYSIS');
+  L.push('  Score  : ' + Math.round(a.passPct) + '%');
+  L.push('  Verdict: ' + a.status);
+  L.push('  Passed ' + passedScoring + ' of ' + scoringChecks.length + ' personal filter criteria.');
   L.push(thin);
   L.push('  PERSONAL FILTER CHECKLIST');
   L.push(thin);
