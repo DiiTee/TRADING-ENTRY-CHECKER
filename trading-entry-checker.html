@@ -572,6 +572,28 @@ html, body { overflow-x: hidden; max-width: 100%; }
 @keyframes pulseGlow { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+/* ── Global mobile overflow safeguards ─────────────────────────────────── */
+body,
+.container,
+main,
+#analysisResults {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.card,
+.analysis-section,
+.metric-card,
+.recommendation-card,
+.verdict-card,
+p, span, td, th {
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+  min-width: 0 !important;
+}
+
 @media (max-width: 768px) {
   .app { padding: 10px; }
   .header h1 { font-size: 1.25rem; }
@@ -591,6 +613,36 @@ html, body { overflow-x: hidden; max-width: 100%; }
   .verdict-info { min-width: 0; width: 100%; }
   /* Card overflow containment */
   .card { overflow: hidden; }
+  /* Analysis results grid collapse */
+  .mob-rec-grid,
+  .briefing-grid,
+  .analysis-grid,
+  .score-grid,
+  .metric-group,
+  .briefing-header {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+  .card,
+  table,
+  input,
+  select {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  /* Orbitron font tuning on mobile */
+  .header h1 { letter-spacing: 0.5px; }
+  .verdict-badge { letter-spacing: 0.5px; }
+  .briefing-title { letter-spacing: 0.3px; }
+  /* Contract address / error message wrapping */
+  .api-diag-text,
+  .briefing-list li,
+  .briefing-advice {
+    white-space: normal !important;
+    word-break: break-all !important;
+  }
 }
 @media (max-width: 480px) {
   .app { padding: 8px; }
@@ -3008,64 +3060,18 @@ async function fetchFromCA(ca) {
     }
   }
 
-  /* ── 5a-fallback: DEX Screener OHLCV (when GeckoTerminal candles unavailable) ── */
+  /* ── 5a: DEX Screener OHLCV note ─────────────────────────────────────────
+     DexScreener's public API does not expose an OHLCV/candle endpoint.
+     The pair discovery data above (volume, liquidity, price change) is the
+     full extent of what DexScreener provides without a paid Pro subscription.
+     GeckoTerminal is the sole public OHLCV source. If GeckoTerminal candles
+     are unavailable, the engine falls through to HINT MODE or FLOW MODE.   */
   if (window._tecEngineMode !== 'STRUCTURE') {
-    try {
-      var dexPairAddr = window._tecPoolAddress || '';
-      if (dexPairAddr) {
-        var nowTs  = Math.floor(Date.now() / 1000);
-        var fromTs = nowTs - (6 * 3600);
-        var dexCandleUrl = 'https://api.dexscreener.com/latest/dex/ohlcv/solana/' + dexPairAddr +
-                           '?from=' + fromTs + '&to=' + nowTs + '&resolution=15';
-        var dexCandleRaw = await fetchWithFallback(dexCandleUrl);
-        /* Support multiple possible response shapes */
-        var dexRawList = null;
-        if (Array.isArray(dexCandleRaw))                              dexRawList = dexCandleRaw;
-        else if (dexCandleRaw && Array.isArray(dexCandleRaw.ohlcv))  dexRawList = dexCandleRaw.ohlcv;
-        else if (dexCandleRaw && Array.isArray(dexCandleRaw.data))   dexRawList = dexCandleRaw.data;
-        if (dexRawList && dexRawList.length >= 3) {
-          /* Normalize to [timestamp, open, high, low, close, volume] */
-          var dexNorm = dexRawList.map(function(c) {
-            if (Array.isArray(c)) return c;
-            return [c.t||c.time||0, c.o||c.open||0, c.h||c.high||0, c.l||c.low||0, c.c||c.close||0, c.v||c.volume||0];
-          });
-          /* Ensure holder counts are available before running structural analysis */
-          if (!window._tecHolderCount) window._tecHolderCount = parseInt((el('fHolders')  ||{}).value||'0') || 0;
-          if (!window._tecHolderH1)    window._tecHolderH1    = parseInt((el('fHoldersH1')||{}).value||'0') || 0;
-          if (!window._tecHolderH6)    window._tecHolderH6    = parseInt((el('fHoldersH6')||{}).value||'0') || 0;
-          if (!window._tecHolderH24)   window._tecHolderH24   = parseInt((el('fHoldersH24')||{}).value||'0') || 0;
-          if (!window._tecSettings)    window._tecSettings    = settings;
-          var dexSaAttrs = window._tecDexTxns ? { transactions: window._tecDexTxns } : null;
-          var dexSA = computeStructuralAnalysis(dexNorm, dexSaAttrs);
-          var dexClose = dexNorm[dexNorm.length - 1][4] || 0;
-          if (dexSA && dexClose > 0) {
-            var dexHighs = dexNorm.map(function(c){ return c[2]; });
-            var dexLows  = dexNorm.map(function(c){ return c[3]; });
-            window._tecCandles = {
-              current:       dexClose,
-              macroFloor:    dexSA.macroFloorPrice  || 0,
-              localFloor:    dexSA.activeShelfPrice || 0,
-              floor15mLow:   dexSA.activeShelfPrice || 0,
-              ceiling1hHigh: Math.max.apply(null, dexHighs),
-              high:          Math.max.apply(null, dexHighs),
-              low:           Math.min.apply(null, dexLows),
-              volM5: 0, volH1: 0, priceChangeM5: null,
-              source: 'DEX Screener',
-              structuralAnalysis: dexSA
-            };
-            window._tecOhlcvSource = 'DEX Screener';
-            window._tecEngineMode  = 'STRUCTURE';
-            window._tecDataAvailability.dexOhlcv = true;
-            addBadge('DEX Screener OHLCV', 'ok');
-            addDiag('ok', 'DEX Screener OHLCV',
-              'OHLCV candle fallback succeeded (' + dexNorm.length + ' candles). ' +
-              'Structural Analysis computed from DEX Screener data. Confidence Tier: ' + dexSA.confidenceTier + '.');
-          }
-        }
-      }
-    } catch(e) {
-      addDiag('partial', 'DEX Screener OHLCV', 'Candle fallback attempted but failed: ' + (e && e.message ? e.message : String(e)) + '. Falling back to Flow Mode.');
-    }
+    addBadge('DEX Screener OHLCV', 'skip');
+    addDiag('skip', 'DEX Screener OHLCV',
+      'DexScreener does not provide a public OHLCV/candle API. ' +
+      'Pair discovery data (liquidity, volume, txns) was captured in step 1. ' +
+      'Candles source: GeckoTerminal only.');
   }
 
   /* ── HINT MODE: attempt estimated structure when OHLCV unavailable ── */
@@ -7018,12 +7024,50 @@ function buildEntryBriefingHTML(d, analysis) {
     return t;
   })();
 
+  /* ── Structure Diagnostics panel ── */
+  var _strucDiag = (function() {
+    var em  = window._tecEngineMode   || 'FLOW';
+    var src = window._tecOhlcvSource  || null;
+    var pa  = window._tecPoolAddress  || null;
+    var cd  = window._tecCandles      || null;
+    var sa  = (cd && cd.structuralAnalysis) || null;
+    var tier   = sa ? sa.confidenceTier : '—';
+    var nCnd   = cd ? (cd.source === 'GeckoTerminal' ? '100 (15m)' : '—') : '—';
+    var fallback = [];
+    if (src === 'GeckoTerminal') fallback.push('✓ GeckoTerminal OHLCV (primary source succeeded)');
+    else { fallback.push('⚠ GeckoTerminal candles unavailable'); }
+    fallback.push('⚠ DEX Screener has no public OHLCV API (pair discovery only)');
+    if (em === 'HINT')        fallback.push('→ HINT MODE: estimated structure from market history');
+    else if (em === 'FLOW')   fallback.push('→ FLOW MODE: no candle data available');
+    var rows = [
+      { l: 'Engine Mode',      v: em },
+      { l: 'OHLCV Source',     v: src || 'None' },
+      { l: 'Pool / Pair Addr', v: pa  || '—' },
+      { l: 'Candles Retrieved',v: nCnd },
+      { l: 'Confidence Tier',  v: tier },
+      { l: 'Fallback Path',    v: fallback.join(' → ') },
+    ];
+    var innerRows = rows.map(function(r) {
+      return '<div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">' +
+        '<span style="color:var(--text-muted);font-size:0.58rem;min-width:110px;flex-shrink:0;">' + r.l + ':</span>' +
+        '<span style="font-size:0.58rem;word-break:break-all;min-width:0;">' + r.v + '</span></div>';
+    }).join('');
+    return '<details style="margin-top:10px;">' +
+      '<summary style="cursor:pointer;font-size:0.60rem;color:var(--text-muted);' +
+      'letter-spacing:0.5px;user-select:none;outline:none;">' +
+      '<i class="fa-solid fa-stethoscope" style="margin-right:5px;"></i>Structure Diagnostics</summary>' +
+      '<div style="margin-top:6px;padding:8px 10px;background:rgba(0,0,0,0.25);' +
+      'border-radius:6px;border-left:2px solid rgba(255,255,255,0.08);display:flex;' +
+      'flex-direction:column;gap:4px;">' + innerRows + '</div></details>';
+  })();
+
   return '<div class="briefing-section">' +
     '<div class="briefing-title"><i class="fa-solid fa-crosshairs"></i> Structure Briefing</div>' +
     actionSummary +
     confBanner +
     checklistBlock +
     rowsHTML +
+    _strucDiag +
     '</div>';
 }
 
@@ -7800,9 +7844,52 @@ function buildAttentionBriefingHTML(d, analysis) {
   }
   nt += '</div>';
 
+  /* ── Attention Diagnostics panel ── */
+  var _attDiag = (function() {
+    var sd   = window._tecSocialDiag  || null;
+    var raw  = window._tecSocialRaw   || null;
+    var xRes = raw && raw.x;
+    var prov = (xRes && xRes.provider) || (sd && sd.providers_succeeded && sd.providers_succeeded[0]) || '—';
+    var tried   = sd && sd.providers_tried   ? sd.providers_tried.join(' → ')   : '—';
+    var usedQ   = (xRes && xRes.usedQuery)   ? xRes.usedQuery : '—';
+    var qval    = (xRes && xRes.queryValue)  ? xRes.queryValue : '—';
+    var xCnt    = (xRes && xRes.tweets)      ? xRes.tweets.length : 0;
+    var rdCnt   = (raw && raw.reddit && raw.reddit.posts) ? raw.reddit.posts.length : 0;
+    var errs    = sd && sd.errors && sd.errors.length ? sd.errors.join('; ') : 'None';
+    var fp      = sd && sd.fallback_path && sd.fallback_path.length
+                    ? sd.fallback_path.join(' → ') : '—';
+    var queriesUsed = (sd && sd.queries_used)
+      ? Object.keys(sd.queries_used).filter(function(k) { return sd.queries_used[k]; })
+              .map(function(k) { return k + ': "' + sd.queries_used[k] + '"'; }).join(', ')
+      : '—';
+    var rows = [
+      { l: 'Provider Used',    v: prov },
+      { l: 'Providers Tried',  v: tried },
+      { l: 'Query Key Used',   v: usedQ },
+      { l: 'Query Value',      v: qval },
+      { l: 'Queries Available',v: queriesUsed },
+      { l: 'Posts Retrieved',  v: 'X: ' + xCnt + ' · Reddit: ' + rdCnt },
+      { l: 'Errors',           v: errs },
+      { l: 'Fallback Path',    v: fp },
+    ];
+    var innerRows = rows.map(function(r) {
+      return '<div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">' +
+        '<span style="color:var(--text-muted);font-size:0.58rem;min-width:110px;flex-shrink:0;">' + r.l + ':</span>' +
+        '<span style="font-size:0.58rem;word-break:break-all;min-width:0;">' + r.v + '</span></div>';
+    }).join('');
+    return '<details style="margin-top:10px;">' +
+      '<summary style="cursor:pointer;font-size:0.60rem;color:var(--text-muted);' +
+      'letter-spacing:0.5px;user-select:none;outline:none;">' +
+      '<i class="fa-solid fa-stethoscope" style="margin-right:5px;"></i>Attention Diagnostics</summary>' +
+      '<div style="margin-top:6px;padding:8px 10px;background:rgba(0,0,0,0.25);' +
+      'border-radius:6px;border-left:2px solid rgba(255,255,255,0.08);display:flex;' +
+      'flex-direction:column;gap:4px;">' + innerRows + '</div></details>';
+  })();
+
   return '<div class="briefing-section">' +
     '<div class="briefing-title"><i class="fa-solid fa-satellite-dish"></i> Attention Briefing</div>' +
     nt +
+    _attDiag +
     '</div>';
 }
 
@@ -7850,129 +7937,62 @@ function bucketsFromTimestamps(timestamps) {
   return b;
 }
 
-/* ── X/Twitter Provider 1: TwitterAPI.io ── */
-async function fetchTwitterAPIio(queries, limit, sinceTs) {
-  var apiKey = getSocialAPIKey('tec_twitter_api_key');
-  if (!apiKey) return { ok: false, error: 'No TwitterAPI.io key in Settings', tweets: [] };
+/* ── X/Twitter: unified server-side proxy (avoids CORS) ──────────────────
+   Sends all provider logic to /api/social-scan (Vercel serverless or local
+   Node dev server).  Provider waterfall: TwitterAPI.io → GetXAPI → Apify.
+   API keys are passed in the POST body — never exposed in a URL. ── */
+async function callSocialScanAPI(queries, limit, sinceTs) {
+  var twKey = getSocialAPIKey('tec_twitter_api_key');
+  var gxKey = getSocialAPIKey('tec_getx_key');
+  var apKey = getSocialAPIKey('tec_apify_key');
 
-  var priority = ['ca', 'ticker', 'name'];
-  for (var i = 0; i < priority.length; i++) {
-    var q = queries[priority[i]];
-    if (!q) continue;
-    var fullQuery = q;
-    if (sinceTs) fullQuery += ' since_time:' + sinceTs;
-    try {
-      var url = 'https://api.twitterapi.io/twitter/tweet/advanced_search?' + new URLSearchParams({ query: fullQuery, queryType: 'Latest' }).toString();
-      var resp = await Promise.race([
-        fetch(url, { headers: { 'X-API-Key': apiKey } }),
-        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 12000); })
-      ]);
-      if (resp.status === 401 || resp.status === 403) return { ok: false, error: 'TwitterAPI.io: Invalid key (HTTP ' + resp.status + ')', tweets: [] };
-      if (!resp.ok) continue;
-      var json = await resp.json();
-      var raw = Array.isArray(json.tweets) ? json.tweets : (Array.isArray(json.data) ? json.data : []);
-      if (raw.length === 0) continue;
-      raw = raw.slice(0, limit);
-      var tweets = raw.map(function(t) {
-        var ts = t.created_at ? new Date(t.created_at).getTime() : null;
-        var author = (t.author && (t.author.userName || t.author.screen_name)) || (t.user && t.user.screen_name) || '';
-        return { id: t.id || '', text: t.text || t.full_text || '', ts: ts, author: author.toLowerCase(), retweets: t.retweetCount || t.retweet_count || 0, likes: t.likeCount || t.favorite_count || 0 };
-      }).filter(function(t) { return t.ts !== null; });
-      return { ok: true, tweets: tweets, usedQuery: priority[i], provider: 'twitterapi.io' };
-    } catch(e) {
-      if (e.message === 'timeout') return { ok: false, error: 'TwitterAPI.io: Timed out', tweets: [] };
-    }
+  if (!twKey && !gxKey && !apKey) {
+    return {
+      ok: false,
+      error: 'No X provider keys found — add a TwitterAPI.io, GetXAPI, or Apify key in Settings',
+      tweets: [],
+      diagnostics: null
+    };
   }
-  return { ok: true, tweets: [], usedQuery: null, provider: 'twitterapi.io', warning: 'No results' };
-}
 
-/* ── X/Twitter Provider 2: GetXAPI ── */
-async function fetchGetXAPI(queries, limit, sinceTs) {
-  var apiKey = getSocialAPIKey('tec_getx_key');
-  if (!apiKey) return { ok: false, error: 'No GetXAPI key in Settings', tweets: [] };
+  try {
+    var resp = await Promise.race([
+      fetch('/api/social-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          queries:  queries,
+          limit:    limit,
+          sinceTs:  sinceTs || null,
+          apiKeys:  { twitterapio: twKey, getxapi: gxKey, apify: apKey }
+        })
+      }),
+      new Promise(function(_, rej) {
+        setTimeout(function() { rej(new Error('Social scan proxy timed out (65s)')); }, 65000);
+      })
+    ]);
 
-  var priority = ['ca', 'ticker', 'name'];
-  for (var i = 0; i < priority.length; i++) {
-    var q = queries[priority[i]];
-    if (!q) continue;
-    var fullQuery = q;
-    if (sinceTs) fullQuery += ' since_time:' + sinceTs;
-    try {
-      var params = new URLSearchParams({ q: fullQuery, product: 'Latest', count: String(limit) });
-      var url = 'https://api.getxapi.com/twitter/tweet/advanced_search?' + params.toString();
-      var resp = await Promise.race([
-        fetch(url, { headers: { 'Authorization': 'Bearer ' + apiKey } }),
-        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 15000); })
-      ]);
-      if (resp.status === 401) return { ok: false, error: 'GetXAPI: Invalid key (HTTP 401 — check your Bearer token)', tweets: [] };
-      if (resp.status === 403) return { ok: false, error: 'GetXAPI: Forbidden (HTTP 403 — endpoint not enabled for this key)', tweets: [] };
-      if (resp.status === 429) return { ok: false, error: 'GetXAPI: Rate limited (HTTP 429 — retry in a few seconds)', tweets: [] };
-      if (resp.status === 400) return { ok: false, error: 'GetXAPI: Bad request (HTTP 400 — missing or invalid query param)', tweets: [] };
-      if (!resp.ok) {
-        var errBody = '';
-        try { var errJson = await resp.json(); errBody = errJson.error || ''; } catch(_) {}
-        return { ok: false, error: 'GetXAPI: HTTP ' + resp.status + (errBody ? ' — ' + errBody : ''), tweets: [] };
-      }
-      var json = await resp.json();
-      var raw = Array.isArray(json.data) ? json.data : (Array.isArray(json.tweets) ? json.tweets : []);
-      if (raw.length === 0) continue;
-      raw = raw.slice(0, limit);
-      var tweets = raw.map(function(t) {
-        var ts = t.created_at ? new Date(t.created_at).getTime() : null;
-        var author = (t.author && (t.author.userName || t.author.screen_name)) ||
-                     (t.user  && (t.user.screen_name || t.user.userName)) || '';
-        return {
-          id: t.id || t.rest_id || '',
-          text: t.text || t.full_text || '',
-          ts: ts,
-          author: author.toLowerCase(),
-          retweets: t.retweet_count || t.retweetCount || 0,
-          likes: t.favorite_count || t.likeCount || 0
-        };
-      }).filter(function(t) { return t.ts !== null; });
-      return { ok: true, tweets: tweets, usedQuery: priority[i], provider: 'getxapi' };
-    } catch(e) {
-      if (e.message === 'timeout') return { ok: false, error: 'GetXAPI: Request timed out (15s)', tweets: [] };
-      return { ok: false, error: 'GetXAPI: ' + (e.message || 'Unknown error'), tweets: [] };
+    if (!resp.ok) {
+      var errText = '';
+      try { errText = await resp.text(); } catch(_) {}
+      var msg = 'Social scan server error (HTTP ' + resp.status + ')' +
+                (errText ? ': ' + errText.slice(0, 200) : '');
+      return { ok: false, error: msg, tweets: [], diagnostics: null };
     }
-  }
-  return { ok: true, tweets: [], usedQuery: null, provider: 'getxapi', warning: 'No results' };
-}
 
-/* ── X/Twitter Provider 3: Apify Tweet Scraper ── */
-async function fetchApifyFallback(queries, limit) {
-  var token = getSocialAPIKey('tec_apify_key');
-  if (!token) return { ok: false, error: 'No Apify token in Settings', tweets: [] };
+    var result = await resp.json();
+    window._tecSocialDiag = result.diagnostics || null;
+    return result;
 
-  var priority = ['ca', 'ticker', 'name'];
-  for (var i = 0; i < priority.length; i++) {
-    var q = queries[priority[i]];
-    if (!q) continue;
-    try {
-      var url = 'https://api.apify.com/v2/acts/apidojo~tweet-scraper/run-sync-get-dataset-items?token=' + encodeURIComponent(token) + '&timeout=45';
-      var resp = await Promise.race([
-        fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ searchTerms: [q], sort: 'Latest', maxItems: limit, includeReplies: false })
-        }),
-        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 50000); })
-      ]);
-      if (resp.status === 401) return { ok: false, error: 'Apify: Invalid token', tweets: [] };
-      if (!resp.ok) continue;
-      var arr = await resp.json();
-      if (!Array.isArray(arr) || arr.length === 0) continue;
-      var tweets = arr.slice(0, limit).map(function(t) {
-        var ts = t.created_at ? new Date(t.created_at).getTime() : (t.createdAt ? new Date(t.createdAt).getTime() : null);
-        var author = (t.author && t.author.userName) || (t.user && t.user.screen_name) || '';
-        return { id: t.id || '', text: t.full_text || t.text || '', ts: ts, author: author.toLowerCase(), retweets: t.retweet_count || t.retweetCount || 0, likes: t.favorite_count || t.likeCount || 0 };
-      }).filter(function(t) { return t.ts !== null; });
-      return { ok: true, tweets: tweets, usedQuery: priority[i], provider: 'apify' };
-    } catch(e) {
-      if (e.message === 'timeout') return { ok: false, error: 'Apify: Actor timed out (actor runs take up to ~45s)', tweets: [] };
+  } catch(e) {
+    var errMsg = e.message || 'Network error';
+    /* Detect common local-dev misconfiguration */
+    if (errMsg.indexOf('Failed to fetch') !== -1 || errMsg.indexOf('NetworkError') !== -1) {
+      errMsg = 'Cannot reach /api/social-scan. ' +
+               'If running locally, use "node server.js" instead of Python HTTP server.';
     }
+    return { ok: false, error: errMsg, tweets: [], diagnostics: null };
   }
-  return { ok: true, tweets: [], usedQuery: null, provider: 'apify', warning: 'No results' };
 }
 
 /* ── Reddit OAuth token cache ── */
@@ -8132,7 +8152,12 @@ async function runSocialScan(isDeep) {
     return;
   }
 
-  var queries  = { ca: ca || null, ticker: tickerSym, name: nameQ };
+  var queries  = {
+    ca:           ca || null,
+    ticker:       tickerSym,
+    ticker_dollar: tickerSym ? ('$' + tickerSym.replace(/^\$/, '')) : null,
+    name:         nameQ
+  };
   var _s = (window._tecSettings || settings);
   var xLimit   = isDeep ? (_s.deepScanX  || 50) : (_s.quickScanX  || 15);
   var rdLimit  = isDeep ? (_s.deepScanRd || 25) : (_s.quickScanRd || 10);
@@ -8155,29 +8180,23 @@ async function runSocialScan(isDeep) {
   var rdResult = { ok: false, posts: [], error: null };
   var errors   = [];
 
-  /* ── Fetch X/Twitter: TwitterAPI.io → GetXAPI → Apify ── */
+  /* ── Fetch X/Twitter via /api/social-scan (server-side proxy — no CORS) ── */
   if (hasX) {
-    /* ── Provider 1: TwitterAPI.io ── */
-    if (twKey) {
-      xResult = await fetchTwitterAPIio(queries, xLimit, sinceTs);
-      if (!xResult.ok) {
-        errors.push('TwitterAPI.io: ' + (xResult.error || 'failed'));
+    socialScanSetStatus(
+      '<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>' +
+      'Scanning X/Twitter' + (isDeep ? ' (deep — ' + xLimit + ' posts)' : '') +
+      ' via secure proxy…', 'var(--accent-cyan)');
+    xResult = await callSocialScanAPI(queries, xLimit, sinceTs);
+    if (xResult.diagnostics && xResult.diagnostics.fallback_path && xResult.diagnostics.fallback_path.length) {
+      var _lastStep = xResult.diagnostics.fallback_path[xResult.diagnostics.fallback_path.length - 1];
+      if (_lastStep && _lastStep.charAt(0) === '✓') {
+        socialScanSetStatus(
+          '<i class="fa-solid fa-check-circle" style="margin-right:5px;color:#00e676;"></i>' + _lastStep,
+          '#00e676');
       }
     }
-    /* ── Provider 2: GetXAPI (if TwitterAPI.io failed or has no key) ── */
-    if ((!xResult.ok || xResult.tweets.length === 0) && gxKey) {
-      socialScanSetStatus('<i class="fa-solid fa-arrow-right-arrow-left" style="margin-right:5px;color:#60a5fa;"></i>Trying GetXAPI…', '#60a5fa');
-      xResult = await fetchGetXAPI(queries, xLimit, sinceTs);
-      if (!xResult.ok) errors.push('GetXAPI: ' + (xResult.error || 'failed'));
-    }
-    /* ── Provider 3: Apify (final fallback) ── */
-    if ((!xResult.ok || xResult.tweets.length === 0) && apKey) {
-      socialScanSetStatus('<i class="fa-solid fa-arrow-right-arrow-left" style="margin-right:5px;color:#ff9800;"></i>Falling back to Apify…', '#ff9800');
-      xResult = await fetchApifyFallback(queries, xLimit);
-      if (!xResult.ok) errors.push('Apify: ' + (xResult.error || 'failed'));
-    }
-    if (!xResult.ok && xResult.tweets.length === 0) {
-      /* all providers failed */
+    if (!xResult.ok || !xResult.tweets || xResult.tweets.length === 0) {
+      errors.push(xResult.error || 'No X posts found');
     }
   } else {
     errors.push('No X provider — add a TwitterAPI.io, GetXAPI, or Apify key in Settings');

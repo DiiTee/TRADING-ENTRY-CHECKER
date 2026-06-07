@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "functions": {
+    "api/social-scan.js": { "maxDuration": 60 }
+  },
+  "routes": [
+    { "src": "/api/social-scan", "dest": "/api/social-scan" },
+    { "src": "/(.*)", "dest": "/trading-entry-checker.html" }
+  ]
+}

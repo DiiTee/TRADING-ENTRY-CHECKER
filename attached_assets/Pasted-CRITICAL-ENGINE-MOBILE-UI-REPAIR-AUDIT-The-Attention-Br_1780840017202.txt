@@ -1,0 +1,366 @@
+CRITICAL ENGINE & MOBILE UI REPAIR AUDIT
+
+The Attention Briefing, Structure Briefing, and Analysis Results UI all contain failures that must be fixed urgently.
+
+====================================================
+PRIORITY 1 — ATTENTION BRIEFING (SOCIAL SCAN ENGINE)
+
+CURRENT SYMPTOMS:
+
+- Popular tokens (Fartcoin, Popcat, Pepe, Pudgy Penguins, Ethereum, etc.) consistently receive F-tier Attention scores.
+- Social Scan frequently returns:
+  "GetXAPI: Failed to fetch"
+- Engine falls into Proxy Mode despite analyzing highly active tokens.
+
+ROOT CAUSE:
+
+The scoring system appears functional. The data acquisition layer is failing.
+
+The application is currently deployed on Vercel and appears to be attempting direct browser-side requests to social APIs.
+
+These requests are being blocked by:
+
+- CORS restrictions
+- Network failures
+- Provider rate limits
+- Invalid API responses
+
+REQUIRED FIXES:
+
+1. Move ALL social API requests off the frontend.
+
+Create a Vercel Serverless Function:
+
+/api/social-scan
+
+The frontend should NEVER directly call:
+
+- TwitterAPI.io
+- GetXAPI
+- Apify
+- Reddit APIs
+
+All requests should pass through the serverless function.
+
+2. Implement provider failover chain:
+
+TwitterAPI.io
+↓
+GetXAPI
+↓
+Apify
+↓
+Graceful Degradation
+
+3. Add explicit status reporting.
+
+Replace generic messages such as:
+
+"Failed to fetch"
+
+with detailed diagnostics:
+
+Examples:
+
+✓ TwitterAPI.io returned 127 posts
+✓ GetXAPI returned 42 posts
+⚠ GetXAPI Rate Limited
+⚠ TwitterAPI.io API Key Invalid
+⚠ Reddit Request Timed Out
+⚠ CORS Blocked
+⚠ Provider Returned Empty Dataset
+⚠ No matching posts found
+
+4. Distinguish between:
+
+- No results
+- Rate limit
+- Invalid key
+- Timeout
+- CORS
+- Network error
+- Provider outage
+
+These must never all appear as:
+
+"Failed to fetch"
+
+5. Log all provider responses.
+
+Add debug output:
+
+Provider Used
+Request URL
+Response Code
+Post Count Returned
+Search Query Used
+
+6. Verify query generation.
+
+Audit searches for:
+
+Coin Name
+Ticker
+$Ticker
+Contract Address
+
+Example:
+
+POPCAT
+$POPCAT
+Popcat
+Contract Address
+
+The engine should test multiple query formats before concluding that no social activity exists.
+
+====================================================
+PRIORITY 2 — STRUCTURE BRIEFING ENGINE
+
+CURRENT SYMPTOMS:
+
+GeckoTerminal:
+"fetched is not defined"
+
+DEX Screener:
+"Token not found (404)"
+
+Structure Engine:
+Falls into HINT MODE even for blue-chip assets.
+
+ROOT CAUSE:
+
+The candle acquisition layer is failing before structure analysis begins.
+
+REQUIRED FIXES:
+
+1. Locate every reference to:
+
+fetched
+
+and ensure the variable exists within scope.
+
+Current error:
+
+ReferenceError:
+fetched is not defined
+
+This is a JavaScript bug.
+
+2. Audit GeckoTerminal fetch flow.
+
+Add logging for:
+
+Request URL
+Response Status
+Returned Pool ID
+Returned Token Address
+Returned OHLCV Count
+
+3. Audit DEX Screener fallback logic.
+
+Current implementation is likely using:
+
+- incorrect endpoint
+  OR
+- wrong identifier type
+
+Verify whether the API expects:
+
+Pair Address
+Pool Address
+Token Address
+
+and ensure the correct identifier is passed.
+
+4. Add detailed diagnostics.
+
+Instead of:
+
+Token not found (404)
+
+display:
+
+DEX Screener Lookup Failed
+Identifier Used: XXXXX
+Identifier Type: Pool Address
+Endpoint: XXXXX
+HTTP Status: 404
+
+5. Ensure GeckoTerminal failure does NOT automatically force Hint Mode.
+
+Proper flow:
+
+GeckoTerminal
+↓
+DEX Screener
+↓
+Historical Flow Analysis
+↓
+Hint Mode
+
+Hint Mode should only activate after all OHLCV sources fail.
+
+6. Add engine telemetry:
+
+Source Used
+Candles Retrieved
+Oldest Candle
+Newest Candle
+Confidence Score
+
+====================================================
+PRIORITY 3 — DEXSCREENER INTEGRATION AUDIT
+
+The currently configured OHLCV route appears invalid.
+
+Please verify against current DexScreener documentation.
+
+If DexScreener does not provide native OHLCV data for this use case:
+
+DO NOT treat DexScreener as a candle source.
+
+Instead:
+
+- Use GeckoTerminal as primary OHLCV source
+- Use DEX Screener for pair discovery only
+- Use discovered pair data to locate valid candle providers
+
+====================================================
+PRIORITY 4 — MOBILE UI OVERFLOW REPAIR
+
+CURRENT SYMPTOMS:
+
+- Analysis Results exceed screen width.
+- Verdicts are cut off.
+- Weighted Score text overflows containers.
+- Cards extend beyond borders.
+- Long strings are unreadable.
+
+REQUIRED FIXES:
+
+Inject the following global mobile-safe CSS:
+
+body,
+.container,
+main,
+#analysisResults {
+max-width: 100vw !important;
+overflow-x: hidden !important;
+box-sizing: border-box !important;
+}
+
+.card,
+.analysis-section,
+.metric-card,
+.recommendation-card,
+.verdict-card,
+div,
+p,
+span,
+td,
+th {
+overflow-wrap: break-word !important;
+word-wrap: break-word !important;
+word-break: break-word !important;
+min-width: 0 !important;
+}
+
+@media (max-width: 768px) {
+
+.mob-rec-grid,
+.briefing-grid,
+.analysis-grid,
+.score-grid,
+.metric-group,
+.briefing-header {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+}
+
+.card,
+table,
+input,
+select {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+}
+
+ADDITIONAL REQUIREMENTS:
+
+- Remove any white-space: nowrap rules inside Analysis Results.
+- Reduce Orbitron font size on mobile.
+- Reduce Orbitron letter-spacing on mobile.
+- Ensure verdict text wraps correctly.
+- Ensure long contract addresses wrap correctly.
+- Ensure error messages wrap correctly.
+- Ensure weighted-score rows wrap correctly.
+
+====================================================
+PRIORITY 5 — ENGINE DEBUG PANEL
+
+Add a collapsible "Diagnostics" panel below each briefing.
+
+Attention Diagnostics:
+
+- Provider Used
+- Query Used
+- Posts Retrieved
+- Errors Encountered
+- Fallback Path
+
+Structure Diagnostics:
+
+- Source Used
+- Candles Retrieved
+- Pool Address
+- Pair Address
+- Confidence Tier
+- Fallback Path
+
+This will dramatically reduce future debugging time.
+
+====================================================
+SUCCESS CRITERIA
+
+Testing these tokens:
+
+- Fartcoin
+- Popcat
+- Pepe
+- Pudgy Penguins
+and other tokens, blue-chip or newly established 
+
+should:
+
+1. Produce real social scan results.
+2. Stop defaulting to Proxy Mode.
+3. Stop defaulting to F-tier Attention.
+4. Retrieve OHLCV data successfully.
+5. Avoid unnecessary Hint Mode activation.
+6. Display Analysis Results correctly on mobile without overflow or clipping.
+
+DO NOT MAKE UP DATA OR INFORMATION however.
+
+ 
+==========================================================
+IMPORTANT: 
+Do not use Cors-Anywhere as a long-term solution. It's unreliable and frequently rate-limited. A Vercel Serverless Function acting as a backend proxy is the correct architecture for a production app.
+
+==========================================================
+
+CONFIRM API ENDPOINTS BELOW: 
+
+CoinGecko 
+https://docs.coingecko.com/reference/endpoint-overview
+
+Geckoterminal 
+https://api.geckoterminal.com/docs/index.html
+
+Dexscreener 
+https://docs.dexscreener.com/api/reference
+
+
