@@ -1,0 +1,312 @@
+UPDATE TO X/TWITTER DATA LAYER SPECIFICATION
+
+New Architecture: 
+TwitterAPI.io (Primary)
+GetXAPI (Secondary Fallback)
+Apify Actor (Final Fallback)
+
+
+Please integrate GetXAPI into our X search pipeline configuration. We will use it to optimize data costs and provide fallback resilience.
+
+
+GetXAPI CONFIGURATION DETAILS:
+
+
+Base URL
+
+https://api.getxapi.com
+Authentication
+All requests require an API key passed as a Bearer token in the Authorization header.
+
+
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://api.getxapi.com/twitter/user/info?userName=elonmusk"
+Example: Get a User Profile
+curl
+JavaScript
+Python
+
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://api.getxapi.com/twitter/user/info?userName=elonmusk"
+Example: Search Tweets
+curl
+JavaScript
+Python
+
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://api.getxapi.com/twitter/tweet/advanced_search?q=from:elonmusk&product=Latest"
+Endpoint Index
+Tweets
+Endpoint	Method	Path	
+Advanced Search	GET	/twitter/tweet/advanced_search	$0.001
+Tweet Detail	GET	/twitter/tweet/detail	
+Tweet Replies	GET	/twitter/tweet/replies
+Create Tweet	POST	/twitter/tweet/create	
+Like Tweet	POST	/twitter/tweet/favorite	
+Retweet	POST	/twitter/tweet/retweet	
+Articles
+Endpoint	Method	Path	
+Get Article	GET	/twitter/article/get	
+Create Article	POST	/twitter/article/create	
+Update Article	POST	/twitter/article/update	
+List Articles	POST	/twitter/article/list	
+Publish Article	POST	/twitter/article/publish	
+Unpublish Article	POST	/twitter/article/unpublish	
+Delete Article	POST	/twitter/article/delete	
+Users
+Endpoint	Method	Path	Cost
+Search Users	GET	/twitter/user/search	
+User Info	GET	/twitter/user/info	
+User Info by ID	GET	/twitter/user/info_by_id	
+User About	GET	/twitter/user/user_about	
+User Tweets	GET	/twitter/user/tweets	
+User Tweets & Replies	GET	/twitter/user/tweets_and_replies	
+User Media	GET	/twitter/user/media	
+User Likes	POST	/twitter/user/likes	$0.001
+Followers	GET	/twitter/user/followers
+Followers v2	GET	/twitter/user/followers_v2	
+Following	GET	/twitter/user/following	
+Following v2	GET	/twitter/user/following_v2	
+Verified Followers	GET	/twitter/user/verified_followers	
+Followers You Know	POST	/twitter/user/followers_you_know	
+Check Relationship	GET	/twitter/user/check_follow_relationship	
+Follow User	POST	/twitter/user/follow	
+Unfollow User	POST	/twitter/user/unfollow	
+Home Timeline	POST	/twitter/user/home_timeline	
+Bookmark Search	POST	/twitter/user/bookmark_search	
+User Affiliates	GET	/twitter/user/affiliates	
+User Login	POST	/twitter/user_login	
+Lists
+Endpoint	Method	Path	
+List Members	GET	/twitter/list/members	
+Direct Messages
+Endpoint	Method	Path	
+Send DM	POST	/twitter/dm/send	
+List DMs	POST	/twitter/dm/list	
+Media
+Endpoint	Method	Path	
+Upload Media	POST	/twitter/media/upload	
+Account
+Endpoint	Method	Path	
+Account Info	GET	/account/me	Free
+Payment History	GET	/account/payments	Free
+Pagination
+All list endpoints support cursor-based pagination:
+
+Omit cursor for the first page
+Pass next_cursor from the response for subsequent pages
+Each page typically returns ~20 items
+Some endpoints (followers/following v1) return up to 200 per page
+The v2 variants (followers_v2/following_v2) return ~70 per page
+Keep paginating until has_more is false
+Error Codes
+Status	Meaning	Common Cause
+400	Bad Request	Missing required parameter
+401	Unauthorized	Invalid or missing API key / auth token
+404	Not Found	User or tweet does not exist
+429	Rate Limited	Too many requests (rare — GetXAPI has generous limits)
+502	Bad Gateway	Twitter rejected the mutation (write endpoints)
+All errors return a JSON body with an error field:
+
+
+{
+  "error": "Missing required query param: userName"
+}
+
+
+Authentication: Pass the API key generated from the getxapi.com dashboard via the HTTP Header.  
+Payload Parameters:
+query: Pass our structured token identifier string (Contract Address, Ticker, or Name) along with the since_time:unix_timestamp chronological filter if a previous scan exists.
+limit: Max out at 15 items for Quick Scan (50 items for Deep Scan).
+sort: Hardcode to Latest to ensure exact time-sequence windowing for our Mention Density calculations.
+
+API CALL FORMAT: 
+Examples:
+
+
+CURL: 
+
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://api.getxapi.com/twitter/user/info?userName=elonmusk"
+
+
+JAVASCRIPT: 
+
+const res = await fetch(
+  "https://api.getxapi.com/twitter/user/info?userName=elonmusk",
+  { headers: { Authorization: "Bearer YOUR_API_KEY" } }
+);
+const { data } = await res.json();
+console.log(data.name, data.followers);
+
+PYTHON: 
+
+import requests
+
+resp = requests.get(
+    "https://api.getxapi.com/twitter/user/info",
+    params={"userName": "elonmusk"},
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+data = resp.json()["data"]
+print(data["name"], data["followers"]) 
+
+
+AUTHORIZATION HEADER + SEARCH ENDPOINT WALKTHROUGH
+
+Examples: 
+
+CURL: 
+
+# Search for recent tweets matching a query.
+# Retries up to 3 times with exponential backoff on HTTP 429.
+
+API_KEY="YOUR_API_KEY"
+QUERY="openai"
+
+for attempt in 1 2 3; do
+  HTTP_CODE=$(curl -s -o /tmp/getxapi.json -w "%{http_code}" \
+    -H "Authorization: Bearer $API_KEY" \
+    "https://api.getxapi.com/twitter/tweet/advanced_search?q=$QUERY&product=Latest")
+
+  if [ "$HTTP_CODE" = "200" ]; then
+    cat /tmp/getxapi.json | jq '.data[0]'
+    exit 0
+  fi
+
+  if [ "$HTTP_CODE" = "429" ]; then
+    SLEEP=$((2 ** attempt))
+    echo "Rate limited, sleeping ${SLEEP}s before retry $attempt"
+    sleep $SLEEP
+    continue
+  fi
+
+  echo "Request failed with HTTP $HTTP_CODE"
+  cat /tmp/getxapi.json
+  exit 1
+done
+
+echo "All retries exhausted"
+exit 1
+
+
+NODE.JS
+
+// Node 18+ (built-in fetch). No external dependencies.
+
+const API_KEY = process.env.GETXAPI_KEY || "YOUR_API_KEY";
+const BASE_URL = "https://api.getxapi.com";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function searchTweets(query, maxRetries = 3) {
+  const url = new URL(`${BASE_URL}/twitter/tweet/advanced_search`);
+  url.searchParams.set("q", query);
+  url.searchParams.set("product", "Latest");
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+
+    if (resp.status === 200) {
+      return await resp.json();
+    }
+
+    if (resp.status === 429) {
+      const sleepMs = 2 ** attempt * 1000;
+      console.log(`Rate limited, sleeping ${sleepMs}ms before retry ${attempt}`);
+      await sleep(sleepMs);
+      continue;
+    }
+
+    if (resp.status === 401) {
+      throw new Error("401 Unauthorized, check the Bearer key");
+    }
+    if (resp.status === 403) {
+      throw new Error("403 Forbidden, endpoint not enabled for this key");
+    }
+
+    const body = await resp.text();
+    throw new Error(`Request failed with HTTP ${resp.status}: ${body}`);
+  }
+
+  throw new Error(`All ${maxRetries} retries exhausted on /advanced_search`);
+}
+
+(async () => {
+  const payload = await searchTweets("openai");
+  const tweets = payload.data || [];
+  if (tweets.length > 0) {
+    console.log(tweets[0].text?.slice(0, 200));
+  } else {
+    console.log("No tweets returned");
+  }
+})();
+
+
+PYTHON
+
+# pip install requests
+import os
+import time
+import requests
+
+API_KEY = os.environ.get("GETXAPI_KEY", "YOUR_API_KEY")
+BASE_URL = "https://api.getxapi.com"
+
+
+def search_tweets(query: str, max_retries: int = 3) -> dict:
+    """Call /twitter/tweet/advanced_search with exponential backoff on 429."""
+    url = f"{BASE_URL}/twitter/tweet/advanced_search"
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+    params = {"q": query, "product": "Latest"}
+
+    for attempt in range(1, max_retries + 1):
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+
+        if resp.status_code == 200:
+            return resp.json()
+
+        if resp.status_code == 429:
+            sleep_s = 2 ** attempt
+            print(f"Rate limited, sleeping {sleep_s}s before retry {attempt}")
+            time.sleep(sleep_s)
+            continue
+
+        if resp.status_code == 401:
+            raise RuntimeError("401 Unauthorized, check the Bearer key")
+        if resp.status_code == 403:
+            raise RuntimeError("403 Forbidden, endpoint not enabled for this key")
+
+        resp.raise_for_status()
+
+    raise RuntimeError(f"All {max_retries} retries exhausted on /advanced_search")
+
+
+if __name__ == "__main__":
+    payload = search_tweets("openai")
+    tweets = payload.get("data", [])
+    if tweets:
+        first = tweets[0]
+        print(first.get("text", "")[:200])
+    else:
+        print("No tweets returned")
+
+
+
+ERROR HANDLING AND DISPLAY: 
+Very important. I need to know the exact issue when encountered.
+
+
+ALSO: 
+CONFIRM AND MAKE SURE TwitterAPI.io & Apify are properly configured: 
+
+TwitterAPI.io
+https://docs.twitterapi.io/introduction
+
+Apify: 
+https://docs.apify.com/api/v2
+
+
+

@@ -1190,7 +1190,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
               <span style="font-size:0.60rem;font-weight:700;color:#1DA1F2;">X / TWITTER</span>
               <span style="font-size:0.50rem;padding:1px 5px;border-radius:3px;background:rgba(255,214,0,0.12);color:#ffd600;border:1px solid rgba(255,214,0,0.3);">KEY REQUIRED</span>
             </div>
-            <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.5;">TwitterAPI.io (primary) → Apify (fallback). Without a key, X data cannot be auto-fetched — enter X mention counts manually in Social Data Inputs.</div>
+            <div style="font-size:0.57rem;color:var(--text-muted);line-height:1.5;">TwitterAPI.io (primary) → GetXAPI (secondary) → Apify (final fallback). Each provider is tried in order. Without at least one key, X data cannot be auto-fetched — enter mention counts manually in Social Data Inputs.</div>
           </div>
 
           <!-- Reddit row -->
@@ -1214,11 +1214,15 @@ html, body { overflow-x: hidden; max-width: 100%; }
           </div>
         </div>
         <div class="form-group">
-          <label class="settings-label">TwitterAPI.io Key <a href="https://twitterapi.io" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get key</a></label>
+          <label class="settings-label">TwitterAPI.io Key <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(primary)</span> <a href="https://twitterapi.io" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get key</a></label>
           <input class="settings-input" type="password" id="sTwitterAPIKey" placeholder="Paste TwitterAPI.io key" autocomplete="off">
         </div>
         <div class="form-group">
-          <label class="settings-label">Apify Token <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(fallback)</span> <a href="https://apify.com" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get token</a></label>
+          <label class="settings-label">GetXAPI Key <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(secondary fallback)</span> <a href="https://getxapi.com" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get key</a></label>
+          <input class="settings-input" type="password" id="sGetXKey" placeholder="Paste GetXAPI Bearer key" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="settings-label">Apify Token <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(final fallback)</span> <a href="https://apify.com" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get token</a></label>
           <input class="settings-input" type="password" id="sApifyKey" placeholder="Paste Apify API token" autocomplete="off">
         </div>
         <div class="form-group">
@@ -2135,6 +2139,7 @@ function applySettingsToUI() {
     el('sDefadeKey').value    = localStorage.getItem('tec_defade_key')       || '';
     el('sRugCheckKey').value  = localStorage.getItem('tec_rugcheck_key')     || '';
     el('sTwitterAPIKey').value  = localStorage.getItem('tec_twitter_api_key')   || '';
+    el('sGetXKey').value        = localStorage.getItem('tec_getx_key')          || '';
     el('sApifyKey').value       = localStorage.getItem('tec_apify_key')         || '';
     el('sRedditClientId').value = localStorage.getItem('tec_reddit_client_id')  || '';
     el('sRedditSecret').value   = localStorage.getItem('tec_reddit_secret')     || '';
@@ -2183,12 +2188,14 @@ function saveSettings() {
     if (rk) localStorage.setItem('tec_rugcheck_key',    rk); else localStorage.removeItem('tec_rugcheck_key');
     try {
       var twk = el('sTwitterAPIKey').value.trim();
+      var gxk = el('sGetXKey').value.trim();
       var apk = el('sApifyKey').value.trim();
       var rci = el('sRedditClientId').value.trim();
       var rcs = el('sRedditSecret').value.trim();
       if (rci) localStorage.setItem('tec_reddit_client_id', rci); else localStorage.removeItem('tec_reddit_client_id');
       if (rcs) localStorage.setItem('tec_reddit_secret',    rcs); else localStorage.removeItem('tec_reddit_secret');
       if (twk) localStorage.setItem('tec_twitter_api_key', twk); else localStorage.removeItem('tec_twitter_api_key');
+      if (gxk) localStorage.setItem('tec_getx_key',        gxk); else localStorage.removeItem('tec_getx_key');
       if (apk) localStorage.setItem('tec_apify_key',       apk); else localStorage.removeItem('tec_apify_key');
     } catch(e) {}
   } catch(e) {}
@@ -7801,7 +7808,7 @@ function buildAttentionBriefingHTML(d, analysis) {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SOCIAL INTELLIGENCE ENGINE — Auto-Fetch Layer v2
-   Provider priority: TwitterAPI.io → Apify (X) | Reddit public API
+   Provider priority: TwitterAPI.io → GetXAPI → Apify (X) | Reddit public API
    Telegram: manual entry only (MTProto requires backend server)
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -7879,7 +7886,60 @@ async function fetchTwitterAPIio(queries, limit, sinceTs) {
   return { ok: true, tweets: [], usedQuery: null, provider: 'twitterapi.io', warning: 'No results' };
 }
 
-/* ── X/Twitter Provider 2: Apify Tweet Scraper ── */
+/* ── X/Twitter Provider 2: GetXAPI ── */
+async function fetchGetXAPI(queries, limit, sinceTs) {
+  var apiKey = getSocialAPIKey('tec_getx_key');
+  if (!apiKey) return { ok: false, error: 'No GetXAPI key in Settings', tweets: [] };
+
+  var priority = ['ca', 'ticker', 'name'];
+  for (var i = 0; i < priority.length; i++) {
+    var q = queries[priority[i]];
+    if (!q) continue;
+    var fullQuery = q;
+    if (sinceTs) fullQuery += ' since_time:' + sinceTs;
+    try {
+      var params = new URLSearchParams({ q: fullQuery, product: 'Latest', count: String(limit) });
+      var url = 'https://api.getxapi.com/twitter/tweet/advanced_search?' + params.toString();
+      var resp = await Promise.race([
+        fetch(url, { headers: { 'Authorization': 'Bearer ' + apiKey } }),
+        new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 15000); })
+      ]);
+      if (resp.status === 401) return { ok: false, error: 'GetXAPI: Invalid key (HTTP 401 — check your Bearer token)', tweets: [] };
+      if (resp.status === 403) return { ok: false, error: 'GetXAPI: Forbidden (HTTP 403 — endpoint not enabled for this key)', tweets: [] };
+      if (resp.status === 429) return { ok: false, error: 'GetXAPI: Rate limited (HTTP 429 — retry in a few seconds)', tweets: [] };
+      if (resp.status === 400) return { ok: false, error: 'GetXAPI: Bad request (HTTP 400 — missing or invalid query param)', tweets: [] };
+      if (!resp.ok) {
+        var errBody = '';
+        try { var errJson = await resp.json(); errBody = errJson.error || ''; } catch(_) {}
+        return { ok: false, error: 'GetXAPI: HTTP ' + resp.status + (errBody ? ' — ' + errBody : ''), tweets: [] };
+      }
+      var json = await resp.json();
+      var raw = Array.isArray(json.data) ? json.data : (Array.isArray(json.tweets) ? json.tweets : []);
+      if (raw.length === 0) continue;
+      raw = raw.slice(0, limit);
+      var tweets = raw.map(function(t) {
+        var ts = t.created_at ? new Date(t.created_at).getTime() : null;
+        var author = (t.author && (t.author.userName || t.author.screen_name)) ||
+                     (t.user  && (t.user.screen_name || t.user.userName)) || '';
+        return {
+          id: t.id || t.rest_id || '',
+          text: t.text || t.full_text || '',
+          ts: ts,
+          author: author.toLowerCase(),
+          retweets: t.retweet_count || t.retweetCount || 0,
+          likes: t.favorite_count || t.likeCount || 0
+        };
+      }).filter(function(t) { return t.ts !== null; });
+      return { ok: true, tweets: tweets, usedQuery: priority[i], provider: 'getxapi' };
+    } catch(e) {
+      if (e.message === 'timeout') return { ok: false, error: 'GetXAPI: Request timed out (15s)', tweets: [] };
+      return { ok: false, error: 'GetXAPI: ' + (e.message || 'Unknown error'), tweets: [] };
+    }
+  }
+  return { ok: true, tweets: [], usedQuery: null, provider: 'getxapi', warning: 'No results' };
+}
+
+/* ── X/Twitter Provider 3: Apify Tweet Scraper ── */
 async function fetchApifyFallback(queries, limit) {
   var token = getSocialAPIKey('tec_apify_key');
   if (!token) return { ok: false, error: 'No Apify token in Settings', tweets: [] };
@@ -8080,8 +8140,9 @@ async function runSocialScan(isDeep) {
   var isIncremental = sinceTs !== null;
 
   var twKey  = getSocialAPIKey('tec_twitter_api_key');
+  var gxKey  = getSocialAPIKey('tec_getx_key');
   var apKey  = getSocialAPIKey('tec_apify_key');
-  var hasX   = !!(twKey || apKey);
+  var hasX   = !!(twKey || gxKey || apKey);
 
   socialScanSetBusy(true);
   socialScanSetStatus('<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Scanning X/Twitter' + (isDeep ? ' (deep — 50 posts)' : '') + '…', 'var(--accent-cyan)');
@@ -8094,24 +8155,32 @@ async function runSocialScan(isDeep) {
   var rdResult = { ok: false, posts: [], error: null };
   var errors   = [];
 
-  /* ── Fetch X/Twitter: primary → fallback ── */
+  /* ── Fetch X/Twitter: TwitterAPI.io → GetXAPI → Apify ── */
   if (hasX) {
+    /* ── Provider 1: TwitterAPI.io ── */
     if (twKey) {
       xResult = await fetchTwitterAPIio(queries, xLimit, sinceTs);
       if (!xResult.ok) {
         errors.push('TwitterAPI.io: ' + (xResult.error || 'failed'));
-        if (apKey) {
-          socialScanSetStatus('<i class="fa-solid fa-arrow-right-arrow-left" style="margin-right:5px;color:#ff9800;"></i>Falling back to Apify…', '#ff9800');
-          xResult = await fetchApifyFallback(queries, xLimit);
-          if (!xResult.ok) errors.push('Apify: ' + (xResult.error || 'failed'));
-        }
       }
-    } else {
+    }
+    /* ── Provider 2: GetXAPI (if TwitterAPI.io failed or has no key) ── */
+    if ((!xResult.ok || xResult.tweets.length === 0) && gxKey) {
+      socialScanSetStatus('<i class="fa-solid fa-arrow-right-arrow-left" style="margin-right:5px;color:#60a5fa;"></i>Trying GetXAPI…', '#60a5fa');
+      xResult = await fetchGetXAPI(queries, xLimit, sinceTs);
+      if (!xResult.ok) errors.push('GetXAPI: ' + (xResult.error || 'failed'));
+    }
+    /* ── Provider 3: Apify (final fallback) ── */
+    if ((!xResult.ok || xResult.tweets.length === 0) && apKey) {
+      socialScanSetStatus('<i class="fa-solid fa-arrow-right-arrow-left" style="margin-right:5px;color:#ff9800;"></i>Falling back to Apify…', '#ff9800');
       xResult = await fetchApifyFallback(queries, xLimit);
       if (!xResult.ok) errors.push('Apify: ' + (xResult.error || 'failed'));
     }
+    if (!xResult.ok && xResult.tweets.length === 0) {
+      /* all providers failed */
+    }
   } else {
-    errors.push('No X provider — add TwitterAPI.io or Apify key in Settings');
+    errors.push('No X provider — add a TwitterAPI.io, GetXAPI, or Apify key in Settings');
   }
 
   /* ── Fetch Reddit ── */
@@ -12237,6 +12306,8 @@ function socialScanHistRender() {
     var provBadge = '';
     if (e.provider === 'twitterapi.io') {
       provBadge = '<span style="font-size:0.52rem;padding:1px 5px;border-radius:3px;background:rgba(0,212,255,0.12);color:var(--accent-cyan);border:1px solid rgba(0,212,255,0.3);">TwitterAPI.io</span>';
+    } else if (e.provider === 'getxapi') {
+      provBadge = '<span style="font-size:0.52rem;padding:1px 5px;border-radius:3px;background:rgba(96,165,250,0.12);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);">GetXAPI</span>';
     } else if (e.provider === 'apify') {
       provBadge = '<span style="font-size:0.52rem;padding:1px 5px;border-radius:3px;background:rgba(255,214,0,0.12);color:#ffd600;border:1px solid rgba(255,214,0,0.3);">Apify</span>';
     } else if (e.xError) {
