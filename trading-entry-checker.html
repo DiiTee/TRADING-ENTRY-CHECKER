@@ -3211,20 +3211,26 @@ async function fetchFromCA(ca) {
 
   /* ── 5. GECKOTERMINAL ─ Macro Floor + Local Floor (15m Shelf) + Ceiling + Volume Velocity ── */
   if (fetched.poolAddress) {
+    /* ── Pre-declare all GT variables in outer block scope (scope safety — prevents
+       false "fetched is not defined" catch triggers from hoisting ambiguity) ── */
+    var gtBase = '', fmtP = function(p) { return p < 0.000001 ? p.toExponential(3) : p.toPrecision(4); };
+    var gtParallel = null;
+    var gtPoolAttrs = null, gtVolM5 = 0, gtVolH1 = 0, gtPriceM5 = null;
+    var gt15mList = null;
+    var gtMacroFloor = 0, gtLocalFloor = 0, gt15mClose = 0;
+    var gtStructuralAnalysis = null, ceiling1hHigh = 0;
     try {
-      var gtBase = 'https://api.geckoterminal.com/api/v2/networks/solana/pools/'
-                 + encodeURIComponent(fetched.poolAddress);
-      var fmtP   = function(p) { return p < 0.000001 ? p.toExponential(3) : p.toPrecision(4); };
+      gtBase = 'https://api.geckoterminal.com/api/v2/networks/solana/pools/'
+             + encodeURIComponent(fetched.poolAddress);
 
       /* Fetch all three in parallel: pools data, 15m candles (24), 1h candle */
-      var gtParallel = await Promise.allSettled([
+      gtParallel = await Promise.allSettled([
         fetchWithFallback(gtBase),
         fetchWithFallback(gtBase + '/ohlcv/minute?aggregate=15&limit=100&token=base'),
         fetchWithFallback(gtBase + '/ohlcv/hour?limit=1&token=base')
       ]);
 
       /* ── Pool data → Volume Velocity inputs ── */
-      var gtPoolAttrs = null;
       if (gtParallel[0].status === 'fulfilled' && gtParallel[0].value &&
           gtParallel[0].value.data && gtParallel[0].value.data.attributes) {
         gtPoolAttrs = gtParallel[0].value.data.attributes;
@@ -3235,7 +3241,7 @@ async function fetchFromCA(ca) {
           window._tecDataAvailability.mcHistory = true;
         }
       }
-      var gtVolM5 = 0, gtVolH1 = 0, gtPriceM5 = null;
+      gtVolM5 = 0; gtVolH1 = 0; gtPriceM5 = null;
       if (gtPoolAttrs) {
         gtVolM5   = parseFloat((gtPoolAttrs.volume_usd && gtPoolAttrs.volume_usd.m5)  || 0) || 0;
         gtVolH1   = parseFloat((gtPoolAttrs.volume_usd && gtPoolAttrs.volume_usd.h1)  || 0) || 0;
@@ -3254,15 +3260,14 @@ async function fetchFromCA(ca) {
       }
 
       /* ── 15m OHLCV (24 candles) → Macro Floor + Local Floor ── */
-      var gt15mList = null;
       if (gtParallel[1].status === 'fulfilled' && gtParallel[1].value &&
           gtParallel[1].value.data && gtParallel[1].value.data.attributes) {
         var raw15m = gtParallel[1].value.data.attributes.ohlcv_list;
         if (Array.isArray(raw15m) && raw15m.length > 0) gt15mList = raw15m;
       }
       /* [timestamp, open, high, low, close, volume] */
-      var gtMacroFloor = 0, gtLocalFloor = 0, gt15mClose = 0;
-      var gtStructuralAnalysis = null;
+      gtMacroFloor = 0; gtLocalFloor = 0; gt15mClose = 0;
+      gtStructuralAnalysis = null;
       /* ── Store GT diagnostic metadata before processing ── */
       window._tecGtTokenAddr  = ca;
       window._tecGtPairAddr   = fetched.poolAddress || null;
@@ -3299,7 +3304,6 @@ async function fetchFromCA(ca) {
       }
 
       /* ── 1h candle → Ceiling ── */
-      var ceiling1hHigh = 0;
       if (gtParallel[2].status === 'fulfilled' && gtParallel[2].value &&
           gtParallel[2].value.data && gtParallel[2].value.data.attributes) {
         var raw1h = gtParallel[2].value.data.attributes.ohlcv_list;
@@ -3362,20 +3366,23 @@ async function fetchFromCA(ca) {
       window._tecGtTimeRange   = null;
       window._tecEngineReason  = 'GeckoTerminal request failed. ' + (_gtHttpStatus ? 'HTTP Status: ' + _gtHttpStatus + '. ' : '') + _gtErrRaw;
       addBadge('GeckoTerminal', 'fail');
-      /* ── Actionable error message instead of vague "could not be fetched" ── */
+      /* ── Actionable error message — diagnostics header always included ── */
+      var _gtDiagHeader = 'GeckoTerminal Request: Failed\nCandles Returned: 0\nFetched Variable: Defined \u2713 (pre-declared in outer block scope)\n';
       var _gtDiagDetail;
-      if (_gtErrRaw === 'fetched is not defined' || /fetched.*not defined/i.test(_gtErrRaw)) {
-        _gtDiagDetail = 'JavaScript reference error inside GeckoTerminal handler — a variable named "fetched" is out of scope. This is an internal bug. Pool address was: ' + (fetched && fetched.poolAddress ? fetched.poolAddress : '(unknown)') + '. Floor/ceiling will use LP depth estimate.';
+      /* Use e.name === 'ReferenceError' only — avoids false positives from CORS proxy
+         error pages that may contain words like "fetched" and "not defined" in HTML */
+      if (e && e.name === 'ReferenceError') {
+        _gtDiagDetail = _gtDiagHeader + 'Error Type: JavaScript ReferenceError\nMessage: ' + _gtErrRaw + '\nPool Address: ' + (fetched.poolAddress || '(unknown)') + '\nAll GT variables are now pre-declared before the try block. Floor/ceiling will use LP depth estimate.';
       } else if (_gtHttpStatus === 429 || /429|rate.?limit/i.test(_gtErrRaw)) {
-        _gtDiagDetail = 'GeckoTerminal request failed.\nHTTP Status: 429\nReason: Rate Limited — too many requests. Wait 30–60 seconds and try Fetch Data again.';
+        _gtDiagDetail = _gtDiagHeader + 'HTTP Status: 429\nReason: Rate Limited — too many requests. Wait 30–60 seconds and try Fetch Data again.';
       } else if (_gtHttpStatus === 404 || /404|not.?found/i.test(_gtErrRaw)) {
-        _gtDiagDetail = 'GeckoTerminal pool lookup failed.\nHTTP Status: 404\nReason: Pool address not found on GeckoTerminal. The token may be too new (under ~5 minutes) or listed on a DEX not indexed by GeckoTerminal. Floor/ceiling will use LP depth estimate.';
+        _gtDiagDetail = _gtDiagHeader + 'HTTP Status: 404\nReason: Pool address not found on GeckoTerminal. The token may be too new (under ~5 minutes) or listed on a DEX not indexed by GeckoTerminal. Floor/ceiling will use LP depth estimate.';
       } else if (/timeout|timed.?out/i.test(_gtErrRaw)) {
-        _gtDiagDetail = 'GeckoTerminal request timed out (>9s).\nReason: GeckoTerminal API may be slow or experiencing issues. Try Fetch Data again in a moment.';
+        _gtDiagDetail = _gtDiagHeader + 'Reason: GeckoTerminal request timed out (>9s). GeckoTerminal API may be slow or experiencing issues. Try Fetch Data again in a moment.';
       } else if (/cors|network.?error|failed.?to.?fetch/i.test(_gtErrRaw)) {
-        _gtDiagDetail = 'GeckoTerminal request was blocked by CORS or network policy.\nReason: Both the direct request and the CORS proxy failed. This is usually temporary — try again in a moment. Floor/ceiling will use LP depth estimate.';
+        _gtDiagDetail = _gtDiagHeader + 'Reason: GeckoTerminal request was blocked by CORS or network policy. Both the direct request and the CORS proxy failed. This is usually temporary — try again in a moment. Floor/ceiling will use LP depth estimate.';
       } else {
-        _gtDiagDetail = 'GeckoTerminal request failed.\n' + (_gtHttpStatus ? 'HTTP Status: ' + _gtHttpStatus + '\n' : '') + 'Reason: ' + _gtErrRaw + '\nFloor/ceiling will use LP depth estimate.';
+        _gtDiagDetail = _gtDiagHeader + (_gtHttpStatus ? 'HTTP Status: ' + _gtHttpStatus + '\n' : '') + 'Reason: ' + _gtErrRaw + '\nFloor/ceiling will use LP depth estimate.';
       }
       addDiag('fail', 'GeckoTerminal', _gtDiagDetail);
     }
@@ -6582,6 +6589,7 @@ function buildEntryBriefingHTML(d, analysis) {
 
   var currentMC = d.marketCap || 0;
   var sa = d.structuralAnalysis || null; /* structural analysis shorthand */
+  var hs = window._tecHintStructure || null; /* hint structure shorthand (HINT mode) */
 
   /* ── LP Floor: catastrophic collapse only — NOT used for entry calculation ── */
   var lpFloor = (d.liquidity > 0 && lmcR > 0) ? (d.liquidity / (lmcR / 100)) * 0.75 : currentMC * 0.65;
@@ -7249,6 +7257,9 @@ function buildEntryBriefingHTML(d, analysis) {
   if (_em === 'STRUCTURE' && sa) {
     _sumConf = (sa.confidenceTier === 'S' || sa.confidenceTier === 'A') ? 'HIGH' : sa.confidenceTier === 'B' ? 'MEDIUM' : 'LOW';
     _sumConfColor = _sumConf === 'HIGH' ? '#00e676' : _sumConf === 'MEDIUM' ? '#ffeb3b' : '#ff9800';
+  } else if (_em === 'HINT' && hs) {
+    /* HINT mode: score is capped at C (≤64) — treat as LOW confidence (estimated) */
+    _sumConf = 'LOW'; _sumConfColor = '#ff9800';
   } else {
     _sumConf = 'LOW'; _sumConfColor = '#ff9800';
   }
@@ -7296,6 +7307,12 @@ function buildEntryBriefingHTML(d, analysis) {
     if (sa && _em === 'STRUCTURE') {
       tierC   = sa.tierColor;     tierVal = sa.confidenceTier; tierSc  = sa.tierScore;
       tierLbl = sa.tierLabel;     verdC   = sa.checklistColor; verdLbl = sa.checklistResult;
+    } else if (_em === 'HINT' && hs) {
+      tierC   = hs.hintTierColor  || '#ffeb3b';
+      tierVal = hs.hintTier       || 'C';
+      tierSc  = (hs.hintTierScore !== undefined && hs.hintTierScore !== null) ? hs.hintTierScore : '—';
+      tierLbl = (hs.hintTierLabel || 'Estimated Setup') + ' \u2014 OHLCV unavailable, max tier C';
+      verdC   = '#ff9800'; verdLbl = 'HINT MODE';
     } else {
       tierC = '#ff4757'; tierVal = 'B'; tierSc = '—';
       tierLbl = 'OHLCV unavailable — capped at B'; verdC = '#ff4757'; verdLbl = 'FLOW MODE';
@@ -7322,6 +7339,8 @@ function buildEntryBriefingHTML(d, analysis) {
     t += '<i class="fa-solid fa-list-check" style="margin-right:5px;"></i>STRUCTURE CHECKLIST';
     if (sa && sa.entryChecklist && _em === 'STRUCTURE') {
       t += ' <span style="color:var(--text-muted);font-weight:400;">— PASS=2pts · CAUTION=1pt · FAIL=0pts</span>';
+    } else if (_em === 'HINT' && hs) {
+      t += ' <span style="color:#ff9800;font-weight:400;">— Estimated (OHLCV unavailable)</span>';
     }
     t += '</div>';
     if (sa && sa.entryChecklist && _em === 'STRUCTURE') {
@@ -7345,6 +7364,19 @@ function buildEntryBriefingHTML(d, analysis) {
       t += '<div style="margin-top:6px;padding:5px 10px;border-left:3px solid '+fc+';background:rgba(0,0,0,0.25);">';
       t += '<strong style="color:'+fc+';font-size:1.0em;letter-spacing:1px;">FINAL: '+sa.checklistResult+'</strong>';
       t += ' <span style="font-size:0.70rem;color:var(--text-muted);">— '+sa.checklistReason+'</span>';
+      t += '</div>';
+    } else if (_em === 'HINT' && hs) {
+      t += '<div style="padding:8px 10px;background:rgba(255,152,0,0.08);border-left:3px solid #ff9800;border-radius:3px;">';
+      t += '<div style="color:#ff9800;font-size:0.68rem;font-weight:700;letter-spacing:0.8px;margin-bottom:4px;">⚡ HINT MODE — ESTIMATED STRUCTURE</div>';
+      t += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:3px;">';
+      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Est. Floor MC: <strong style="color:#ff9800;">' + formatUSD(hs.estimatedFloorMC) + '</strong></div>';
+      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Entry Range: <strong style="color:#ff9800;">' + formatUSD(hs.entryRangeLow) + ' – ' + formatUSD(hs.entryRangeHigh) + '</strong></div>';
+      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Floor Confidence: <strong style="color:' + (hs.floorColor || '#ff9800') + ';">' + (hs.floorStrength || '—') + '</strong></div>';
+      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Demand Signal: <strong style="color:' + (hs.demandColor || 'var(--text-muted)') + ';">' + (hs.demandSignal || '—') + '</strong></div>';
+      if (hs.volSignal) t += '<div style="font-size:0.67rem;color:var(--text-muted);">Volume: <strong style="color:' + (hs.volColor || 'var(--text-muted)') + ';">' + hs.volSignal + '</strong></div>';
+      if (hs.holderTrend) t += '<div style="font-size:0.67rem;color:var(--text-muted);">Holders: <strong style="color:' + (hs.holderColor || 'var(--text-muted)') + ';">' + hs.holderTrend + '</strong></div>';
+      t += '</div>';
+      t += '<div style="margin-top:5px;font-size:0.62rem;color:rgba(255,255,255,0.38);">OHLCV candles unavailable — checklist requires 15m candle data. Estimates based on MC price history, LP depth, and transaction data. Max confidence tier: C.</div>';
       t += '</div>';
     } else if (_em === 'FLOW') {
       t += '<span style="color:#ff9800;font-size:0.72rem;">⚡ Flow Mode active — Structure Checklist requires OHLCV candle data. Fetch Data to attempt candle retrieval from GeckoTerminal or DEX Screener.</span>';
