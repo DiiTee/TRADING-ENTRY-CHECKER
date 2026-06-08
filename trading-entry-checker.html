@@ -697,6 +697,86 @@ p, span, td, th {
   .mob-grid-3  { grid-template-columns: 1fr; }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   MOBILE ANALYSIS RESULTS — deep overflow containment
+   These rules target dynamically generated HTML inside #analysisResults
+   that inline styles and grid auto-fill can cause to blow out on small
+   screens. All rules use targeted selectors to avoid side-effects.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Hard-contain the results root and every briefing section */
+#analysisResults,
+#analysisResults .briefing-section,
+#analysisResults .card {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Any flex row inside results that has gap should be allowed to wrap */
+#analysisResults [style*="display:flex"],
+#analysisResults [style*="display: flex"] {
+  flex-wrap: wrap !important;
+  min-width: 0 !important;
+}
+
+/* Checklist auto-fill grid — collapse to 1 col below 480px */
+@media (max-width: 480px) {
+  #analysisResults [style*="repeat(auto-fill"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Confidence tier / structural verdict row — stack vertically */
+  #analysisResults [style*="display:flex;gap:10px;margin-bottom:10px"] {
+    flex-direction: column !important;
+  }
+  /* Score pillars — labels shouldn't force horizontal overflow */
+  #analysisResults [style*="letter-spacing:3px"] {
+    font-size: 1.8rem !important;
+    letter-spacing: 1px !important;
+  }
+}
+
+/* Diagnostic panel rows — label column should not exceed 40% of container */
+@media (max-width: 600px) {
+  /* Force structure diagnostics label column to shrink */
+  #analysisResults details [style*="min-width:120px"] {
+    min-width: 90px !important;
+    max-width: 40% !important;
+  }
+  #analysisResults details [style*="min-width:110px"] {
+    min-width: 80px !important;
+    max-width: 40% !important;
+  }
+  /* Social provider badge on mobile */
+  #socialProviderBadge {
+    font-size: 0.56rem !important;
+  }
+}
+
+/* Prevent long contract addresses and URLs from blowing out any container */
+#analysisResults span[style*="font-family:monospace"],
+#analysisResults .qa-addr,
+#analysisResults code {
+  word-break: break-all !important;
+  overflow-wrap: break-word !important;
+  max-width: 100% !important;
+  display: inline-block !important;
+}
+
+/* Briefing score bars and progress bars — never exceed container */
+#analysisResults [style*="height:3px"] {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Attention briefing mode badges — allow wrapping on narrow screens */
+@media (max-width: 480px) {
+  #analysisResults [style*="border-radius:20px"] {
+    flex-wrap: wrap !important;
+    font-size: 0.56rem !important;
+  }
+}
+
 /* ── Bubblemaps Integration ── */
 .bm-section { margin-top: 4px; }
 .bm-hybrid-risk {
@@ -1584,6 +1664,8 @@ p, span, td, th {
             <button class="btn btn-secondary btn-sm" id="socialDeepScanBtn" onclick="runSocialScan(true)" title="Deep Scan: 50 posts each — higher confidence, more API usage"><i class="fa-solid fa-binoculars"></i> Deep Scan</button>
           </div>
           <div id="socialScanStatus" style="display:none;margin-top:6px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid var(--accent-cyan);font-size:0.60rem;color:var(--text-muted);line-height:1.6;"></div>
+          <!-- ── Real-time social scan provider badge ── -->
+          <div id="socialProviderBadge" style="display:none;margin-top:6px;"></div>
           <div id="socialDataPanel" style="display:none;margin-top:6px;padding:12px;background:rgba(0,0,0,0.15);border-radius:5px;border:1px solid rgba(255,255,255,0.06);">
             <div style="font-size:0.58rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">Enter mention counts from your monitoring tools (Telegram bots, X search, Reddit, etc.). All fields are optional. Any data entered will activate Social Mode and enhance the Attention Briefing with real signals.</div>
             <div style="font-size:0.62rem;font-weight:700;color:#1DA1F2;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(29,161,242,0.2);"><i class="fa-brands fa-x-twitter" style="margin-right:5px;"></i>X / Twitter</div>
@@ -2373,6 +2455,15 @@ async function fetchFromCA(ca) {
   window._tecEngineMode       = 'FLOW';  /* 'STRUCTURE' | 'HINT' | 'FLOW' */
   window._tecHintStructure    = null;    /* HINT mode estimated structure when OHLCV unavailable */
   window._tecGtPoolAttrs      = null;    /* GeckoTerminal pool attributes (price/vol history) */
+  /* ── Structure Diagnostics extended state ── */
+  window._tecGtCandleCount  = 0;        /* exact candle count retrieved from GT */
+  window._tecGtTimeRange    = null;     /* { oldest, newest } Unix timestamps from candles */
+  window._tecGtResolution   = null;     /* '15m' when GT OHLCV succeeds */
+  window._tecGtTokenAddr    = null;     /* contract address used in GT request */
+  window._tecGtPoolAddr     = null;     /* pool address resolved by GT */
+  window._tecGtPairAddr     = null;     /* pair address (from DexScreener, used as GT pool key) */
+  window._tecGtError        = null;     /* structured error object { msg, raw, httpStatus } */
+  window._tecEngineReason   = null;     /* human-readable reason for mode selection */
   window._tecDataAvailability = {        /* diagnostics panel data source flags */
     poolFound:     false,
     gtOhlcv:       false,
@@ -2976,6 +3067,14 @@ async function fetchFromCA(ca) {
       /* [timestamp, open, high, low, close, volume] */
       var gtMacroFloor = 0, gtLocalFloor = 0, gt15mClose = 0;
       var gtStructuralAnalysis = null;
+      /* ── Store GT diagnostic metadata before processing ── */
+      window._tecGtTokenAddr  = ca;
+      window._tecGtPairAddr   = fetched.poolAddress || null;
+      window._tecGtPoolAddr   = (gtParallel[0].status === 'fulfilled' && gtParallel[0].value && gtParallel[0].value.data && gtParallel[0].value.data.attributes) ? (gtParallel[0].value.data.attributes.address || fetched.poolAddress || null) : null;
+      window._tecGtResolution = '15m';
+      window._tecGtCandleCount = gt15mList ? gt15mList.length : 0;
+      window._tecGtTimeRange  = (gt15mList && gt15mList.length > 0) ? { oldest: gt15mList[0][0], newest: gt15mList[gt15mList.length - 1][0] } : null;
+      window._tecGtError      = null;
       if (gt15mList) {
         gt15mClose = gt15mList[gt15mList.length - 1][4] || 0;
         if (gt15mClose > 0) {
@@ -3032,8 +3131,11 @@ async function fetchFromCA(ca) {
         };
         window._tecOhlcvSource = 'GeckoTerminal';
         if (gtStructuralAnalysis) {
-          window._tecEngineMode = 'STRUCTURE';
+          window._tecEngineMode   = 'STRUCTURE';
+          window._tecEngineReason = 'OHLCV data successfully retrieved from GeckoTerminal. ' + (gt15mList ? gt15mList.length : 0) + ' candles (15m resolution) loaded and passed to Structure Engine.';
           window._tecDataAvailability.gtOhlcv = true;
+        } else {
+          window._tecEngineReason = 'GeckoTerminal returned candles but Structure Engine returned no result (possible empty/invalid candle data). Candle count: ' + (gt15mList ? gt15mList.length : 0) + '.';
         }
         if (gtMacroFloor > 0 || gtLocalFloor > 0) {
           addBadge('GeckoTerminal', 'ok');
@@ -3055,8 +3157,31 @@ async function fetchFromCA(ca) {
         addDiag('partial', 'GeckoTerminal', 'Candle data incomplete. Floor/ceiling will fall back to LP depth estimate.');
       }
     } catch(e) {
+      /* ── Store structured error for Structure Diagnostics panel ── */
+      var _gtErrRaw = (e && e.message) ? e.message : String(e);
+      var _gtHttpStatus = (e && e.statusCode) ? e.statusCode : null;
+      var _gtErrMsg = errReason(e);
+      window._tecGtError = { failed: true, msg: _gtErrMsg, raw: _gtErrRaw, httpStatus: _gtHttpStatus };
+      window._tecGtCandleCount = 0;
+      window._tecGtTimeRange   = null;
+      window._tecEngineReason  = 'GeckoTerminal request failed. ' + (_gtHttpStatus ? 'HTTP Status: ' + _gtHttpStatus + '. ' : '') + _gtErrRaw;
       addBadge('GeckoTerminal', 'fail');
-      addDiag('fail', 'GeckoTerminal', 'Data could not be fetched: ' + errReason(e) + '. Floor/ceiling will use LP depth estimate.');
+      /* ── Actionable error message instead of vague "could not be fetched" ── */
+      var _gtDiagDetail;
+      if (_gtErrRaw === 'fetched is not defined' || /fetched.*not defined/i.test(_gtErrRaw)) {
+        _gtDiagDetail = 'JavaScript reference error inside GeckoTerminal handler — a variable named "fetched" is out of scope. This is an internal bug. Pool address was: ' + (fetched && fetched.poolAddress ? fetched.poolAddress : '(unknown)') + '. Floor/ceiling will use LP depth estimate.';
+      } else if (_gtHttpStatus === 429 || /429|rate.?limit/i.test(_gtErrRaw)) {
+        _gtDiagDetail = 'GeckoTerminal request failed.\nHTTP Status: 429\nReason: Rate Limited — too many requests. Wait 30–60 seconds and try Fetch Data again.';
+      } else if (_gtHttpStatus === 404 || /404|not.?found/i.test(_gtErrRaw)) {
+        _gtDiagDetail = 'GeckoTerminal pool lookup failed.\nHTTP Status: 404\nReason: Pool address not found on GeckoTerminal. The token may be too new (under ~5 minutes) or listed on a DEX not indexed by GeckoTerminal. Floor/ceiling will use LP depth estimate.';
+      } else if (/timeout|timed.?out/i.test(_gtErrRaw)) {
+        _gtDiagDetail = 'GeckoTerminal request timed out (>9s).\nReason: GeckoTerminal API may be slow or experiencing issues. Try Fetch Data again in a moment.';
+      } else if (/cors|network.?error|failed.?to.?fetch/i.test(_gtErrRaw)) {
+        _gtDiagDetail = 'GeckoTerminal request was blocked by CORS or network policy.\nReason: Both the direct request and the CORS proxy failed. This is usually temporary — try again in a moment. Floor/ceiling will use LP depth estimate.';
+      } else {
+        _gtDiagDetail = 'GeckoTerminal request failed.\n' + (_gtHttpStatus ? 'HTTP Status: ' + _gtHttpStatus + '\n' : '') + 'Reason: ' + _gtErrRaw + '\nFloor/ceiling will use LP depth estimate.';
+      }
+      addDiag('fail', 'GeckoTerminal', _gtDiagDetail);
     }
   }
 
@@ -3089,6 +3214,11 @@ async function fetchFromCA(ca) {
         _hint.hasHolderHist   ? 'holder history'    : '',
         _hint.hasVolHistory   ? 'volume data'       : ''
       ].filter(Boolean).join(', ');
+      if (!window._tecEngineReason) {
+        window._tecEngineReason = 'OHLCV source unavailable. Fallback triggered — usable market history detected (' + (_hintSources || 'general market data') + '). Hint Mode uses estimated structure; max confidence capped at C.';
+      } else {
+        window._tecEngineReason += ' Fallback: Hint Mode activated using ' + (_hintSources || 'market data') + '.';
+      }
       addBadge('Structure Engine', 'partial');
       addDiag('partial', 'Structure Engine',
         'HINT MODE ACTIVE: OHLCV candles unavailable, but usable market history detected. ' +
@@ -3100,6 +3230,11 @@ async function fetchFromCA(ca) {
     } else {
       window._tecDataAvailability.txHistory = !!(window._tecDexTxns &&
         (window._tecDexTxns.h1 || window._tecDexTxns.m5));
+      if (!window._tecEngineReason) {
+        window._tecEngineReason = 'OHLCV source unavailable and insufficient market history for Hint Mode. Flow Mode active — LP-depth estimates only. Common causes: (1) Pool not yet indexed by GeckoTerminal (token under ~30 min old). (2) CORS proxy failure on OHLCV endpoints. (3) DexScreener has no public OHLCV API.';
+      } else {
+        window._tecEngineReason += ' Fallback: Flow Mode — insufficient data for Hint Mode. LP-depth estimates only.';
+      }
       addBadge('Structure Engine', 'fail');
       addDiag('partial', 'Structure Engine',
         'FLOW MODE: Candle data could not be loaded from GeckoTerminal or DEX Screener, ' +
@@ -7024,41 +7159,148 @@ function buildEntryBriefingHTML(d, analysis) {
     return t;
   })();
 
-  /* ── Structure Diagnostics panel ── */
+  /* ── Structure Diagnostics panel (full 5-section) ── */
   var _strucDiag = (function() {
-    var em  = window._tecEngineMode   || 'FLOW';
-    var src = window._tecOhlcvSource  || null;
-    var pa  = window._tecPoolAddress  || null;
-    var cd  = window._tecCandles      || null;
-    var sa  = (cd && cd.structuralAnalysis) || null;
-    var tier   = sa ? sa.confidenceTier : '—';
-    var nCnd   = cd ? (cd.source === 'GeckoTerminal' ? '100 (15m)' : '—') : '—';
-    var fallback = [];
-    if (src === 'GeckoTerminal') fallback.push('✓ GeckoTerminal OHLCV (primary source succeeded)');
-    else { fallback.push('⚠ GeckoTerminal candles unavailable'); }
-    fallback.push('⚠ DEX Screener has no public OHLCV API (pair discovery only)');
-    if (em === 'HINT')        fallback.push('→ HINT MODE: estimated structure from market history');
-    else if (em === 'FLOW')   fallback.push('→ FLOW MODE: no candle data available');
-    var rows = [
-      { l: 'Engine Mode',      v: em },
-      { l: 'OHLCV Source',     v: src || 'None' },
-      { l: 'Pool / Pair Addr', v: pa  || '—' },
-      { l: 'Candles Retrieved',v: nCnd },
-      { l: 'Confidence Tier',  v: tier },
-      { l: 'Fallback Path',    v: fallback.join(' → ') },
-    ];
-    var innerRows = rows.map(function(r) {
-      return '<div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">' +
-        '<span style="color:var(--text-muted);font-size:0.58rem;min-width:110px;flex-shrink:0;">' + r.l + ':</span>' +
-        '<span style="font-size:0.58rem;word-break:break-all;min-width:0;">' + r.v + '</span></div>';
-    }).join('');
+    var em    = window._tecEngineMode    || 'FLOW';
+    var src   = window._tecOhlcvSource   || null;
+    var cd    = window._tecCandles       || null;
+    var sa    = (cd && cd.structuralAnalysis) || null;
+    var hs    = window._tecHintStructure || null;
+    var gtErr = window._tecGtError       || null;
+
+    /* ── colors ── */
+    var emColor = em === 'STRUCTURE' ? '#00e676' : em === 'HINT' ? '#ffeb3b' : '#ff4757';
+
+    /* ── helper: build a key→value row ── */
+    function diagRow(label, value, mono) {
+      return '<div style="display:flex;gap:6px;align-items:flex-start;min-width:0;padding:2px 0;">' +
+        '<span style="color:var(--text-muted);font-size:0.58rem;min-width:120px;flex-shrink:0;padding-top:1px;">' + label + ':</span>' +
+        '<span style="font-size:0.58rem;word-break:break-all;min-width:0;' + (mono ? 'font-family:monospace;' : '') + '">' + (value || '—') + '</span>' +
+        '</div>';
+    }
+    function diagSectionTitle(icon, title) {
+      return '<div style="font-size:0.57rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.8px;text-transform:uppercase;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid rgba(0,212,255,0.15);">' +
+        '<i class="fa-solid ' + icon + '" style="margin-right:4px;"></i>' + title + '</div>';
+    }
+
+    /* ── 1. DATA ACQUISITION ── */
+    var nCnd = window._tecGtCandleCount || 0;
+    var tr   = window._tecGtTimeRange   || null;
+    var res  = window._tecGtResolution  || null;
+    var fmtTs = function(ts) {
+      if (!ts) return '—';
+      try { return new Date(ts * 1000).toUTCString().replace(' GMT',''); } catch(e) { return String(ts); }
+    };
+    var candleStatus = gtErr ? '<span style="color:#ff4757;">0 (fetch failed)</span>' :
+                       nCnd > 0 ? '<span style="color:#00e676;">' + nCnd + ' candles</span>' :
+                       '<span style="color:#ff9800;">0 (returned empty)</span>';
+
+    var acqBlock = diagSectionTitle('fa-database', 'Data Acquisition');
+    acqBlock += diagRow('OHLCV Source',  src ? '<span style="color:#00e676;">GeckoTerminal</span>' : '<span style="color:#ff4757;">None Available</span>');
+    acqBlock += diagRow('Candles Retrieved', candleStatus);
+    acqBlock += diagRow('Oldest Candle', tr ? fmtTs(tr.oldest) : (gtErr ? 'N/A (fetch failed)' : '—'));
+    acqBlock += diagRow('Newest Candle', tr ? fmtTs(tr.newest) : (gtErr ? 'N/A (fetch failed)' : '—'));
+    acqBlock += diagRow('Resolution',    res ? res : (gtErr ? 'N/A' : '—'));
+    acqBlock += diagRow('Token Address', window._tecGtTokenAddr || '—', true);
+    acqBlock += diagRow('Pool Address',  window._tecGtPoolAddr  || window._tecPoolAddress || '—', true);
+    acqBlock += diagRow('Pair Address',  window._tecGtPairAddr  || '—', true);
+
+    /* ── 2. ENGINE EXECUTION ── */
+    var reason = window._tecEngineReason || (
+      em === 'STRUCTURE' ? 'OHLCV data successfully retrieved.' :
+      em === 'HINT'      ? 'OHLCV source unavailable. Historical market data detected — Hint Mode activated.' :
+                           'OHLCV source unavailable. Insufficient market history for Hint Mode. Flow Mode active.'
+    );
+    var execBlock = diagSectionTitle('fa-gear', 'Engine Execution');
+    execBlock += diagRow('Engine Mode', '<span style="color:' + emColor + ';font-weight:700;">' + em + ' MODE</span>');
+    execBlock += diagRow('Reason Selected', reason);
+
+    /* ── 3. CONFIDENCE CALCULATION ── */
+    var tier = sa ? sa.confidenceTier : (hs ? hs.hintTier : '—');
+    var tierColor = tier==='S'?'#00ffcc':tier==='A'?'#00e676':tier==='B'?'#ffeb3b':tier==='C'?'#ff9800':tier==='D'?'#ff4757':'var(--text-muted)';
+    var tierScore = sa ? sa.tierScore : (hs ? hs.hintTierScore : null);
+    var tierLabel = sa ? sa.tierLabel : (hs ? hs.hintTierLabel : (em === 'FLOW' ? 'Flow Mode — no OHLCV' : '—'));
+    var confExplain;
+    if (em === 'STRUCTURE' && sa) {
+      if (tier === 'S')      confExplain = 'S tier: Exceptional candle data quality. ≥2000 candles with strong structural signals.';
+      else if (tier === 'A') confExplain = 'A tier: High-quality candle data. ≥1000 candles with reliable signals (score: ' + tierScore + '/100).';
+      else if (tier === 'B') confExplain = 'B tier: Adequate candle data. ≥500 candles — solid base for analysis (score: ' + tierScore + '/100).';
+      else if (tier === 'C') confExplain = 'C tier: Limited candle data. Fewer than 500 candles retrieved (score: ' + tierScore + '/100).';
+      else                   confExplain = 'D tier: Very sparse candle data — low reliability (score: ' + (tierScore||'—') + '/100).';
+    } else if (em === 'HINT') {
+      confExplain = 'Hint Mode caps confidence at C — OHLCV candle data is required to reach tier A, B, or S. Confidence based on market history signals only.';
+    } else {
+      confExplain = 'Flow Mode — no candle data available. Confidence cannot be calculated from structure. Max tier capped at B (LP-depth reference only).';
+    }
+    var confBlock = diagSectionTitle('fa-chart-bar', 'Confidence Calculation');
+    confBlock += diagRow('Structure Confidence', '<span style="font-size:0.75rem;font-weight:900;color:' + tierColor + ';">' + (tier || '—') + '</span>');
+    confBlock += diagRow('Confidence Score', tierScore !== null && tierScore !== undefined ? tierScore + '/100' : '—');
+    confBlock += diagRow('Tier Label', tierLabel || '—');
+    confBlock += diagRow('Explanation', confExplain);
+
+    /* ── 4. FALLBACK TRACE ── */
+    var fallbackSteps = [];
+    if (src === 'GeckoTerminal' && nCnd > 0) {
+      fallbackSteps.push({ ok: true,  text: 'GeckoTerminal' });
+      fallbackSteps.push({ ok: true,  text: '→ Success (' + nCnd + ' candles, 15m resolution)' });
+    } else if (gtErr) {
+      fallbackSteps.push({ ok: false, text: 'GeckoTerminal' });
+      fallbackSteps.push({ ok: false, text: '→ Failed: ' + (gtErr.raw || gtErr.msg) });
+      if (em === 'HINT') {
+        fallbackSteps.push({ ok: null, text: '→ Hint Mode (market history fallback)' });
+      } else {
+        fallbackSteps.push({ ok: false, text: '→ Flow Mode (no usable data found)' });
+      }
+    } else if (nCnd === 0 && !gtErr) {
+      fallbackSteps.push({ ok: false, text: 'GeckoTerminal' });
+      fallbackSteps.push({ ok: false, text: '→ 0 candles returned (pool exists but historical data unavailable)' });
+      if (em === 'HINT') {
+        fallbackSteps.push({ ok: null, text: '→ Hint Mode (market history fallback)' });
+      } else {
+        fallbackSteps.push({ ok: false, text: '→ Flow Mode (no usable data found)' });
+      }
+    } else {
+      fallbackSteps.push({ ok: null, text: 'No GeckoTerminal request was attempted (pool address not found)' });
+      fallbackSteps.push({ ok: false, text: '→ Flow Mode active' });
+    }
+    fallbackSteps.push({ ok: null, text: 'DEX Screener → No public OHLCV API (pair discovery only)' });
+
+    var fallBlock = diagSectionTitle('fa-route', 'Fallback Trace');
+    fallbackSteps.forEach(function(step) {
+      var stepColor = step.ok === true ? '#00e676' : step.ok === false ? '#ff4757' : '#ffeb3b';
+      fallBlock += '<div style="font-size:0.58rem;padding:1px 0;color:' + stepColor + ';word-break:break-word;">' + step.text + '</div>';
+    });
+
+    /* ── 5. ERROR REPORTING ── */
+    var errBlock = '';
+    if (gtErr || (nCnd === 0 && (src !== 'GeckoTerminal'))) {
+      errBlock = diagSectionTitle('fa-circle-exclamation', 'Error Reporting');
+      if (gtErr) {
+        errBlock += '<div style="padding:6px 8px;background:rgba(255,71,87,0.08);border:1px solid rgba(255,71,87,0.25);border-radius:4px;margin-bottom:4px;">';
+        errBlock += diagRow('Source', 'GeckoTerminal');
+        if (gtErr.httpStatus) errBlock += diagRow('HTTP Status', '<span style="color:#ff4757;font-weight:700;">' + gtErr.httpStatus + '</span>');
+        errBlock += diagRow('Raw Error', '<span style="color:#ff9800;">' + (gtErr.raw || 'Unknown') + '</span>');
+        errBlock += diagRow('Diagnosis', gtErr.msg || '—');
+        errBlock += '</div>';
+      } else if (nCnd === 0) {
+        errBlock += '<div style="padding:6px 8px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);border-radius:4px;">';
+        errBlock += '<div style="font-size:0.58rem;color:#ff9800;">GeckoTerminal returned 0 candles.<br>Pool exists but historical OHLCV data is unavailable.<br>Token may be too new (&lt;5 min old) or has insufficient trading history.</div>';
+        errBlock += '</div>';
+      }
+    }
+
+    var inner = acqBlock + execBlock + confBlock + fallBlock + (errBlock || '');
+
     return '<details style="margin-top:10px;">' +
-      '<summary style="cursor:pointer;font-size:0.60rem;color:var(--text-muted);' +
-      'letter-spacing:0.5px;user-select:none;outline:none;">' +
-      '<i class="fa-solid fa-stethoscope" style="margin-right:5px;"></i>Structure Diagnostics</summary>' +
-      '<div style="margin-top:6px;padding:8px 10px;background:rgba(0,0,0,0.25);' +
-      'border-radius:6px;border-left:2px solid rgba(255,255,255,0.08);display:flex;' +
-      'flex-direction:column;gap:4px;">' + innerRows + '</div></details>';
+      '<summary style="cursor:pointer;font-size:0.61rem;color:' + emColor + ';' +
+      'letter-spacing:0.5px;user-select:none;outline:none;display:flex;align-items:center;gap:6px;">' +
+      '<i class="fa-solid fa-stethoscope"></i>' +
+      '<span style="font-weight:700;">Structure Diagnostics</span>' +
+      '<span style="font-size:0.56rem;color:var(--text-muted);font-weight:400;">— Mode: ' + em + ' · Source: ' + (src || 'None') + ' · Candles: ' + nCnd + ' · Tier: ' + (tier || '—') + '</span>' +
+      '</summary>' +
+      '<div style="margin-top:8px;padding:10px 12px;background:rgba(0,0,0,0.3);' +
+      'border-radius:6px;border-left:2px solid ' + emColor + '55;display:flex;' +
+      'flex-direction:column;gap:1px;">' + inner + '</div></details>';
   })();
 
   return '<div class="briefing-section">' +
@@ -7844,46 +8086,129 @@ function buildAttentionBriefingHTML(d, analysis) {
   }
   nt += '</div>';
 
-  /* ── Attention Diagnostics panel ── */
+  /* ── Attention / Social Scan Diagnostics panel ── */
   var _attDiag = (function() {
-    var sd   = window._tecSocialDiag  || null;
-    var raw  = window._tecSocialRaw   || null;
-    var xRes = raw && raw.x;
-    var prov = (xRes && xRes.provider) || (sd && sd.providers_succeeded && sd.providers_succeeded[0]) || '—';
-    var tried   = sd && sd.providers_tried   ? sd.providers_tried.join(' → ')   : '—';
-    var usedQ   = (xRes && xRes.usedQuery)   ? xRes.usedQuery : '—';
-    var qval    = (xRes && xRes.queryValue)  ? xRes.queryValue : '—';
-    var xCnt    = (xRes && xRes.tweets)      ? xRes.tweets.length : 0;
-    var rdCnt   = (raw && raw.reddit && raw.reddit.posts) ? raw.reddit.posts.length : 0;
-    var errs    = sd && sd.errors && sd.errors.length ? sd.errors.join('; ') : 'None';
-    var fp      = sd && sd.fallback_path && sd.fallback_path.length
-                    ? sd.fallback_path.join(' → ') : '—';
-    var queriesUsed = (sd && sd.queries_used)
-      ? Object.keys(sd.queries_used).filter(function(k) { return sd.queries_used[k]; })
-              .map(function(k) { return k + ': "' + sd.queries_used[k] + '"'; }).join(', ')
-      : '—';
-    var rows = [
-      { l: 'Provider Used',    v: prov },
-      { l: 'Providers Tried',  v: tried },
-      { l: 'Query Key Used',   v: usedQ },
-      { l: 'Query Value',      v: qval },
-      { l: 'Queries Available',v: queriesUsed },
-      { l: 'Posts Retrieved',  v: 'X: ' + xCnt + ' · Reddit: ' + rdCnt },
-      { l: 'Errors',           v: errs },
-      { l: 'Fallback Path',    v: fp },
-    ];
-    var innerRows = rows.map(function(r) {
-      return '<div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">' +
-        '<span style="color:var(--text-muted);font-size:0.58rem;min-width:110px;flex-shrink:0;">' + r.l + ':</span>' +
-        '<span style="font-size:0.58rem;word-break:break-all;min-width:0;">' + r.v + '</span></div>';
-    }).join('');
+    var raw  = window._tecSocialRaw  || null;
+    var xRes = (raw && raw.x)        || null;
+    var rdRes= (raw && raw.reddit)   || null;
+    var sd   = (xRes && xRes.diagnostics) || window._tecSocialDiag || null;
+
+    var prov       = (xRes && xRes.provider) || '—';
+    var tried      = (sd && sd.providers_tried)    ? sd.providers_tried.join(' → ')    : '—';
+    var succeeded  = (sd && sd.providers_succeeded)? sd.providers_succeeded.join(', ')  : '—';
+    var usedQ      = (xRes && xRes.usedQuery)  ? xRes.usedQuery  : '—';
+    var qval       = (xRes && xRes.queryValue) ? xRes.queryValue : '—';
+    var xCnt       = (xRes && xRes.tweets)     ? xRes.tweets.length : 0;
+    var rdCnt      = (rdRes && rdRes.posts)    ? rdRes.posts.length : 0;
+    var fp         = (sd && sd.fallback_path && sd.fallback_path.length) ? sd.fallback_path : [];
+    var errs       = (sd && sd.errors && sd.errors.length) ? sd.errors : [];
+    var respCodes  = (sd && sd.response_codes)  ? sd.response_codes  : [];
+    var postCounts = (sd && sd.post_counts)     ? sd.post_counts     : [];
+    var reqUrls    = (sd && sd.request_urls)    ? sd.request_urls    : [];
+    var attMode    = ab.attMode || 'PROXY';
+    var attModeColor = attMode === 'FULL SOCIAL' ? '#00ffcc' : attMode === 'PARTIAL SOCIAL' ? '#ffeb3b' : '#9fa8da';
+
+    /* ── Engagement summary computed from bulk response ── */
+    var tweets = (xRes && xRes.tweets) || [];
+    var totalLikes = 0, totalRt = 0;
+    var topTweet = null;
+    tweets.forEach(function(t) {
+      totalLikes += (t.likes    || 0);
+      totalRt    += (t.retweets || 0);
+      var eng    = (t.likes||0) + (t.retweets||0)*2;
+      var topEng = topTweet ? ((topTweet.likes||0)+(topTweet.retweets||0)*2) : 0;
+      if (eng > topEng) topTweet = t;
+    });
+
+    function dRow(l, v) {
+      return '<div style="display:flex;gap:5px;align-items:flex-start;flex-wrap:wrap;min-width:0;padding:2px 0;">' +
+        '<span style="color:var(--text-muted);font-size:0.57rem;min-width:120px;flex-shrink:0;">' + l + ':</span>' +
+        '<span style="font-size:0.57rem;word-break:break-all;min-width:0;">' + (v||'—') + '</span></div>';
+    }
+    function dTitle(icon, title) {
+      return '<div style="font-size:0.56rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.8px;text-transform:uppercase;margin:8px 0 4px;padding-bottom:3px;border-bottom:1px solid rgba(0,212,255,0.12);">' +
+        '<i class="fa-solid ' + icon + '" style="margin-right:4px;"></i>' + title + '</div>';
+    }
+
+    var inner = '';
+
+    /* ── 1. Attention Mode ── */
+    inner += dTitle('fa-satellite-dish', 'Attention Mode');
+    inner += dRow('Current Mode', '<span style="color:' + attModeColor + ';font-weight:700;">' + attMode + '</span>');
+    inner += dRow('Attention Tier', ab.attTier + ' — ' + ab.attVerdict);
+    inner += dRow('Mode Reason', attMode === 'FULL SOCIAL' ? 'Real social scan data available — X posts and/or Reddit posts were retrieved and scored.' :
+                                 attMode === 'PARTIAL SOCIAL' ? 'Partial social data available — some fields populated from scan or manual entry.' :
+                                 'No social scan data — attention scored from on-chain signals only (price, volume, holders, narrative).');
+
+    /* ── 2. Provider Chain ── */
+    inner += dTitle('fa-route', 'Provider Chain');
+    if (fp.length > 0) {
+      fp.forEach(function(step) {
+        var isOk   = step.charAt(0) === '✓';
+        var isFail = step.charAt(0) === '✗';
+        var col    = isOk ? '#00e676' : isFail ? '#ff4757' : '#ff9800';
+        inner += '<div style="font-size:0.57rem;color:' + col + ';padding:2px 4px;word-break:break-word;">' + step + '</div>';
+      });
+    } else {
+      inner += dRow('Path', 'No scan performed — run Scan Social or Deep Scan first.');
+    }
+    if (respCodes.length) inner += dRow('HTTP Codes', respCodes.join(', '));
+    if (postCounts.length) inner += dRow('Raw Counts', postCounts.join(', ') + ' (per provider attempt)');
+
+    /* ── 3. Queries Used ── */
+    inner += dTitle('fa-magnifying-glass', 'Query Used');
+    inner += dRow('Query Key', usedQ);
+    inner += dRow('Query Value', qval ? '"' + qval + '"' : '—');
+    if (sd && sd.queries_used) {
+      var qAvail = Object.keys(sd.queries_used).filter(function(k){ return sd.queries_used[k]; }).map(function(k){ return k + '="' + sd.queries_used[k] + '"'; }).join(', ');
+      if (qAvail) inner += dRow('All Queries Available', qAvail);
+    }
+
+    /* ── 4. Results ── */
+    inner += dTitle('fa-chart-bar', 'Scan Results');
+    inner += dRow('X/Twitter Posts', '<span style="color:' + (xCnt>0?'#00e676':'#ff9800') + ';">' + xCnt + '</span>');
+    inner += dRow('Reddit Posts', '<span style="color:' + (rdCnt>0?'#00e676':'#ff9800') + ';">' + rdCnt + '</span>');
+    if (xCnt > 0) {
+      inner += dRow('Total Likes (batch)', totalLikes.toLocaleString());
+      inner += dRow('Total Retweets (batch)', totalRt.toLocaleString());
+      inner += dRow('Avg Likes/Post', xCnt > 0 ? (totalLikes/xCnt).toFixed(1) : '—');
+      if (topTweet) {
+        inner += dRow('Top Author', topTweet.author ? '@' + topTweet.author : '—');
+        inner += dRow('Top Post ❤', (topTweet.likes||0).toLocaleString() + ' likes · ' + (topTweet.retweets||0).toLocaleString() + ' RT');
+      }
+    }
+    if (raw && raw.scanTs) {
+      inner += dRow('Scanned At', new Date(raw.scanTs).toLocaleTimeString());
+      inner += dRow('Scan Type', raw.isDeep ? 'Deep Scan (50 posts)' : 'Quick Scan (15 posts)');
+    }
+
+    /* ── 5. Errors ── */
+    if (errs.length > 0) {
+      inner += dTitle('fa-circle-exclamation', 'Errors');
+      errs.forEach(function(e) {
+        inner += '<div style="font-size:0.57rem;color:#ff9800;padding:2px 4px;word-break:break-word;">⚠ ' + e + '</div>';
+      });
+    }
+    if (!xRes && !rdRes) {
+      inner += '<div style="font-size:0.57rem;color:var(--text-muted);font-style:italic;margin-top:4px;">No social scan has been performed yet. Click Scan Social or Deep Scan to populate real data.</div>';
+    }
+
+    var hasData = xRes || rdRes;
+    var summaryText = hasData
+      ? 'Mode: ' + attMode + ' · X: ' + xCnt + ' · Reddit: ' + rdCnt + ' · Provider: ' + prov
+      : 'No scan data';
+    var diagColor = attMode === 'FULL SOCIAL' ? '#00ffcc' : attMode === 'PARTIAL SOCIAL' ? '#ffeb3b' : 'var(--text-muted)';
+
     return '<details style="margin-top:10px;">' +
-      '<summary style="cursor:pointer;font-size:0.60rem;color:var(--text-muted);' +
-      'letter-spacing:0.5px;user-select:none;outline:none;">' +
-      '<i class="fa-solid fa-stethoscope" style="margin-right:5px;"></i>Attention Diagnostics</summary>' +
-      '<div style="margin-top:6px;padding:8px 10px;background:rgba(0,0,0,0.25);' +
-      'border-radius:6px;border-left:2px solid rgba(255,255,255,0.08);display:flex;' +
-      'flex-direction:column;gap:4px;">' + innerRows + '</div></details>';
+      '<summary style="cursor:pointer;font-size:0.61rem;color:' + diagColor + ';' +
+      'letter-spacing:0.5px;user-select:none;outline:none;display:flex;align-items:center;gap:6px;">' +
+      '<i class="fa-solid fa-stethoscope"></i>' +
+      '<span style="font-weight:700;">Social Scan Diagnostics</span>' +
+      '<span style="font-size:0.56rem;color:var(--text-muted);font-weight:400;">— ' + summaryText + '</span>' +
+      '</summary>' +
+      '<div style="margin-top:8px;padding:10px 12px;background:rgba(0,0,0,0.3);' +
+      'border-radius:6px;border-left:2px solid ' + diagColor + '55;display:flex;' +
+      'flex-direction:column;gap:1px;">' + inner + '</div></details>';
   })();
 
   return '<div class="briefing-section">' +
@@ -8171,6 +8496,9 @@ async function runSocialScan(isDeep) {
 
   socialScanSetBusy(true);
   socialScanSetStatus('<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Scanning X/Twitter' + (isDeep ? ' (deep — 50 posts)' : '') + '…', 'var(--accent-cyan)');
+  /* Reset provider badge while scanning */
+  var _spBadge = el('socialProviderBadge');
+  if (_spBadge) { _spBadge.innerHTML = ''; _spBadge.style.display = 'none'; }
 
   /* Open social panel */
   var panel = el('socialDataPanel');
@@ -8255,6 +8583,131 @@ async function runSocialScan(isDeep) {
   } else {
     socialScanSetStatus('<i class="fa-solid fa-circle-check" style="color:#00e676;margin-right:5px;"></i>' + parts.join(' · ') + errHTML, '#00e676');
   }
+
+  /* ── Render real-time Social Provider Badge ── */
+  (function() {
+    var badgeEl = el('socialProviderBadge');
+    if (!badgeEl) return;
+    var diag = xResult.diagnostics || {};
+    var fp   = (diag.fallback_path || []);
+    var tried = (diag.providers_tried || []);
+    var succeeded = (diag.providers_succeeded || []);
+    var respCodes = (diag.response_codes || []);
+    var postCounts = (diag.post_counts || []);
+    var errs = (diag.errors || []);
+    var provUsed = (xResult.ok && xResult.provider) || null;
+
+    /* ── Engagement stats from bulk response (no extra API calls) ── */
+    var tweets = xResult.tweets || [];
+    var totalLikes = 0, totalRt = 0, topLikes = 0, topRt = 0;
+    var topAuthor = '—', topTweet = null;
+    tweets.forEach(function(t) {
+      totalLikes += (t.likes    || 0);
+      totalRt    += (t.retweets || 0);
+      var eng = (t.likes||0) + (t.retweets||0)*2;
+      var topEng = (topTweet ? ((topTweet.likes||0)+(topTweet.retweets||0)*2) : 0);
+      if (eng > topEng) { topTweet = t; }
+    });
+    if (topTweet) {
+      topLikes  = topTweet.likes    || 0;
+      topRt     = topTweet.retweets || 0;
+      topAuthor = topTweet.author   ? ('@' + topTweet.author) : '—';
+    }
+    var avgLikes = xCount > 0 ? (totalLikes / xCount).toFixed(1) : 0;
+    var avgRt    = xCount > 0 ? (totalRt    / xCount).toFixed(1) : 0;
+
+    var html = '<div style="padding:8px 10px;background:rgba(0,0,0,0.25);border-radius:6px;border:1px solid rgba(255,255,255,0.08);font-size:0.60rem;">';
+
+    /* ── Header ── */
+    var scanTypeLabel = isDeep ? 'Deep Scan' : 'Quick Scan';
+    var scanTs = new Date().toLocaleTimeString();
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.07);">';
+    html += '<div style="font-size:0.62rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.8px;text-transform:uppercase;"><i class="fa-solid fa-satellite-dish" style="margin-right:5px;"></i>Social Scan Result</div>';
+    html += '<div style="font-size:0.55rem;color:var(--text-muted);">' + scanTypeLabel + ' · ' + scanTs + '</div>';
+    html += '</div>';
+
+    /* ── Provider Chain ── */
+    html += '<div style="font-size:0.58rem;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:5px;">Provider Chain</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px;">';
+    if (fp.length > 0) {
+      fp.forEach(function(step) {
+        var isOk = step.charAt(0) === '✓';
+        var isWarn = step.charAt(0) === '⚠';
+        var isFail = step.charAt(0) === '✗';
+        var stepColor = isOk ? '#00e676' : isWarn ? '#ff9800' : '#ff4757';
+        html += '<div style="font-size:0.59rem;color:' + stepColor + ';padding:2px 6px;background:rgba(0,0,0,0.15);border-radius:3px;word-break:break-word;">' + step + '</div>';
+      });
+    } else if (!hasX) {
+      html += '<div style="font-size:0.59rem;color:#ff9800;">No X API keys configured — add TwitterAPI.io, GetXAPI, or Apify key in Settings.</div>';
+    } else {
+      html += '<div style="font-size:0.59rem;color:var(--text-muted);">No provider response logged.</div>';
+    }
+    html += '</div>';
+
+    /* ── Results Summary ── */
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:8px;">';
+    var mkMetric = function(label, val, col) {
+      return '<div style="padding:5px 7px;background:rgba(0,0,0,0.2);border-radius:4px;">' +
+        '<div style="font-size:0.53rem;color:var(--text-muted);font-weight:700;letter-spacing:0.6px;">' + label + '</div>' +
+        '<div style="font-size:0.78rem;font-weight:700;color:' + (col||'var(--text-primary)') + ';">' + val + '</div>' +
+        '</div>';
+    };
+    html += mkMetric('X Posts', xCount > 0 ? '<span style="color:#00e676;">'+xCount+'</span>' : '<span style="color:#ff9800;">0</span>');
+    html += mkMetric('Reddit', rdCount > 0 ? '<span style="color:#00e676;">'+rdCount+'</span>' : '0');
+    if (xCount > 0) {
+      html += mkMetric('Avg ❤', avgLikes);
+      html += mkMetric('Avg RT', avgRt);
+    }
+    html += '</div>';
+
+    /* ── Top Post Engagement (from bulk response data only) ── */
+    if (topTweet && xCount > 0) {
+      html += '<div style="font-size:0.58rem;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:4px;">Top Engagement Post (from scan)</div>';
+      html += '<div style="padding:6px 8px;background:rgba(29,161,242,0.06);border:1px solid rgba(29,161,242,0.15);border-radius:4px;margin-bottom:8px;">';
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px;">';
+      html += '<span style="font-size:0.62rem;font-weight:700;color:#1DA1F2;">' + topAuthor + '</span>';
+      html += '<span style="font-size:0.56rem;color:#ff9800;">❤ ' + topLikes.toLocaleString() + '</span>';
+      html += '<span style="font-size:0.56rem;color:#4fc3f7;">⟳ ' + topRt.toLocaleString() + '</span>';
+      html += '</div>';
+      if (topTweet.text) {
+        var previewText = topTweet.text.slice(0, 160) + (topTweet.text.length > 160 ? '…' : '');
+        html += '<div style="font-size:0.56rem;color:rgba(255,255,255,0.45);line-height:1.4;word-break:break-word;">' + previewText.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+      }
+      html += '</div>';
+    }
+
+    /* ── Scan Diagnostics ── */
+    html += '<details style="margin-top:2px;">';
+    html += '<summary style="cursor:pointer;font-size:0.58rem;color:var(--text-muted);user-select:none;outline:none;">';
+    html += '<i class="fa-solid fa-stethoscope" style="margin-right:4px;"></i>Scan Diagnostics</summary>';
+    html += '<div style="margin-top:6px;padding:8px;background:rgba(0,0,0,0.25);border-radius:5px;border-left:2px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:3px;">';
+
+    var mkDiagRow = function(l, v) {
+      return '<div style="display:flex;gap:5px;align-items:flex-start;flex-wrap:wrap;min-width:0;">' +
+        '<span style="color:var(--text-muted);font-size:0.56rem;min-width:100px;flex-shrink:0;">' + l + ':</span>' +
+        '<span style="font-size:0.56rem;word-break:break-all;min-width:0;">' + (v||'—') + '</span></div>';
+    };
+
+    html += mkDiagRow('Query Used', (xResult.usedQuery || '—') + (xResult.queryValue ? ' ("' + xResult.queryValue + '")' : ''));
+    html += mkDiagRow('Providers Tried', tried.length ? tried.join(' → ') : '—');
+    html += mkDiagRow('Provider Success', succeeded.length ? succeeded.join(', ') : 'None');
+    html += mkDiagRow('X Posts Retrieved', String(xCount) + ' of ' + xLimit + ' requested');
+    html += mkDiagRow('Reddit Posts', String(rdCount) + ' of ' + rdLimit + ' requested');
+    if (respCodes.length) html += mkDiagRow('HTTP Status Codes', respCodes.join(', '));
+    if (postCounts.length) html += mkDiagRow('Raw Post Counts', postCounts.join(', ') + ' (per provider attempt)');
+    if (errs.length) {
+      html += mkDiagRow('Errors', '<span style="color:#ff9800;">' + errs.join(' | ') + '</span>');
+    }
+    if (isIncremental) html += mkDiagRow('Scan Type', 'Incremental — only posts since last scan timestamp');
+    html += mkDiagRow('Total Likes (batch)', totalLikes.toLocaleString());
+    html += mkDiagRow('Total Retweets (batch)', totalRt.toLocaleString());
+
+    html += '</div></details>';
+    html += '</div>';
+
+    badgeEl.innerHTML = html;
+    badgeEl.style.display = '';
+  })();
 
   socialScanSetBusy(false);
 }

@@ -1,3 +1,4 @@
 - [HINT MODE refactor](hint-mode-refactor.md) — Three-mode engine (STRUCTURE/HINT/FLOW), trigger logic, data sources, tier caps, and all fallback injection points.
 - [Social Intelligence Engine](social-intelligence-engine.md) — Three-mode Attention Briefing (FULL SOCIAL/PARTIAL SOCIAL/PROXY), blending logic, scoring weights, history store.
 - [Backend Proxy Architecture](backend-proxy.md) — Social scan moved to Vercel serverless (api/social-scan.js); local dev via server.js (node server.js); DexScreener has no public OHLCV API.
+- [Structure Diagnostics State](structure-diagnostics-state.md) — Extended globals (_tecGtCandleCount, _tecGtTimeRange, _tecGtResolution, _tecGtTokenAddr, _tecGtPoolAddr, _tecGtPairAddr, _tecGtError, _tecEngineReason) stored during fetchData; read in _strucDiag IIFE inside buildEntryBriefingHTML.
