@@ -1,0 +1,28 @@
+
+EDITS:
+
+ATTENTION BRIEFING ENGINE: 
+
+Add a collapsible Post/Tweet Preview pane under each social scan category (X, Telegram, Reddit) which will show the tweets/posts fetched so I can see for myself if these tweets/posts are actually related to the scanned coin. 
+There will be the option to select or deselect the tweets/posts in the preview pane; the deselected/unticked/unchecked tweets/posts will be marked as unrelated to the coin in question and not be factored into the Attention briefing calculation. 
+The tweets/posts should be saved in the Social Scan history panel so that I can identify and deselect  and avoid re-analyzing duplicate tweets/posts that have already been analyzed.
+Each tweet/post will be clickable (preferably, or have links) and, when clicked, will redirect me to X/Reddit so I can see the entire tweet/post for myself.  The fetching of the tweets/posts themselves as well as the other metrics (unique accounts, engagement metrics etc) already being fetched in the social scan engine should all be done in the same single API call per scan, to avoid wasting API credits/resources. Get all the required information per single scan (20 tweets and their metrics, as required in the engine). 
+In the API Budget settings in Global settings, add the option to adjust the already used budget (for each API), in case I’m starting the month with a budget from which I’ve already used some credits/$.  
+
+
+
+STRUCTURE BRIEFING ENGINE: 
+Hint Mode is capped at Tier C. The code explicitly states:
+"Max confidence tier: C (OHLCV required for A/B/S)." 
+"OHLCV unavailable, max tier C" �\
+trading-entry-checker (1).html
+Flow Mode is capped at Tier B. The code explicitly states:
+"Maximum confidence tier: B." 
+And the scoring logic hard-caps the Flow Mode score at 79, preventing both A (80+) and S (90+) tiers:
+"hard cap — S(≥90) and A(≥80) not available in Flow Mode"
+
+This doesn't make sense 
+Switch the score capping system for Hint and Flow Modes to: 
+Hint Mode: Maximum confidence tier: B [OHLCV unavailable]
+Flow Mode (the last fallback option): Maximum confidence tier: C
+

@@ -1465,6 +1465,27 @@ p, span, td, th {
             </div>
           </div>
           <div style="margin-top:8px;" id="monthlySpendDisplay"></div>
+          <!-- Starting spend adjustment -->
+          <div style="margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:0.52rem;color:var(--text-muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;">Adjust Starting Spend <span style="font-weight:400;text-transform:none;">— set if you've already used budget this month</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:flex-end;">
+              <div>
+                <label class="settings-label">TwitterAPI.io ($)</label>
+                <input class="settings-input" type="number" id="sSpendTw" value="0" min="0" step="0.0001" placeholder="0.0000">
+              </div>
+              <div>
+                <label class="settings-label">GetXAPI ($)</label>
+                <input class="settings-input" type="number" id="sSpendGx" value="0" min="0" step="0.0001" placeholder="0.0000">
+              </div>
+              <div>
+                <label class="settings-label">Apify ($)</label>
+                <input class="settings-input" type="number" id="sSpendAp" value="0" min="0" step="0.0001" placeholder="0.0000">
+              </div>
+              <div>
+                <button class="btn btn-secondary btn-sm" onclick="setMonthlySpendManual()" style="white-space:nowrap;" title="Override current month spend with these values">Set</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <!-- ── END SOCIAL PROVIDER CONTROL ──────────────────────────────── -->
@@ -2532,6 +2553,57 @@ function renderMonthlySpendDisplay() {
     bar('Apify',         spend.apify,      bAp);
 }
 
+function setMonthlySpendManual() {
+  var tw = parseFloat((el('sSpendTw') || {}).value || '0') || 0;
+  var gx = parseFloat((el('sSpendGx') || {}).value || '0') || 0;
+  var ap = parseFloat((el('sSpendAp') || {}).value || '0') || 0;
+  var spend = getMonthlySpend();
+  spend.twitterapi = Math.max(0, Math.round(tw * 1e6) / 1e6);
+  spend.getxapi    = Math.max(0, Math.round(gx * 1e6) / 1e6);
+  spend.apify      = Math.max(0, Math.round(ap * 1e6) / 1e6);
+  try { localStorage.setItem('tec_monthly_spend', JSON.stringify(spend)); } catch(_) {}
+  renderMonthlySpendDisplay();
+}
+
+/* ── Post Exclusion System (Tweet/Reddit preview checkboxes) ── */
+var TEC_EXCL_KEY = 'tec_excluded_posts';
+function tecGetExcluded() {
+  try { return new Set(JSON.parse(localStorage.getItem(TEC_EXCL_KEY) || '[]')); }
+  catch(_) { return new Set(); }
+}
+function tecSetExcluded(s) {
+  try { localStorage.setItem(TEC_EXCL_KEY, JSON.stringify([...s])); } catch(_) {}
+}
+function tecTogglePost(id) {
+  var ex = tecGetExcluded();
+  if (ex.has(id)) ex.delete(id); else ex.add(id);
+  tecSetExcluded(ex);
+  var row = document.getElementById('tecPost_' + id);
+  if (row) row.style.opacity = ex.has(id) ? '0.35' : '1';
+  var cb  = document.getElementById('tecPostCb_' + id);
+  if (cb) cb.checked = !ex.has(id);
+  /* Update excluded counter badges */
+  ['tecXExclBadge', 'tecRdExclBadge'].forEach(function(bid) {
+    var badge = document.getElementById(bid);
+    if (!badge) return;
+    var prefix  = bid === 'tecXExclBadge' ? 'tecXPost_' : 'tecRdPost_';
+    var allRows = document.querySelectorAll('[id^="' + prefix + '"]');
+    var cnt = 0;
+    allRows.forEach(function(r) { if (r.style.opacity === '0.35') cnt++; });
+    badge.textContent = cnt > 0 ? cnt + ' excluded' : '';
+    badge.style.display = cnt > 0 ? '' : 'none';
+  });
+  var reBtn = document.getElementById('tecRecomputeBtn');
+  if (reBtn) {
+    var anyExcl = document.querySelector('[id^="tecXPost_"][style*="opacity: 0.35"], [id^="tecRdPost_"][style*="opacity: 0.35"]');
+    reBtn.style.display = anyExcl ? '' : 'none';
+  }
+}
+function tecApplyPostExclusions() {
+  var btn = document.getElementById('analyzeBtn');
+  if (btn) btn.click();
+}
+
 function cleanText(str) {
   if (!str) return '';
   return str
@@ -3429,7 +3501,7 @@ async function fetchFromCA(ca) {
         'Entry Range: ' + formatUSD(_hint.entryRangeLow) + ' – ' + formatUSD(_hint.entryRangeHigh) + '. ' +
         'Floor confidence: ' + _hint.floorStrength + '. ' +
         'Data used: ' + _hintSources + '. ' +
-        'Max confidence tier: C (OHLCV required for A/B/S).');
+        'Max confidence tier: B (OHLCV required for A/S).');
     } else {
       window._tecDataAvailability.txHistory = !!(window._tecDexTxns &&
         (window._tecDexTxns.h1 || window._tecDexTxns.m5));
@@ -5522,11 +5594,12 @@ function computeHintStructure(fetched) {
   }
   var totalW   = rawWeights.reduce(function(s,w){return s+w;},0);
   var rawScore = rawInputs.reduce(function(s,v,i){return s+v*rawWeights[i];},0) / (totalW || 1);
-  var hintTierScore = Math.min(Math.round(rawScore), 64); /* cap: A/B/S not available */
+  var hintTierScore = Math.min(Math.round(rawScore), 79); /* cap: A/S not available — B is max in Hint Mode */
   var hintTier, hintTierLabel, hintTierColor;
-  if      (hintTierScore >= 55) { hintTier = 'C'; hintTierLabel = 'Speculative Setup';   hintTierColor = '#ffeb3b'; }
-  else if (hintTierScore >= 40) { hintTier = 'D'; hintTierLabel = 'Below Average Setup'; hintTierColor = '#ff9800'; }
-  else                          { hintTier = 'F'; hintTierLabel = 'Weak Setup';           hintTierColor = '#ff4757'; }
+  if      (hintTierScore >= 65) { hintTier = 'B'; hintTierLabel = 'Tradable Setup';       hintTierColor = '#ffeb3b'; }
+  else if (hintTierScore >= 50) { hintTier = 'C'; hintTierLabel = 'Speculative Setup';    hintTierColor = '#ff9800'; }
+  else if (hintTierScore >= 35) { hintTier = 'D'; hintTierLabel = 'Below Average Setup';  hintTierColor = '#ff4757'; }
+  else                          { hintTier = 'F'; hintTierLabel = 'Weak Setup';            hintTierColor = '#ff4757'; }
 
   /* ── Runner potential (low confidence) ── */
   var hintRunner   = rawScore >= 68 ? 'Moderate' : rawScore >= 52 ? 'Low-Moderate' : 'Low';
@@ -7077,7 +7150,7 @@ function buildEntryBriefingHTML(d, analysis) {
           t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + hs.hintTierColor + ';background:rgba(0,0,0,0.2);">';
           t += 'Confidence Tier (Hint): <strong style="color:' + hs.hintTierColor + ';font-size:1.15em;letter-spacing:2px;">' + hs.hintTier + '</strong>';
           t += ' &nbsp;<strong style="color:' + hs.hintTierColor + ';">' + hs.hintTierLabel + '</strong>';
-          t += '<br><span style="color:#ff9800;font-size:0.68rem;font-style:italic;">A/B/S tiers require OHLCV candle data. Maximum tier in Hint Mode: C.</span>';
+          t += '<br><span style="color:#ff9800;font-size:0.68rem;font-style:italic;">A/S tiers require OHLCV candle data. Maximum tier in Hint Mode: B.</span>';
           t += '</div>';
 
         /* ═══════════════════════════════════════════════════════
@@ -7176,15 +7249,15 @@ function buildEntryBriefingHTML(d, analysis) {
           if (fDeScore !== undefined) { fTierInput += fDeScore;  fTierN++; }
           if (tps)                    { fTierInput += tps.score; fTierN++; }
           var fTierRaw   = fTierN > 0 ? Math.round(fTierInput / fTierN) : 0;
-          var fTierScore = Math.min(fTierRaw, 79); /* hard cap — S(≥90) and A(≥80) not available in Flow Mode */
+          var fTierScore = Math.min(fTierRaw, 64); /* hard cap — S(≥90), A(≥80) and B(≥65) not available in Flow Mode */
           var fTier, fTierLabel, fTierColor;
-          if      (fTierScore >= 65) { fTier = 'B'; fTierLabel = 'Tradable Setup';  fTierColor = '#ffeb3b'; }
-          else if (fTierScore >= 50) { fTier = 'C'; fTierLabel = 'Speculative';     fTierColor = '#ff9800'; }
+          if      (fTierScore >= 55) { fTier = 'C'; fTierLabel = 'Speculative';     fTierColor = '#ff9800'; }
+          else if (fTierScore >= 40) { fTier = 'D'; fTierLabel = 'Avoid';           fTierColor = '#ff4757'; }
           else                       { fTier = 'D'; fTierLabel = 'Avoid';           fTierColor = '#ff4757'; }
           t += '<div style="margin-top:5px;padding:4px 8px;border-left:3px solid ' + fTierColor + ';background:rgba(0,0,0,0.2);">';
           t += 'Confidence Tier (Flow): <strong style="color:' + fTierColor + ';font-size:1.15em;letter-spacing:2px;">' + fTier + '</strong>';
           t += ' &nbsp;<strong style="color:' + fTierColor + ';">' + fTierLabel + '</strong>';
-          t += '<br><span style="color:#ff9800;font-size:0.68rem;font-style:italic;">S and A tiers unavailable in Flow Mode — insufficient structural data. Maximum: B tier.</span>';
+          t += '<br><span style="color:#ff9800;font-size:0.68rem;font-style:italic;">S, A and B tiers unavailable in Flow Mode — insufficient structural data. Maximum: C tier.</span>';
           t += '</div>';
 
           /* Final Flow Mode warning */
@@ -7311,11 +7384,11 @@ function buildEntryBriefingHTML(d, analysis) {
       tierC   = hs.hintTierColor  || '#ffeb3b';
       tierVal = hs.hintTier       || 'C';
       tierSc  = (hs.hintTierScore !== undefined && hs.hintTierScore !== null) ? hs.hintTierScore : '—';
-      tierLbl = (hs.hintTierLabel || 'Estimated Setup') + ' \u2014 OHLCV unavailable, max tier C';
+      tierLbl = (hs.hintTierLabel || 'Estimated Setup') + ' \u2014 OHLCV unavailable, max tier B';
       verdC   = '#ff9800'; verdLbl = 'HINT MODE';
     } else {
-      tierC = '#ff4757'; tierVal = 'B'; tierSc = '—';
-      tierLbl = 'OHLCV unavailable — capped at B'; verdC = '#ff4757'; verdLbl = 'FLOW MODE';
+      tierC = '#ff4757'; tierVal = 'C'; tierSc = '—';
+      tierLbl = 'OHLCV unavailable — capped at C'; verdC = '#ff4757'; verdLbl = 'FLOW MODE';
     }
     var t = '<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:stretch;">';
     t += '<div style="min-width:110px;padding:8px 14px;border-left:4px solid '+tierC+';background:rgba(0,0,0,0.28);border-radius:4px;flex-shrink:0;">';
@@ -7376,7 +7449,7 @@ function buildEntryBriefingHTML(d, analysis) {
       if (hs.volSignal) t += '<div style="font-size:0.67rem;color:var(--text-muted);">Volume: <strong style="color:' + (hs.volColor || 'var(--text-muted)') + ';">' + hs.volSignal + '</strong></div>';
       if (hs.holderTrend) t += '<div style="font-size:0.67rem;color:var(--text-muted);">Holders: <strong style="color:' + (hs.holderColor || 'var(--text-muted)') + ';">' + hs.holderTrend + '</strong></div>';
       t += '</div>';
-      t += '<div style="margin-top:5px;font-size:0.62rem;color:rgba(255,255,255,0.38);">OHLCV candles unavailable — checklist requires 15m candle data. Estimates based on MC price history, LP depth, and transaction data. Max confidence tier: C.</div>';
+      t += '<div style="margin-top:5px;font-size:0.62rem;color:rgba(255,255,255,0.38);">OHLCV candles unavailable — checklist requires 15m candle data. Estimates based on MC price history, LP depth, and transaction data. Max confidence tier: B.</div>';
       t += '</div>';
     } else if (_em === 'FLOW') {
       t += '<span style="color:#ff9800;font-size:0.72rem;">⚡ Flow Mode active — Structure Checklist requires OHLCV candle data. Fetch Data to attempt candle retrieval from GeckoTerminal or DEX Screener.</span>';
@@ -7845,9 +7918,19 @@ function computeAttentionBriefing(d, analysis) {
 
   /* ── Mention Density — how tightly clustered in time ── */
   var mentionDensityLabel = null, mentionDensityColor = 'var(--text-muted)', mentionDensityRatio = 0;
+  /* ── Apply post exclusions before density/concentration scoring ── */
+  var _excluded = typeof tecGetExcluded === 'function' ? tecGetExcluded() : new Set();
+  var _xTweetsF = (_rawX  && _rawX.tweets ) ? _rawX.tweets.filter( function(t){ return !_excluded.has(String(t.id  ||'')); }) : [];
+  var _rdPostsF = (_rawRd && _rawRd.posts  ) ? _rawRd.posts.filter( function(p){ return !_excluded.has(String(p.id||p.name||'')); }) : [];
+  var _xTsF     = _xTweetsF.map(function(t){ return t.ts; }).filter(Boolean);
+  var _rdTsF    = _rdPostsF.map(function(p){ return p.ts||(p.created_utc?p.created_utc*1000:null); }).filter(Boolean);
+  var _xAuthF = {}, _rdAuthF = {};
+  _xTweetsF.forEach(function(t){ if(t.author){ _xAuthF[t.author]  = (_xAuthF[t.author] ||0)+1; }});
+  _rdPostsF.forEach(function(p){ if(p.author){ _rdAuthF[p.author] = (_rdAuthF[p.author]||0)+1; }});
+
   var _allTs = [];
-  if (_rawX  && _rawX.timestamps)  _allTs = _allTs.concat(_rawX.timestamps);
-  if (_rawRd && _rawRd.timestamps) _allTs = _allTs.concat(_rawRd.timestamps);
+  _allTs = _allTs.concat(_xTsF.length  ? _xTsF  : (_rawX  && _rawX.timestamps  ? _rawX.timestamps  : []));
+  _allTs = _allTs.concat(_rdTsF.length ? _rdTsF : (_rawRd && _rawRd.timestamps ? _rawRd.timestamps : []));
   if (_allTs.length >= 1) {
     if (_allTs.length === 1) {
       mentionDensityLabel = 'VERY HIGH'; mentionDensityColor = '#00ffcc';
@@ -7868,8 +7951,14 @@ function computeAttentionBriefing(d, analysis) {
   var authorConcentrationLabel = null, authorConcentrationRatio = 0;
   var authorConcentrationColor = 'var(--text-muted)', authorConcentrationPenalty = 0;
   var _allAuthors = {};
-  if (_rawX  && _rawX.authorMap)  Object.keys(_rawX.authorMap).forEach(function(a) { _allAuthors[a] = (_allAuthors[a] || 0) + _rawX.authorMap[a]; });
-  if (_rawRd && _rawRd.authorMap) Object.keys(_rawRd.authorMap).forEach(function(a) { _allAuthors[a] = (_allAuthors[a] || 0) + _rawRd.authorMap[a]; });
+  /* Use filtered author maps (respects post exclusions) */
+  Object.keys(_xAuthF).forEach( function(a) { _allAuthors[a] = (_allAuthors[a]||0) + _xAuthF[a];  });
+  Object.keys(_rdAuthF).forEach(function(a) { _allAuthors[a] = (_allAuthors[a]||0) + _rdAuthF[a]; });
+  /* Fallback to pre-built maps when no tweet objects are available */
+  if (!Object.keys(_allAuthors).length) {
+    if (_rawX  && _rawX.authorMap)  Object.keys(_rawX.authorMap).forEach( function(a) { _allAuthors[a] = (_allAuthors[a]||0) + _rawX.authorMap[a];  });
+    if (_rawRd && _rawRd.authorMap) Object.keys(_rawRd.authorMap).forEach(function(a) { _allAuthors[a] = (_allAuthors[a]||0) + _rawRd.authorMap[a]; });
+  }
   var _authorKeys = Object.keys(_allAuthors);
   var _totAuthorMentions = _authorKeys.reduce(function(s, k) { return s + _allAuthors[k]; }, 0);
   if (_totAuthorMentions > 0) {
@@ -8442,9 +8531,89 @@ function buildAttentionBriefingHTML(d, analysis) {
       'flex-direction:column;gap:1px;">' + inner + '</div></details>';
   })();
 
+  /* ── Post Preview Pane ── */
+  var _postPreview = (function() {
+    var _xTw = (window._tecSocialRaw && window._tecSocialRaw.x && window._tecSocialRaw.x.tweets) ? window._tecSocialRaw.x.tweets : [];
+    var _rdP = (window._tecSocialRaw && window._tecSocialRaw.reddit && window._tecSocialRaw.reddit.posts) ? window._tecSocialRaw.reddit.posts : [];
+    if (!_xTw.length && !_rdP.length) return '';
+    var _ex  = typeof tecGetExcluded === 'function' ? tecGetExcluded() : new Set();
+    var _now = Date.now();
+    function tAgo(ts) {
+      if (!ts) return '';
+      var d = Math.floor((_now - ts) / 1000);
+      return d < 60 ? d+'s' : d < 3600 ? Math.floor(d/60)+'m' : d < 86400 ? Math.floor(d/3600)+'h' : Math.floor(d/86400)+'d';
+    }
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    var out = '<div style="margin-bottom:10px;padding:8px 10px;background:rgba(0,0,0,0.18);border-radius:5px;border:1px solid rgba(0,212,255,0.12);">' +
+      '<div style="font-size:0.58rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:7px;">' +
+      '<i class="fa-solid fa-eye" style="margin-right:5px;"></i>Post Preview — uncheck to exclude from scoring</div>';
+    var anyExcl = false;
+    if (_xTw.length) {
+      var xExc = _xTw.filter(function(t){ return _ex.has(String(t.id||'')); }).length;
+      if (xExc) anyExcl = true;
+      out += '<details style="margin-bottom:5px;">' +
+        '<summary style="cursor:pointer;list-style:none;font-size:0.60rem;font-weight:700;color:#1DA1F2;user-select:none;display:flex;align-items:center;gap:7px;padding:3px 0;">' +
+        '<i class="fa-brands fa-x-twitter"></i> X / Twitter Posts (' + _xTw.length + ')' +
+        ' <span id="tecXExclBadge" style="font-size:0.54rem;color:#ff9800;font-weight:600;' + (xExc?'':'display:none;') + '">' + (xExc?xExc+' excluded':'') + '</span>' +
+        ' <span style="font-size:0.51rem;color:var(--text-muted);font-weight:400;">▸ expand</span></summary>' +
+        '<div style="display:flex;flex-direction:column;gap:3px;margin-top:5px;">';
+      _xTw.forEach(function(t) {
+        var tid = String(t.id||''); var excl = _ex.has(tid);
+        var xUrl = (t.author&&tid)?'https://x.com/'+t.author+'/status/'+tid:(tid?'https://x.com/i/web/status/'+tid:'#');
+        var prev = esc((t.text||'').slice(0,140))+((t.text||'').length>140?'…':'');
+        var ta = tAgo(t.ts);
+        out += '<div id="tecXPost_'+tid+'" style="display:flex;gap:7px;align-items:flex-start;padding:5px 7px;background:rgba(29,161,242,0.05);border-radius:4px;border-left:2px solid rgba(29,161,242,'+(excl?'0.15':'0.40')+');opacity:'+(excl?'0.38':'1')+';transition:opacity .15s;">' +
+          '<input type="checkbox" id="tecPostCb_'+tid+'" '+(excl?'':'checked')+' onchange="tecTogglePost(\''+tid+'\')" style="margin-top:3px;flex-shrink:0;accent-color:#1DA1F2;cursor:pointer;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px;">' +
+              '<a href="'+xUrl+'" target="_blank" rel="noopener" style="font-size:0.60rem;font-weight:700;color:#1DA1F2;text-decoration:none;">@'+esc(t.author||'?')+'</a>' +
+              (ta?'<span style="font-size:0.51rem;color:var(--text-muted);">'+ta+' ago</span>':'') +
+              (((t.likes||0)>0||(t.retweets||0)>0)?'<span style="font-size:0.51rem;color:var(--text-muted);">❤ '+(t.likes||0)+' · 🔁 '+(t.retweets||0)+'</span>':'') +
+            '</div>' +
+            '<div style="font-size:0.60rem;color:rgba(255,255,255,0.60);line-height:1.4;word-break:break-word;">'+prev+'</div>' +
+          '</div></div>';
+      });
+      out += '</div></details>';
+    }
+    if (_rdP.length) {
+      var rdExc = _rdP.filter(function(p){ return _ex.has(String(p.id||p.name||'')); }).length;
+      if (rdExc) anyExcl = true;
+      out += '<details style="margin-bottom:5px;">' +
+        '<summary style="cursor:pointer;list-style:none;font-size:0.60rem;font-weight:700;color:#FF4500;user-select:none;display:flex;align-items:center;gap:7px;padding:3px 0;">' +
+        '<i class="fa-brands fa-reddit-alien"></i> Reddit Posts (' + _rdP.length + ')' +
+        ' <span id="tecRdExclBadge" style="font-size:0.54rem;color:#ff9800;font-weight:600;' + (rdExc?'':'display:none;') + '">' + (rdExc?rdExc+' excluded':'') + '</span>' +
+        ' <span style="font-size:0.51rem;color:var(--text-muted);font-weight:400;">▸ expand</span></summary>' +
+        '<div style="display:flex;flex-direction:column;gap:3px;margin-top:5px;">';
+      _rdP.forEach(function(p) {
+        var pid = String(p.id||p.name||''); var excl = _ex.has(pid);
+        var rdUrl = p.permalink?'https://reddit.com'+p.permalink:(p.url||'#');
+        var prev = esc((p.title||p.selftext||p.text||'').slice(0,140));
+        var ta = tAgo(p.ts||(p.created_utc?p.created_utc*1000:null));
+        out += '<div id="tecRdPost_'+pid+'" style="display:flex;gap:7px;align-items:flex-start;padding:5px 7px;background:rgba(255,69,0,0.05);border-radius:4px;border-left:2px solid rgba(255,69,0,'+(excl?'0.15':'0.40')+');opacity:'+(excl?'0.38':'1')+';transition:opacity .15s;">' +
+          '<input type="checkbox" id="tecPostCb_'+pid+'" '+(excl?'':'checked')+' onchange="tecTogglePost(\''+pid+'\')" style="margin-top:3px;flex-shrink:0;accent-color:#FF4500;cursor:pointer;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px;">' +
+              '<a href="'+rdUrl+'" target="_blank" rel="noopener" style="font-size:0.60rem;font-weight:700;color:#FF4500;text-decoration:none;">u/'+esc(p.author||'?')+'</a>' +
+              (p.subreddit?'<span style="font-size:0.51rem;color:var(--text-muted);">r/'+esc(p.subreddit)+'</span>':'') +
+              (ta?'<span style="font-size:0.51rem;color:var(--text-muted);">'+ta+' ago</span>':'') +
+              ((p.score||0)>0?'<span style="font-size:0.51rem;color:var(--text-muted);">↑ '+(p.score||0)+'</span>':'') +
+            '</div>' +
+            (prev?'<div style="font-size:0.60rem;color:rgba(255,255,255,0.60);line-height:1.4;word-break:break-word;">'+prev+'</div>':'') +
+          '</div></div>';
+      });
+      out += '</div></details>';
+    }
+    if (anyExcl) {
+      out += '<button id="tecRecomputeBtn" onclick="tecApplyPostExclusions()" style="font-size:0.57rem;padding:3px 10px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.28);border-radius:4px;color:var(--accent-cyan);cursor:pointer;margin-top:2px;">↺ Recompute Briefing with Exclusions</button>';
+    }
+    out += '</div>';
+    return out;
+  })();
+
   return '<div class="briefing-section">' +
     '<div class="briefing-title"><i class="fa-solid fa-satellite-dish"></i> Attention Briefing</div>' +
     nt +
+    _postPreview +
     _attDiag +
     '</div>';
 }
@@ -8814,7 +8983,9 @@ async function runSocialScan(isDeep) {
     mentionDensityLabel: null, mentionDensityRatio: 0,
     authorConcLabel: null,
     xError:  (!xResult.ok && xResult.error) ? xResult.error : null,
-    rdError: (!rdResult.ok && rdResult.error) ? rdResult.error : null
+    rdError: (!rdResult.ok && rdResult.error) ? rdResult.error : null,
+    xTweets: (xResult.tweets  || []).slice(0, 50),
+    rdPosts: (rdResult.posts || []).slice(0, 30)
   });
 
   /* ── Build status message ── */
@@ -10892,9 +11063,9 @@ function buildSetupText(d, analysis) {
     }
   } else if (_sbHS) {
     lines.push('Confidence Tier: ' + _sbHS.hintTier + ' — ' + _sbHS.hintTierLabel + ' (Score: ' + _sbHS.hintTierScore + '/100)');
-    lines.push('Mode: HINT — Estimated structure (OHLCV unavailable, max tier C)');
+    lines.push('Mode: HINT — Estimated structure (OHLCV unavailable, max tier B)');
   } else {
-    lines.push('Mode: FLOW — No candle data. Floor estimates from LP depth and tx flow only (max tier B).');
+    lines.push('Mode: FLOW — No candle data. Floor estimates from LP depth and tx flow only (max tier C).');
   }
   lines.push('');
   var ageMin = analysis.ageMinutes;
@@ -13126,6 +13297,80 @@ function socialScanHistRender() {
           '<button onclick="socialScanHistClearOne('+e.id+')" style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:0.7rem;padding:2px 4px;line-height:1;" title="Remove">✕</button>' +
         '</div>' +
       '</div>' +
+      /* ── Saved Tweet/Post Preview ── */
+      (function() {
+        var xt = e.xTweets || [], rdp = e.rdPosts || [];
+        if (!xt.length && !rdp.length) return '';
+        var _ex = typeof tecGetExcluded === 'function' ? tecGetExcluded() : new Set();
+        /* Build set of all tweet IDs across all other history entries for duplicate detection */
+        var _dupMap = {};
+        _sshData.forEach(function(other) {
+          if (other.id === e.id) return;
+          (other.xTweets||[]).forEach(function(t){ _dupMap[String(t.id||'')] = true; });
+          (other.rdPosts||[]).forEach(function(p){ _dupMap[String(p.id||p.name||'')] = true; });
+        });
+        function tAgo(ts) {
+          if (!ts) return '';
+          var d = Math.floor((Date.now()-ts)/1000);
+          return d<60?d+'s':d<3600?Math.floor(d/60)+'m':d<86400?Math.floor(d/3600)+'h':Math.floor(d/86400)+'d';
+        }
+        function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+        var hp = '';
+        if (xt.length) {
+          hp += '<details style="margin-top:6px;">' +
+            '<summary style="cursor:pointer;list-style:none;font-size:0.57rem;font-weight:700;color:#1DA1F2;user-select:none;display:flex;align-items:center;gap:6px;padding:3px 0;">' +
+            '<i class="fa-brands fa-x-twitter"></i> X Posts ('+xt.length+') <span style="font-size:0.50rem;color:var(--text-muted);font-weight:400;">▸</span></summary>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;margin-top:4px;">';
+          xt.forEach(function(t) {
+            var tid = String(t.id||'');
+            var excl = _ex.has(tid);
+            var dup  = _dupMap[tid];
+            var xUrl = (t.author&&tid)?'https://x.com/'+t.author+'/status/'+tid:(tid?'https://x.com/i/web/status/'+tid:'#');
+            var prev = esc2((t.text||'').slice(0,100))+((t.text||'').length>100?'…':'');
+            var ta   = tAgo(t.ts);
+            hp += '<div style="display:flex;gap:6px;align-items:flex-start;padding:4px 6px;background:rgba(29,161,242,0.04);border-radius:3px;border-left:2px solid rgba(29,161,242,'+(excl?'0.12':'0.30')+');opacity:'+(excl?'0.4':'1')+';">' +
+              '<div style="flex:1;min-width:0;">' +
+                '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:1px;">' +
+                  '<a href="'+xUrl+'" target="_blank" rel="noopener" style="font-size:0.57rem;font-weight:700;color:#1DA1F2;text-decoration:none;">@'+esc2(t.author||'?')+'</a>' +
+                  (ta?'<span style="font-size:0.49rem;color:var(--text-muted);">'+ta+' ago</span>':'') +
+                  (excl?'<span style="font-size:0.49rem;color:#ff9800;font-weight:700;">EXCLUDED</span>':'') +
+                  (dup?'<span style="font-size:0.49rem;color:#9fa8da;">DUP</span>':'') +
+                  (((t.likes||0)>0||(t.retweets||0)>0)?'<span style="font-size:0.49rem;color:var(--text-muted);">❤ '+(t.likes||0)+' 🔁 '+(t.retweets||0)+'</span>':'') +
+                '</div>' +
+                (prev?'<div style="font-size:0.57rem;color:rgba(255,255,255,0.50);line-height:1.35;word-break:break-word;">'+prev+'</div>':'') +
+              '</div>' +
+            '</div>';
+          });
+          hp += '</div></details>';
+        }
+        if (rdp.length) {
+          hp += '<details style="margin-top:4px;">' +
+            '<summary style="cursor:pointer;list-style:none;font-size:0.57rem;font-weight:700;color:#FF4500;user-select:none;display:flex;align-items:center;gap:6px;padding:3px 0;">' +
+            '<i class="fa-brands fa-reddit-alien"></i> Reddit Posts ('+rdp.length+') <span style="font-size:0.50rem;color:var(--text-muted);font-weight:400;">▸</span></summary>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;margin-top:4px;">';
+          rdp.forEach(function(p) {
+            var pid = String(p.id||p.name||'');
+            var excl = _ex.has(pid); var dup = _dupMap[pid];
+            var rdUrl = p.permalink?'https://reddit.com'+p.permalink:(p.url||'#');
+            var prev = esc2((p.title||p.selftext||p.text||'').slice(0,100));
+            var ta   = tAgo(p.ts||(p.created_utc?p.created_utc*1000:null));
+            hp += '<div style="display:flex;gap:6px;align-items:flex-start;padding:4px 6px;background:rgba(255,69,0,0.04);border-radius:3px;border-left:2px solid rgba(255,69,0,'+(excl?'0.12':'0.30')+');opacity:'+(excl?'0.4':'1')+';">' +
+              '<div style="flex:1;min-width:0;">' +
+                '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:1px;">' +
+                  '<a href="'+rdUrl+'" target="_blank" rel="noopener" style="font-size:0.57rem;font-weight:700;color:#FF4500;text-decoration:none;">u/'+esc2(p.author||'?')+'</a>' +
+                  (p.subreddit?'<span style="font-size:0.49rem;color:var(--text-muted);">r/'+esc2(p.subreddit)+'</span>':'') +
+                  (ta?'<span style="font-size:0.49rem;color:var(--text-muted);">'+ta+' ago</span>':'') +
+                  (excl?'<span style="font-size:0.49rem;color:#ff9800;font-weight:700;">EXCLUDED</span>':'') +
+                  (dup?'<span style="font-size:0.49rem;color:#9fa8da;">DUP</span>':'') +
+                '</div>' +
+                (prev?'<div style="font-size:0.57rem;color:rgba(255,255,255,0.50);line-height:1.35;word-break:break-word;">'+prev+'</div>':'') +
+              '</div>' +
+            '</div>';
+          });
+          hp += '</div></details>';
+        }
+        return hp;
+      })() +
     '</div>';
   }).join('');
 }
