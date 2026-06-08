@@ -1244,7 +1244,7 @@ p, span, td, th {
       <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">Weights determine how much each briefing contributes to the Overall Tier score. Each mode has its own set — Attention is downweighted when social data is limited.</div>
 
       <div style="margin-bottom:9px;padding:8px 10px;background:rgba(0,212,255,0.04);border-radius:6px;border-left:3px solid var(--accent-cyan);">
-        <div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.9px;margin-bottom:6px;">FULL SOCIAL MODE <span style="font-weight:400;color:var(--text-muted);">— all social fields filled</span></div>
+        <div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.9px;margin-bottom:6px;">FULL MODE <span style="font-weight:400;color:var(--text-muted);">— X + at least one secondary source</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <div class="form-group" style="margin:0;">
             <label class="settings-label">Security %</label>
@@ -1261,20 +1261,20 @@ p, span, td, th {
         </div>
       </div>
 
-      <div style="margin-bottom:9px;padding:8px 10px;background:rgba(255,235,59,0.04);border-radius:6px;border-left:3px solid #ffeb3b;">
-        <div style="font-size:0.60rem;color:#ffeb3b;font-weight:700;letter-spacing:0.9px;margin-bottom:6px;">PARTIAL SOCIAL MODE <span style="font-weight:400;color:var(--text-muted);">— some social fields filled</span></div>
+      <div style="margin-bottom:9px;padding:8px 10px;background:rgba(0,230,118,0.04);border-radius:6px;border-left:3px solid #00e676;">
+        <div style="font-size:0.60rem;color:#00e676;font-weight:700;letter-spacing:0.9px;margin-bottom:6px;">X ONLY MODE <span style="font-weight:400;color:var(--text-muted);">— X data only, no secondary sources</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <div class="form-group" style="margin:0;">
             <label class="settings-label">Security %</label>
-            <input class="settings-input" type="number" id="sWPartSec" value="38" min="0" max="100" step="0.5">
+            <input class="settings-input" type="number" id="sWPartSec" value="37" min="0" max="100" step="0.5">
           </div>
           <div class="form-group" style="margin:0;">
             <label class="settings-label">Structure %</label>
-            <input class="settings-input" type="number" id="sWPartStr" value="38" min="0" max="100" step="0.5">
+            <input class="settings-input" type="number" id="sWPartStr" value="37" min="0" max="100" step="0.5">
           </div>
           <div class="form-group" style="margin:0;">
             <label class="settings-label">Attention %</label>
-            <input class="settings-input" type="number" id="sWPartAtt" value="24" min="0" max="100" step="0.5">
+            <input class="settings-input" type="number" id="sWPartAtt" value="26" min="0" max="100" step="0.5">
           </div>
         </div>
       </div>
@@ -7825,13 +7825,17 @@ function computeAttentionBriefing(d, analysis) {
 
   /* ── Mode Detection ── */
   var anySocial = socX.available || socTg.available || socRd.available;
+  var hasSupporting = socTg.available || socRd.available;
   var attMode, attConfidence;
-  if (socX.available && socTg.available) {
-    attMode = 'FULL SOCIAL'; attConfidence = 'HIGH';
-  } else if (anySocial) {
-    attMode = 'PARTIAL SOCIAL'; attConfidence = 'MEDIUM';
+  if (socX.available && hasSupporting) {
+    /* FULL MODE: X + at least one secondary social source */
+    attMode = 'FULL MODE'; attConfidence = 100;
+  } else if (socX.available) {
+    /* X ONLY MODE: X data available but no secondary sources */
+    attMode = 'X ONLY MODE'; attConfidence = 85;
   } else {
-    attMode = 'PROXY'; attConfidence = 'LOW';
+    /* PROXY MODE: no X data — attention inferred from on-chain signals */
+    attMode = 'PROXY MODE'; attConfidence = 45;
   }
   window._tecAttentionMode = attMode;
 
@@ -7877,28 +7881,28 @@ function computeAttentionBriefing(d, analysis) {
     else                                       { authorConcentrationLabel = 'LOW CONCENTRATION';     authorConcentrationColor = '#00e676'; authorConcentrationPenalty = 0;  }
   }
 
-  /* ── Time-Weighted Confidence — replaces simple mode-based confidence ── */
+  /* ── Time-Weighted Confidence — fine-tunes numeric confidence % ── */
   var coinAgeMin = !isNaN(parseFloat(d.launchAge)) ? parseFloat(d.launchAge) : null;
-  var twConfidence = attConfidence;
+  var twConfidence = attConfidence; /* numeric: 100 / 85 / 45 */
   var twConfidenceReason = null;
   if (anySocial) {
     var _densityHigh = mentionDensityLabel === 'VERY HIGH' || mentionDensityLabel === 'HIGH';
     /* Ignition detection: young coin + high density */
     if (coinAgeMin !== null && coinAgeMin < 60 && _densityHigh) {
-      twConfidence = 'HIGH';
+      twConfidence = Math.min(100, twConfidence + 10);
       twConfidenceReason = 'IGNITION — Token <1h old · ' + (mentionDensityLabel || '') + ' density';
     } else if (coinAgeMin !== null && coinAgeMin < 720 && _densityHigh) {
-      if (twConfidence !== 'HIGH') twConfidence = 'MEDIUM';
+      twConfidence = Math.min(100, twConfidence + 5);
       twConfidenceReason = 'EARLY BURST — Token <12h · ' + (mentionDensityLabel || '') + ' density';
     }
-    /* Cross-platform bonus */
-    if (platformsActive >= 3 && twConfidence !== 'HIGH') {
-      twConfidence = twConfidence === 'MEDIUM' ? 'HIGH' : 'MEDIUM';
+    /* Cross-platform bonus — extra boost when X ONLY gains a supporting signal */
+    if (platformsActive >= 3 && attMode !== 'FULL MODE') {
+      twConfidence = Math.min(100, twConfidence + 8);
       twConfidenceReason = (twConfidenceReason ? twConfidenceReason + ' · ' : '') + 'Cross-platform (3+ sources)';
     }
     /* Author concentration penalty */
     if (authorConcentrationLabel === 'EXTREME CONCENTRATION') {
-      twConfidence = twConfidence === 'HIGH' ? 'MEDIUM' : 'LOW';
+      twConfidence = Math.max(20, twConfidence - 20);
       twConfidenceReason = (twConfidenceReason ? twConfidenceReason + ' · ' : '') + '⚠ Extreme author concentration';
     }
     attConfidence = twConfidence;
@@ -7990,7 +7994,7 @@ function computeAttentionBriefing(d, analysis) {
     else                                                   { srcExpLabel = 'LIMITED';  srcExpColor = '#ff9800'; }
   }
 
-  /* ── Social Score Composition (FULL SOCIAL mode weights)
+  /* ── Social Score Composition (FULL MODE / X ONLY MODE weights)
      Velocity 35% | Acceleration 20% | Persistence 15%
      Quality 15%  | Source Expansion 10% | Narrative 5%  ── */
   var socialScore = 0;
@@ -8013,15 +8017,12 @@ function computeAttentionBriefing(d, analysis) {
   /* ── Social + Proxy Blending (Social 70% / Proxy 30%) ── */
   var _proxyPct = corePct * 100;
   var _blendPct;
-  if (attMode === 'PROXY') {
+  if (attMode === 'PROXY MODE') {
+    /* PROXY MODE: no X data — use on-chain signals only */
     _blendPct = _proxyPct;
   } else {
+    /* FULL MODE / X ONLY MODE: X is primary, blend with proxy signals */
     _blendPct = socialScore * 0.70 + _proxyPct * 0.30;
-    /* Validate FULL SOCIAL: social must contribute >= 50% of final score */
-    if (attMode === 'FULL SOCIAL' && (socialScore * 0.70) < (_blendPct * 0.50)) {
-      attMode = 'PARTIAL SOCIAL'; attConfidence = 'MEDIUM';
-      window._tecAttentionMode = attMode;
-    }
   }
   _blendPct = Math.min(100, Math.max(0, _blendPct));
 
@@ -8076,17 +8077,19 @@ function buildAttentionBriefingHTML(d, analysis) {
   var nt = '';
 
   /* ── Mode + Confidence Badge ── */
-  var _modeColor = ab.attMode === 'FULL SOCIAL' ? '#00ffcc' : ab.attMode === 'PARTIAL SOCIAL' ? '#ffeb3b' : '#9fa8da';
-  var _modeIcon  = ab.attMode === 'FULL SOCIAL' ? 'fa-satellite-dish' : ab.attMode === 'PARTIAL SOCIAL' ? 'fa-signal' : 'fa-chart-line';
-  var _confColor = ab.attConfidence === 'HIGH' ? '#00e676' : ab.attConfidence === 'MEDIUM' ? '#ffeb3b' : '#9fa8da';
+  var _modeColor = ab.attMode === 'FULL MODE' ? '#00ffcc' : ab.attMode === 'X ONLY MODE' ? '#00e676' : '#9fa8da';
+  var _modeIcon  = ab.attMode === 'FULL MODE' ? 'fa-satellite-dish' : ab.attMode === 'X ONLY MODE' ? 'fa-x-twitter' : 'fa-chart-line';
+  var _confPct   = typeof ab.attConfidence === 'number' ? ab.attConfidence : 50;
+  var _confColor = _confPct >= 90 ? '#00e676' : _confPct >= 75 ? '#ffeb3b' : _confPct >= 50 ? '#ff9800' : '#9fa8da';
+  var _confDisplay = _confPct + '%';
   nt += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:' + (ab.twConfidenceReason ? '4px' : '8px') + ';flex-wrap:wrap;gap:4px;">';
   nt += '<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(0,0,0,0.25);border-radius:20px;border:1px solid '+_modeColor+'33;">';
   nt += '<i class="fa-solid '+_modeIcon+'" style="font-size:0.6rem;color:'+_modeColor+';"></i>';
   nt += '<span style="font-size:0.62rem;font-weight:700;color:'+_modeColor+';letter-spacing:0.8px;">'+ab.attMode+'</span>';
   nt += '</div>';
   nt += '<div style="display:flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,0,0,0.25);border-radius:20px;border:1px solid '+_confColor+'33;">';
-  nt += '<span style="font-size:0.58rem;color:var(--text-muted);">Confidence:</span>';
-  nt += '<span style="font-size:0.62rem;font-weight:700;color:'+_confColor+';">'+ab.attConfidence+'</span>';
+  nt += '<span style="font-size:0.58rem;color:var(--text-muted);">Attention Confidence:</span>';
+  nt += '<span style="font-size:0.62rem;font-weight:700;color:'+_confColor+';">'+_confDisplay+'</span>';
   nt += '</div>';
   nt += '</div>';
   if (ab.twConfidenceReason) {
@@ -8140,8 +8143,8 @@ function buildAttentionBriefingHTML(d, analysis) {
   });
   nt += '</div>';
 
-  /* ── Social Intelligence Section (FULL SOCIAL / PARTIAL SOCIAL only) ── */
-  if (ab.attMode !== 'PROXY') {
+  /* ── Social Intelligence Section (FULL MODE / X ONLY MODE only) ── */
+  if (ab.attMode !== 'PROXY MODE') {
     nt += '<div style="margin-bottom:10px;">';
     nt += '<div style="font-size:0.59rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(0,212,255,0.15);"><i class="fa-solid fa-chart-line" style="margin-right:4px;"></i>Social Intelligence</div>';
 
@@ -8333,8 +8336,8 @@ function buildAttentionBriefingHTML(d, analysis) {
     var respCodes  = (sd && sd.response_codes)  ? sd.response_codes  : [];
     var postCounts = (sd && sd.post_counts)     ? sd.post_counts     : [];
     var reqUrls    = (sd && sd.request_urls)    ? sd.request_urls    : [];
-    var attMode    = ab.attMode || 'PROXY';
-    var attModeColor = attMode === 'FULL SOCIAL' ? '#00ffcc' : attMode === 'PARTIAL SOCIAL' ? '#ffeb3b' : '#9fa8da';
+    var attMode    = ab.attMode || 'PROXY MODE';
+    var attModeColor = attMode === 'FULL MODE' ? '#00ffcc' : attMode === 'X ONLY MODE' ? '#00e676' : '#9fa8da';
 
     /* ── Engagement summary computed from bulk response ── */
     var tweets = (xRes && xRes.tweets) || [];
@@ -8364,9 +8367,9 @@ function buildAttentionBriefingHTML(d, analysis) {
     inner += dTitle('fa-satellite-dish', 'Attention Mode');
     inner += dRow('Current Mode', '<span style="color:' + attModeColor + ';font-weight:700;">' + attMode + '</span>');
     inner += dRow('Attention Tier', ab.attTier + ' — ' + ab.attVerdict);
-    inner += dRow('Mode Reason', attMode === 'FULL SOCIAL' ? 'Real social scan data available — X posts and/or Reddit posts were retrieved and scored.' :
-                                 attMode === 'PARTIAL SOCIAL' ? 'Partial social data available — some fields populated from scan or manual entry.' :
-                                 'No social scan data — attention scored from on-chain signals only (price, volume, holders, narrative).');
+    inner += dRow('Mode Reason', attMode === 'FULL MODE' ? 'X data available with secondary source (Telegram / Reddit) — highest-confidence assessment.' :
+                                 attMode === 'X ONLY MODE' ? 'X data available — strong standalone social assessment. No secondary sources required.' :
+                                 'No X data — attention inferred from on-chain signals only (price, volume, holders, narrative).');
 
     /* ── 2. Provider Chain ── */
     inner += dTitle('fa-route', 'Provider Chain');
@@ -8425,7 +8428,7 @@ function buildAttentionBriefingHTML(d, analysis) {
     var summaryText = hasData
       ? 'Mode: ' + attMode + ' · X: ' + xCnt + ' · Reddit: ' + rdCnt + ' · Provider: ' + prov
       : 'No scan data';
-    var diagColor = attMode === 'FULL SOCIAL' ? '#00ffcc' : attMode === 'PARTIAL SOCIAL' ? '#ffeb3b' : 'var(--text-muted)';
+    var diagColor = attMode === 'FULL MODE' ? '#00ffcc' : attMode === 'X ONLY MODE' ? '#00e676' : 'var(--text-muted)';
 
     return '<details style="margin-top:10px;">' +
       '<summary style="cursor:pointer;font-size:0.61rem;color:' + diagColor + ';' +
@@ -9044,16 +9047,16 @@ function buildRecommendedEntryChecklist(d, analysis) {
   var attTC= ab ? ab.attTierColor : 'var(--text-muted)';
 
   /* Dynamic weights based on Attention Mode
-     FULL SOCIAL:    Sec 35%  · Str 35%  · Att 30%
-     PARTIAL SOCIAL: Sec 38%  · Str 38%  · Att 24%
-     PROXY:          Sec 42.5% · Str 42.5% · Att 15% */
-  var _aMode = window._tecAttentionMode || 'PROXY';
+     FULL MODE:    Sec 35%   · Str 35%   · Att 30%
+     X ONLY MODE:  Sec 37%   · Str 37%   · Att 26%
+     PROXY MODE:   Sec 42.5% · Str 42.5% · Att 15% */
+  var _aMode = window._tecAttentionMode || 'PROXY MODE';
   var _wSec, _wStr, _wAtt, _wLabel;
-  if (_aMode === 'FULL SOCIAL') {
+  if (_aMode === 'FULL MODE') {
     var _fs = settings.wFullSec||35, _fst = settings.wFullStr||35, _fa = settings.wFullAtt||30;
     _wSec=_fs/100; _wStr=_fst/100; _wAtt=_fa/100; _wLabel='Sec '+_fs+'% · Str '+_fst+'% · Att '+_fa+'%';
-  } else if (_aMode === 'PARTIAL SOCIAL') {
-    var _ps = settings.wPartSec||38, _pst = settings.wPartStr||38, _pa = settings.wPartAtt||24;
+  } else if (_aMode === 'X ONLY MODE') {
+    var _ps = settings.wPartSec||37, _pst = settings.wPartStr||37, _pa = settings.wPartAtt||26;
     _wSec=_ps/100; _wStr=_pst/100; _wAtt=_pa/100; _wLabel='Sec '+_ps+'% · Str '+_pst+'% · Att '+_pa+'%';
   } else {
     var _xs = settings.wProxSec||42.5, _xst = settings.wProxStr||42.5, _xa = settings.wProxAtt||15;
@@ -11187,10 +11190,10 @@ el('exportTxtBtn').addEventListener('click', function() {
   var _sN  = _secT2==='A'?100:_secT2==='B'?75:_secT2==='C'?50:25;
   var _stN = _strT2==='S'?100:_strT2==='A'?85:_strT2==='B'?65:_strT2==='C'?45:25;
   var _aN  = _attT2==='A'?100:_attT2==='B'?75:_attT2==='C'?50:_attT2==='D'?33:15;
-  var _aMode3 = window._tecAttentionMode || 'PROXY';
-  var _wSec3 = (_aMode3==='FULL SOCIAL' ? (settings.wFullSec||35) : _aMode3==='PARTIAL SOCIAL' ? (settings.wPartSec||38) : (settings.wProxSec||42.5)) / 100;
-  var _wStr3 = (_aMode3==='FULL SOCIAL' ? (settings.wFullStr||35) : _aMode3==='PARTIAL SOCIAL' ? (settings.wPartStr||38) : (settings.wProxStr||42.5)) / 100;
-  var _wAtt3 = (_aMode3==='FULL SOCIAL' ? (settings.wFullAtt||30) : _aMode3==='PARTIAL SOCIAL' ? (settings.wPartAtt||24) : (settings.wProxAtt||15)) / 100;
+  var _aMode3 = window._tecAttentionMode || 'PROXY MODE';
+  var _wSec3 = (_aMode3==='FULL MODE' ? (settings.wFullSec||35) : _aMode3==='X ONLY MODE' ? (settings.wPartSec||37) : (settings.wProxSec||42.5)) / 100;
+  var _wStr3 = (_aMode3==='FULL MODE' ? (settings.wFullStr||35) : _aMode3==='X ONLY MODE' ? (settings.wPartStr||37) : (settings.wProxStr||42.5)) / 100;
+  var _wAtt3 = (_aMode3==='FULL MODE' ? (settings.wFullAtt||30) : _aMode3==='X ONLY MODE' ? (settings.wPartAtt||26) : (settings.wProxAtt||15)) / 100;
   var _oS  = Math.round(_sN*_wSec3 + _stN*_wStr3 + _aN*_wAtt3);
   var _oT  = _oS>=88?'A':_oS>=72?'B':_oS>=55?'C':_oS>=38?'D':'F';
   var _oR  = _oS>=88?'STRONG ENTRY CANDIDATE':_oS>=72?'VIABLE ENTRY — MANAGE RISK':_oS>=55?'SPECULATIVE — SIZE DOWN':_oS>=38?'HIGH RISK — AVOID OR WATCH':'SKIP — NOT RECOMMENDED';
@@ -12948,7 +12951,7 @@ function attHistRender() {
 
   grid.innerHTML = _attHistData.map(function(s) {
     var tc  = s.attTier==='A'?'#00ffcc':s.attTier==='B'?'#00e676':s.attTier==='C'?'#ffeb3b':s.attTier==='D'?'#ff9800':'#ff4757';
-    var mc  = s.attMode==='FULL SOCIAL'?'#00ffcc':s.attMode==='PARTIAL SOCIAL'?'#ffeb3b':'#9fa8da';
+    var mc  = s.attMode==='FULL MODE'?'#00ffcc':s.attMode==='X ONLY MODE'?'#00e676':'#9fa8da';
     var dt  = new Date(s.ts);
     var dtS = (dt.getMonth()+1)+'/'+dt.getDate()+' '+dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');
 
