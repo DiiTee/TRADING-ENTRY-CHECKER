@@ -1,0 +1,287 @@
+ATTENTION BRIEFING ENGINE — SOCIAL PROVIDER CONTROL SYSTEM (COST-AWARE REDESIGN)
+
+BACKGROUND
+
+I'm switching to low-cost Pay-Per-Result Apify Actors, including the other 2 providers that charge approximately:
+
+- TwitterAPI.io → $0.15 / 1000 tweets
+- GetXAPI → $0.05 / 1000 tweets
+- Apify PPR Actors → $0.05–$0.25 / 1000 tweets
+
+I want full user control over provider usage and spending.
+
+====================================================
+PROVIDER CONTROL PANEL
+
+Create a new Social Provider Configuration panel.
+
+Display:
+
+SOCIAL PROVIDERS
+
+[✓] TwitterAPI.io
+[✓] GetXAPI
+[✓] Apify
+
+Each provider can be independently enabled or disabled via toggle.
+
+If a provider is disabled, it must not be called.
+
+====================================================
+SCAN MODES
+
+Add three scan modes.
+
+MODE 1 — FIRST SUCCESSFUL PROVIDER
+
+Flow:
+
+TwitterAPI.io
+↓
+Success → Stop
+
+If fail:
+↓
+GetXAPI
+
+If fail:
+↓
+Apify
+
+If fail:
+↓
+Provider Failure
+
+Purpose:
+Lowest cost.
+
+---
+
+MODE 2 — AUTOMATIC FALLBACK
+
+Flow:
+
+TwitterAPI.io
+↓
+GetXAPI
+↓
+Apify
+
+Return first provider that successfully returns usable tweet data.
+
+Purpose:
+Maximum reliability.
+
+---
+
+MODE 3 — MERGE ALL RESULTS
+
+Flow:
+
+TwitterAPI.io
++
+GetXAPI
++
+Apify
+
+Combine and deduplicate tweets.
+
+Purpose:
+Highest quality Attention analysis.
+
+====================================================
+TWEET LIMIT CONTROL
+
+The engine should never request more tweets than configured in Global settings.
+
+====================================================
+PROVIDER DIAGNOSTICS
+
+Add a collapsible diagnostics section.
+
+Display:
+
+TwitterAPI.io
+
+Status:
+Success
+
+Tweets Returned:
+20
+
+Request Time:
+1.3s
+
+Cost Estimate:
+$0.003
+
+---
+
+GetXAPI
+
+Status:
+Rate Limited
+
+Tweets Returned:
+0
+
+Request Time:
+0.8s
+
+Cost Estimate:
+$0.000
+
+---
+
+Apify
+
+Status:
+Disabled
+
+Reason:
+Provider Toggle Off
+
+====================================================
+ATTENTION ENGINE VISIBILITY
+
+Display exactly which provider supplied the final data.
+
+Examples:
+
+Attention Source:
+TwitterAPI.io
+
+OR
+
+Attention Source:
+GetXAPI
+
+OR
+
+Attention Source:
+Merged Dataset
+
+This must be visible to the user.
+
+====================================================
+APIFY PROVIDER CONFIGURATION
+
+Support multiple Apify actors.
+
+Create dropdown:
+
+Apify Actor:
+
+○ GetXAPI Actor
+○ Xquik X Tweet Scraper
+○ Quadraphonic X Scraper V3
+○ KaitoEasyAPI X Scraper
+○ Igolaizola X Scraper
+
+Only the selected actor should execute.
+
+
+Links to configuring them: 
+
+https://apify.com/getxapi
+($0.05/1000 Tweets)
+
+https://apify.com/xquik/x-tweet-scraper
+($0.15/1000 Tweets)
+
+https://apify.com/celebrated-quadraphonic/x-twitter-scraper-v3
+($0.20/1000 Tweets)
+
+https://apify.com/kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest
+($0.25/1000 Tweets)
+
+https://apify.com/igolaizola/x-twitter-scraper-ppe
+($0.15/1000 Tweets)
+
+====================================================
+COST PROTECTION
+
+Add hard limits.
+
+Maximum Runtime:
+30 seconds
+
+Maximum Tweets:
+Configured Tweet Limit
+
+Maximum Monthly Budget:
+User Configurable
+
+Example:
+Apify
+
+Monthly Budget:
+$5
+
+Warning Threshold:
+80%
+
+Hard Stop:
+100%
+
+When budget reached:
+
+Disable provider scans.
+
+Display:
+Example:
+
+"Apify monthly budget limit reached."
+
+Budgets will be entered in the Global settings: 
+Default:
+TwitterAPI.io: $0.10
+GetXAPI: $0.15
+Apify: $5
+
+
+===================================================
+Add these buttons so I can quickly and easily go to my API dashboards:
+
+
+https://twitterapi.io/dashboard
+
+https://www.getxapi.com/dashboard
+
+https://console.apify.com/
+
+
+====================================================
+ERROR HANDLING
+
+Remove generic messages such as:
+
+"Failed to fetch"
+
+Replace with:
+
+"TwitterAPI.io Rate Limited"
+
+"GetXAPI Request Timed Out"
+
+"Apify Actor Returned Zero Results"
+
+"Provider Returned Invalid Response"
+
+"Provider Disabled By User"
+
+====================================================
+SUCCESS CRITERIA
+
+The user should be able to:
+
+1. Enable or disable each provider individually.
+2. Choose which Apify actor to use.
+3. Choose scan strategy.
+4. Limit tweet count.
+5. View estimated costs.
+6. View provider diagnostics.
+7. See exactly which provider supplied the Attention Briefing data.
+8. Prevent accidental budget exhaustion while maintaining reliable social scanning.
+
+

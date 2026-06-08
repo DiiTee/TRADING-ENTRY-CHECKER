@@ -1389,6 +1389,86 @@ p, span, td, th {
         </div>
       </div>
 
+      <!-- ── SOCIAL PROVIDER CONTROL ────────────────────────────────────── -->
+      <div style="margin-top:12px;padding:12px 14px;background:rgba(0,212,255,0.04);border-radius:7px;border:1px solid rgba(0,212,255,0.12);">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          <div style="font-size:0.60rem;color:var(--accent-cyan);font-weight:700;letter-spacing:0.9px;"><i class="fa-solid fa-tower-broadcast" style="margin-right:5px;"></i>SOCIAL PROVIDERS</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <a href="https://twitterapi.io/dashboard" target="_blank" style="font-size:0.53rem;color:var(--text-muted);text-decoration:none;padding:2px 7px;border:1px solid rgba(255,255,255,0.1);border-radius:3px;white-space:nowrap;" title="TwitterAPI.io Dashboard"><i class="fa-brands fa-x-twitter" style="margin-right:3px;"></i>Twitter Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.45rem;"></i></a>
+            <a href="https://www.getxapi.com/dashboard" target="_blank" style="font-size:0.53rem;color:var(--text-muted);text-decoration:none;padding:2px 7px;border:1px solid rgba(255,255,255,0.1);border-radius:3px;white-space:nowrap;" title="GetXAPI Dashboard">GetXAPI Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.45rem;"></i></a>
+            <a href="https://console.apify.com/" target="_blank" style="font-size:0.53rem;color:var(--text-muted);text-decoration:none;padding:2px 7px;border:1px solid rgba(255,255,255,0.1);border-radius:3px;white-space:nowrap;" title="Apify Console"><i class="fa-solid fa-robot" style="margin-right:3px;"></i>Apify Console <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.45rem;"></i></a>
+          </div>
+        </div>
+
+        <!-- Provider toggles -->
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid rgba(29,161,242,0.2);">
+            <input type="checkbox" id="sProvTwitterapi" checked style="accent-color:#1DA1F2;width:14px;height:14px;">
+            <span style="font-size:0.62rem;font-weight:700;color:#1DA1F2;"><i class="fa-brands fa-x-twitter" style="margin-right:3px;"></i>TwitterAPI.io</span>
+            <span style="font-size:0.53rem;color:var(--text-muted);">$0.15/1K</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid rgba(0,230,118,0.2);">
+            <input type="checkbox" id="sProvGetxapi" checked style="accent-color:#00e676;width:14px;height:14px;">
+            <span style="font-size:0.62rem;font-weight:700;color:#00e676;"><i class="fa-brands fa-x-twitter" style="margin-right:3px;"></i>GetXAPI</span>
+            <span style="font-size:0.53rem;color:var(--text-muted);">$0.05/1K</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid rgba(255,152,0,0.2);">
+            <input type="checkbox" id="sProvApify" checked style="accent-color:#ff9800;width:14px;height:14px;">
+            <span style="font-size:0.62rem;font-weight:700;color:#ff9800;"><i class="fa-solid fa-robot" style="margin-right:3px;"></i>Apify</span>
+            <span style="font-size:0.53rem;color:var(--text-muted);">$0.05–0.25/1K</span>
+          </label>
+        </div>
+
+        <!-- Scan mode + Apify actor row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:0.57rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Scan Mode</div>
+            <select class="settings-input" id="sScanMode" onchange="updateScanModeHint()">
+              <option value="first_success">First Successful Provider — Lowest Cost</option>
+              <option value="auto_fallback" selected>Automatic Fallback — Max Reliability</option>
+              <option value="merge_all">Merge All Results — Highest Quality</option>
+            </select>
+            <div style="font-size:0.52rem;color:var(--text-muted);margin-top:3px;line-height:1.4;" id="sScanModeHint">Tries providers in order and returns the first successful result.</div>
+          </div>
+          <div>
+            <div style="font-size:0.57rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Apify Actor</div>
+            <select class="settings-input" id="sApifyActor">
+              <option value="getxapi_actor">GetXAPI Actor — $0.05/1000</option>
+              <option value="xquik">Xquik X Tweet Scraper — $0.15/1000</option>
+              <option value="quadraphonic">Quadraphonic X Scraper V3 — $0.20/1000</option>
+              <option value="kaitoeasyapi">KaitoEasyAPI X Scraper — $0.25/1000</option>
+              <option value="igolaizola">Igolaizola X Scraper — $0.15/1000</option>
+            </select>
+            <div style="font-size:0.52rem;color:var(--text-muted);margin-top:3px;">Only used when Apify provider is enabled.</div>
+          </div>
+        </div>
+
+        <!-- Monthly budgets -->
+        <div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid rgba(255,152,0,0.15);">
+          <div style="font-size:0.57rem;color:#ff9800;font-weight:700;letter-spacing:.7px;margin-bottom:7px;"><i class="fa-solid fa-shield-halved" style="margin-right:4px;"></i>MONTHLY BUDGET LIMITS <span style="font-weight:400;color:var(--text-muted);font-size:0.52rem;text-transform:none;">— scans blocked when limit is reached · 0 = unlimited</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+            <div class="form-group" style="margin:0;">
+              <label class="settings-label">TwitterAPI.io ($)</label>
+              <input class="settings-input" type="number" id="sBudgetTwitterapi" value="0.10" min="0" step="0.01">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="settings-label">GetXAPI ($)</label>
+              <input class="settings-input" type="number" id="sBudgetGetxapi" value="0.15" min="0" step="0.01">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="settings-label">Apify ($)</label>
+              <input class="settings-input" type="number" id="sBudgetApify" value="5.00" min="0" step="0.01">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="settings-label">Warn at (%)</label>
+              <input class="settings-input" type="number" id="sBudgetWarnPct" value="80" min="10" max="99" step="5">
+            </div>
+          </div>
+          <div style="margin-top:8px;" id="monthlySpendDisplay"></div>
+        </div>
+      </div>
+      <!-- ── END SOCIAL PROVIDER CONTROL ──────────────────────────────── -->
+
       <div class="settings-section-label" style="margin-top:14px;">Flagged Wallets <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(known ruggers, snipers &amp; cabal — auto-highlighted in QEC holder scans)</span></div>
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:flex-end;">
         <div style="flex:1;min-width:180px;">
@@ -2269,6 +2349,19 @@ function applySettingsToUI() {
   el('sDeepScanX').value   = settings.deepScanX   || 50;
   el('sDeepScanRd').value  = settings.deepScanRd  || 25;
   try {
+    el('sProvTwitterapi').checked = localStorage.getItem('tec_prov_twitterapi_en') !== 'false';
+    el('sProvGetxapi').checked    = localStorage.getItem('tec_prov_getxapi_en')    !== 'false';
+    el('sProvApify').checked      = localStorage.getItem('tec_prov_apify_en')      !== 'false';
+    el('sScanMode').value         = localStorage.getItem('tec_scan_mode')           || 'auto_fallback';
+    el('sApifyActor').value       = localStorage.getItem('tec_apify_actor')         || 'getxapi_actor';
+    el('sBudgetTwitterapi').value = localStorage.getItem('tec_budget_twitterapi')   || '0.10';
+    el('sBudgetGetxapi').value    = localStorage.getItem('tec_budget_getxapi')      || '0.15';
+    el('sBudgetApify').value      = localStorage.getItem('tec_budget_apify')        || '5.00';
+    el('sBudgetWarnPct').value    = localStorage.getItem('tec_budget_warn_pct')     || '80';
+    updateScanModeHint();
+    renderMonthlySpendDisplay();
+  } catch(_) {}
+  try {
     el('sHeliusKey').value    = localStorage.getItem('tec_helius_key')       || '';
     el('sDefadeKey').value    = localStorage.getItem('tec_defade_key')       || '';
     el('sRugCheckKey').value  = localStorage.getItem('tec_rugcheck_key')     || '';
@@ -2333,7 +2426,110 @@ function saveSettings() {
       if (apk) localStorage.setItem('tec_apify_key',       apk); else localStorage.removeItem('tec_apify_key');
     } catch(e) {}
   } catch(e) {}
+  try {
+    localStorage.setItem('tec_prov_twitterapi_en', el('sProvTwitterapi').checked ? 'true' : 'false');
+    localStorage.setItem('tec_prov_getxapi_en',    el('sProvGetxapi').checked    ? 'true' : 'false');
+    localStorage.setItem('tec_prov_apify_en',      el('sProvApify').checked      ? 'true' : 'false');
+    localStorage.setItem('tec_scan_mode',          el('sScanMode').value);
+    localStorage.setItem('tec_apify_actor',        el('sApifyActor').value);
+    localStorage.setItem('tec_budget_twitterapi',  parseFloat(el('sBudgetTwitterapi').value) || 0);
+    localStorage.setItem('tec_budget_getxapi',     parseFloat(el('sBudgetGetxapi').value)    || 0);
+    localStorage.setItem('tec_budget_apify',       parseFloat(el('sBudgetApify').value)      || 0);
+    localStorage.setItem('tec_budget_warn_pct',    parseInt(el('sBudgetWarnPct').value)      || 80);
+    renderMonthlySpendDisplay();
+  } catch(_) {}
   showToast('Settings saved', 'success');
+}
+
+/* ── Social Provider Config & Budget helpers ─────────────────────────────── */
+function getSocialProviderConfig() {
+  return {
+    twitterapi: localStorage.getItem('tec_prov_twitterapi_en') !== 'false',
+    getxapi:    localStorage.getItem('tec_prov_getxapi_en')    !== 'false',
+    apify:      localStorage.getItem('tec_prov_apify_en')      !== 'false',
+  };
+}
+function getScanMode()   { return localStorage.getItem('tec_scan_mode')   || 'auto_fallback'; }
+function getApifyActor() { return localStorage.getItem('tec_apify_actor') || 'getxapi_actor'; }
+
+function getMonthlySpend() {
+  var now   = new Date();
+  var month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  try {
+    var raw = localStorage.getItem('tec_monthly_spend');
+    if (raw) { var data = JSON.parse(raw); if (data.month === month) return data; }
+  } catch(_) {}
+  return { month: month, twitterapi: 0, getxapi: 0, apify: 0 };
+}
+function addMonthlySpend(provider, amount) {
+  if (!amount || amount <= 0) return;
+  var spend = getMonthlySpend();
+  spend[provider] = Math.round(((spend[provider] || 0) + amount) * 1e6) / 1e6;
+  try { localStorage.setItem('tec_monthly_spend', JSON.stringify(spend)); } catch(_) {}
+}
+function checkBudgetBlock(provider) {
+  var budget = parseFloat(localStorage.getItem('tec_budget_' + provider) || '0');
+  if (budget <= 0) return { blocked: false, warning: false, current: 0, budget: 0 };
+  var warnPct = parseFloat(localStorage.getItem('tec_budget_warn_pct') || '80') / 100;
+  var spend   = getMonthlySpend();
+  var current = spend[provider] || 0;
+  if (current >= budget) return { blocked: true,  warning: false, current: current, budget: budget };
+  if (current >= budget * warnPct) return { blocked: false, warning: true, current: current, budget: budget };
+  return { blocked: false, warning: false, current: current, budget: budget };
+}
+function getEffectiveProviderConfig() {
+  var base = getSocialProviderConfig();
+  var budgetBlocks = [], budgetWarnings = [];
+  ['twitterapi', 'getxapi', 'apify'].forEach(function(p) {
+    if (!base[p]) return;
+    var chk = checkBudgetBlock(p);
+    if (chk.blocked) {
+      base[p] = false;
+      budgetBlocks.push(p);
+    } else if (chk.warning) {
+      budgetWarnings.push({ p: p, current: chk.current, budget: chk.budget });
+    }
+  });
+  return { config: base, budgetBlocks: budgetBlocks, budgetWarnings: budgetWarnings };
+}
+function updateScanModeHint() {
+  var hintEl = el('sScanModeHint');
+  if (!hintEl) return;
+  var modeEl = el('sScanMode');
+  var mode = modeEl ? modeEl.value : 'auto_fallback';
+  var hints = {
+    first_success: 'Stops after the first enabled provider that returns results — cheapest per scan. If it fails, falls back to the next in sequence.',
+    auto_fallback: 'Tries providers in order (TwitterAPI.io → GetXAPI → Apify) and returns the first successful result.',
+    merge_all:     'Calls all enabled providers simultaneously and combines + deduplicates results. Best quality, higher cost.'
+  };
+  hintEl.textContent = hints[mode] || '';
+}
+function renderMonthlySpendDisplay() {
+  var dispEl = el('monthlySpendDisplay');
+  if (!dispEl) return;
+  var spend = getMonthlySpend();
+  var bTw   = parseFloat(localStorage.getItem('tec_budget_twitterapi') || '0.10');
+  var bGx   = parseFloat(localStorage.getItem('tec_budget_getxapi')    || '0.15');
+  var bAp   = parseFloat(localStorage.getItem('tec_budget_apify')      || '5.00');
+  function bar(label, cur, budget) {
+    cur = cur || 0;
+    if (budget <= 0) return '<div style="font-size:0.51rem;color:var(--text-muted);margin-bottom:2px;">' + label + ': <span style="color:rgba(255,255,255,0.35);">no limit</span></div>';
+    var pct   = Math.min(100, (cur / budget) * 100);
+    var color = pct >= 100 ? '#ff4757' : pct >= 80 ? '#ff9800' : '#00e676';
+    return '<div style="margin-bottom:5px;">' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.51rem;color:var(--text-muted);margin-bottom:2px;">' +
+      '<span>' + label + '</span><span style="color:' + color + ';">' +
+      (pct >= 100 ? '<i class="fa-solid fa-ban" style="margin-right:3px;"></i>' : '') +
+      '$' + cur.toFixed(4) + ' / $' + budget.toFixed(2) + (pct >= 100 ? ' — LIMIT REACHED' : '') + '</span></div>' +
+      '<div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;">' +
+      '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + color + ';border-radius:2px;"></div>' +
+      '</div></div>';
+  }
+  dispEl.innerHTML =
+    '<div style="font-size:0.51rem;color:var(--text-muted);margin-bottom:5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">This Month\'s Spend</div>' +
+    bar('TwitterAPI.io', spend.twitterapi, bTw) +
+    bar('GetXAPI',       spend.getxapi,    bGx) +
+    bar('Apify',         spend.apify,      bAp);
 }
 
 function cleanText(str) {
@@ -8286,10 +8482,13 @@ async function callSocialScanAPI(queries, limit, sinceTs) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          queries:  queries,
-          limit:    limit,
-          sinceTs:  sinceTs || null,
-          apiKeys:  { twitterapio: twKey, getxapi: gxKey, apify: apKey }
+          queries:        queries,
+          limit:          limit,
+          sinceTs:        sinceTs || null,
+          apiKeys:        { twitterapio: twKey, getxapi: gxKey, apify: apKey },
+          scanMode:       getScanMode(),
+          providerConfig: getEffectiveProviderConfig().config,
+          apifyActor:     getApifyActor(),
         })
       }),
       new Promise(function(_, rej) {
@@ -8494,6 +8693,11 @@ async function runSocialScan(isDeep) {
   var apKey  = getSocialAPIKey('tec_apify_key');
   var hasX   = !!(twKey || gxKey || apKey);
 
+  /* ── Budget check — disable over-limit providers before scan ── */
+  var _eff = getEffectiveProviderConfig();
+  var _budgetBlocks   = _eff.budgetBlocks;
+  var _budgetWarnings = _eff.budgetWarnings;
+
   socialScanSetBusy(true);
   socialScanSetStatus('<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Scanning X/Twitter' + (isDeep ? ' (deep — 50 posts)' : '') + '…', 'var(--accent-cyan)');
   /* Reset provider badge while scanning */
@@ -8507,6 +8711,12 @@ async function runSocialScan(isDeep) {
   var xResult  = { ok: false, tweets: [], error: null, provider: null };
   var rdResult = { ok: false, posts: [], error: null };
   var errors   = [];
+
+  /* Pre-populate budget block warnings into errors so they appear in final status */
+  var _bNames = { twitterapi: 'TwitterAPI.io', getxapi: 'GetXAPI', apify: 'Apify' };
+  _budgetBlocks.forEach(function(p) {
+    errors.push(_bNames[p] + ' monthly budget limit reached — provider skipped');
+  });
 
   /* ── Fetch X/Twitter via /api/social-scan (server-side proxy — no CORS) ── */
   if (hasX) {
@@ -8543,6 +8753,18 @@ async function runSocialScan(isDeep) {
   /* ── Populate form fields & store raw ── */
   populateSocialFormFields(xResult, rdResult);
   window._tecSocialRaw = { x: xResult, reddit: rdResult, scanTs: Date.now(), isDeep: isDeep };
+
+  /* ── Update monthly spend from server-reported cost estimates ── */
+  if (xResult && xResult.providerDiagnostics) {
+    xResult.providerDiagnostics.forEach(function(pd) {
+      if (pd.costKey && pd.costEstimate > 0) addMonthlySpend(pd.costKey, pd.costEstimate);
+    });
+    renderMonthlySpendDisplay();
+  }
+  /* Budget warnings (near limit) — add to status as info note */
+  _budgetWarnings.forEach(function(w) {
+    errors.push(_bNames[w.p] + ' near budget limit ($' + (w.current || 0).toFixed(4) + ' / $' + (w.budget || 0).toFixed(2) + ')');
+  });
 
   /* ── Store incremental timestamp + scan history ── */
   var xCount  = (xResult.tweets || []).length;
@@ -8588,81 +8810,135 @@ async function runSocialScan(isDeep) {
   (function() {
     var badgeEl = el('socialProviderBadge');
     if (!badgeEl) return;
-    var diag = xResult.diagnostics || {};
-    var fp   = (diag.fallback_path || []);
-    var tried = (diag.providers_tried || []);
-    var succeeded = (diag.providers_succeeded || []);
-    var respCodes = (diag.response_codes || []);
-    var postCounts = (diag.post_counts || []);
-    var errs = (diag.errors || []);
-    var provUsed = (xResult.ok && xResult.provider) || null;
+    var diag      = xResult.diagnostics     || {};
+    var provDiags = xResult.providerDiagnostics || [];
+    var fp        = (diag.fallback_path     || []);
+    var tried     = (diag.providers_tried   || []);
+    var succeeded = (diag.providers_succeeded|| []);
+    var respCodes  = (diag.response_codes   || []);
+    var postCounts = (diag.post_counts      || []);
+    var errs       = (diag.errors           || []);
+    var scanMode   = diag.scan_mode         || getScanMode();
+    var apifyActor = diag.apify_actor       || getApifyActor();
+    var provUsed   = (xResult.ok && xResult.provider) || null;
 
     /* ── Engagement stats from bulk response (no extra API calls) ── */
     var tweets = xResult.tweets || [];
-    var totalLikes = 0, totalRt = 0, topLikes = 0, topRt = 0;
-    var topAuthor = '—', topTweet = null;
+    var totalLikes = 0, totalRt = 0;
+    var topTweet = null;
     tweets.forEach(function(t) {
       totalLikes += (t.likes    || 0);
       totalRt    += (t.retweets || 0);
-      var eng = (t.likes||0) + (t.retweets||0)*2;
-      var topEng = (topTweet ? ((topTweet.likes||0)+(topTweet.retweets||0)*2) : 0);
-      if (eng > topEng) { topTweet = t; }
+      var eng    = (t.likes || 0) + (t.retweets || 0) * 2;
+      var topEng = topTweet ? ((topTweet.likes||0) + (topTweet.retweets||0)*2) : 0;
+      if (eng > topEng) topTweet = t;
     });
-    if (topTweet) {
-      topLikes  = topTweet.likes    || 0;
-      topRt     = topTweet.retweets || 0;
-      topAuthor = topTweet.author   ? ('@' + topTweet.author) : '—';
-    }
-    var avgLikes = xCount > 0 ? (totalLikes / xCount).toFixed(1) : 0;
-    var avgRt    = xCount > 0 ? (totalRt    / xCount).toFixed(1) : 0;
+    var topLikes  = topTweet ? (topTweet.likes    || 0) : 0;
+    var topRt     = topTweet ? (topTweet.retweets || 0) : 0;
+    var topAuthor = topTweet && topTweet.author ? ('@' + topTweet.author) : '—';
+    var avgLikes  = xCount > 0 ? (totalLikes / xCount).toFixed(1) : 0;
+    var avgRt     = xCount > 0 ? (totalRt    / xCount).toFixed(1) : 0;
 
-    var html = '<div style="padding:8px 10px;background:rgba(0,0,0,0.25);border-radius:6px;border:1px solid rgba(255,255,255,0.08);font-size:0.60rem;">';
+    /* ── Attention Source label ── */
+    var attSourceLabel = '—';
+    var attSourceColor = 'var(--text-muted)';
+    if (provUsed === 'merged') {
+      attSourceLabel = 'Merged Dataset (' + succeeded.join(' + ') + ')';
+      attSourceColor = '#00ffcc';
+    } else if (provUsed === 'twitterapi.io') {
+      attSourceLabel = 'TwitterAPI.io';
+      attSourceColor = '#1DA1F2';
+    } else if (provUsed === 'getxapi') {
+      attSourceLabel = 'GetXAPI';
+      attSourceColor = '#00e676';
+    } else if (provUsed === 'apify') {
+      attSourceLabel = 'Apify (' + apifyActor + ')';
+      attSourceColor = '#ff9800';
+    }
+
+    /* ── Scan mode label ── */
+    var modeLabels = { first_success: 'First Successful', auto_fallback: 'Auto Fallback', merge_all: 'Merge All' };
+    var scanModeLabel = modeLabels[scanMode] || scanMode;
+
+    var html = '<div style="padding:10px 12px;background:rgba(0,0,0,0.25);border-radius:6px;border:1px solid rgba(255,255,255,0.08);font-size:0.60rem;">';
 
     /* ── Header ── */
     var scanTypeLabel = isDeep ? 'Deep Scan' : 'Quick Scan';
     var scanTs = new Date().toLocaleTimeString();
     html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.07);">';
     html += '<div style="font-size:0.62rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.8px;text-transform:uppercase;"><i class="fa-solid fa-satellite-dish" style="margin-right:5px;"></i>Social Scan Result</div>';
-    html += '<div style="font-size:0.55rem;color:var(--text-muted);">' + scanTypeLabel + ' · ' + scanTs + '</div>';
+    html += '<div style="font-size:0.55rem;color:var(--text-muted);">' + scanTypeLabel + ' · Mode: ' + scanModeLabel + ' · ' + scanTs + '</div>';
     html += '</div>';
 
-    /* ── Provider Chain ── */
-    html += '<div style="font-size:0.58rem;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:5px;">Provider Chain</div>';
-    html += '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px;">';
-    if (fp.length > 0) {
-      fp.forEach(function(step) {
-        var isOk = step.charAt(0) === '✓';
-        var isWarn = step.charAt(0) === '⚠';
-        var isFail = step.charAt(0) === '✗';
-        var stepColor = isOk ? '#00e676' : isWarn ? '#ff9800' : '#ff4757';
-        html += '<div style="font-size:0.59rem;color:' + stepColor + ';padding:2px 6px;background:rgba(0,0,0,0.15);border-radius:3px;word-break:break-word;">' + step + '</div>';
-      });
-    } else if (!hasX) {
-      html += '<div style="font-size:0.59rem;color:#ff9800;">No X API keys configured — add TwitterAPI.io, GetXAPI, or Apify key in Settings.</div>';
-    } else {
-      html += '<div style="font-size:0.59rem;color:var(--text-muted);">No provider response logged.</div>';
+    /* ── Attention Source (prominent) ── */
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:5px;border-left:3px solid ' + attSourceColor + ';">';
+    html += '<div>';
+    html += '<div style="font-size:0.53rem;color:var(--text-muted);font-weight:700;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:1px;">Attention Source</div>';
+    html += '<div style="font-size:0.85rem;font-weight:700;color:' + attSourceColor + ';">' + attSourceLabel + '</div>';
+    html += '</div>';
+    if (xCount > 0 || rdCount > 0) {
+      html += '<div style="margin-left:auto;text-align:right;">';
+      html += '<div style="font-size:0.53rem;color:var(--text-muted);margin-bottom:1px;">Posts Loaded</div>';
+      html += '<div style="font-size:0.85rem;font-weight:700;color:#00e676;">' + (xCount + rdCount) + '</div>';
+      html += '</div>';
     }
     html += '</div>';
+
+    /* ── Per-provider diagnostics table ── */
+    if (provDiags.length > 0) {
+      html += '<div style="font-size:0.56rem;font-weight:700;color:var(--text-muted);letter-spacing:0.6px;text-transform:uppercase;margin-bottom:5px;">Provider Results</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">';
+      provDiags.forEach(function(pd) {
+        var sc = pd.status === 'Success' ? '#00e676' :
+                 pd.status === 'No Results' ? '#ffeb3b' :
+                 pd.status === 'Disabled' ? 'rgba(255,255,255,0.25)' : '#ff4757';
+        var icon = pd.status === 'Success' ? '✓' : pd.status === 'Disabled' ? '—' : '⚠';
+        var costStr = pd.costEstimate > 0 ? ('~$' + pd.costEstimate.toFixed(5)) : '$0.00000';
+        var timeStr = pd.requestTimeMs > 0 ? ((pd.requestTimeMs / 1000).toFixed(2) + 's') : '—';
+        html += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;' +
+          'padding:4px 8px;background:rgba(0,0,0,0.15);border-radius:4px;border-left:2px solid ' + sc + ';">';
+        html += '<div>';
+        html += '<span style="font-size:0.62rem;font-weight:700;color:' + sc + ';">' + icon + ' ' + pd.provider + '</span>';
+        if (pd.error && pd.status !== 'Success') {
+          html += '<div style="font-size:0.52rem;color:rgba(255,255,255,0.35);margin-top:1px;word-break:break-word;">' + pd.error + '</div>';
+        }
+        html += '</div>';
+        html += '<div style="text-align:center;">';
+        html += '<div style="font-size:0.50rem;color:var(--text-muted);">Tweets</div>';
+        html += '<div style="font-size:0.68rem;font-weight:700;color:' + (pd.tweets > 0 ? '#00e676' : 'var(--text-muted)') + ';">' + pd.tweets + '</div>';
+        html += '</div>';
+        html += '<div style="text-align:center;">';
+        html += '<div style="font-size:0.50rem;color:var(--text-muted);">Time</div>';
+        html += '<div style="font-size:0.65rem;color:var(--text-primary);">' + timeStr + '</div>';
+        html += '</div>';
+        html += '<div style="text-align:right;">';
+        html += '<div style="font-size:0.50rem;color:var(--text-muted);">Cost Est.</div>';
+        html += '<div style="font-size:0.65rem;color:' + (pd.costEstimate > 0 ? '#ff9800' : 'var(--text-muted)') + ';">' + costStr + '</div>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
 
     /* ── Results Summary ── */
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:5px;margin-bottom:8px;">';
-    var mkMetric = function(label, val, col) {
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:5px;margin-bottom:8px;">';
+    var mkMetric = function(label, val) {
       return '<div style="padding:5px 7px;background:rgba(0,0,0,0.2);border-radius:4px;">' +
-        '<div style="font-size:0.53rem;color:var(--text-muted);font-weight:700;letter-spacing:0.6px;">' + label + '</div>' +
-        '<div style="font-size:0.78rem;font-weight:700;color:' + (col||'var(--text-primary)') + ';">' + val + '</div>' +
-        '</div>';
+        '<div style="font-size:0.50rem;color:var(--text-muted);font-weight:700;letter-spacing:0.6px;">' + label + '</div>' +
+        '<div style="font-size:0.75rem;font-weight:700;">' + val + '</div></div>';
     };
-    html += mkMetric('X Posts', xCount > 0 ? '<span style="color:#00e676;">'+xCount+'</span>' : '<span style="color:#ff9800;">0</span>');
-    html += mkMetric('Reddit', rdCount > 0 ? '<span style="color:#00e676;">'+rdCount+'</span>' : '0');
+    html += mkMetric('X Posts',  xCount  > 0 ? '<span style="color:#00e676;">' + xCount  + '</span>' : '<span style="color:#ff9800;">0</span>');
+    html += mkMetric('Reddit',   rdCount > 0 ? '<span style="color:#FF4500;">' + rdCount + '</span>' : '0');
     if (xCount > 0) {
-      html += mkMetric('Avg ❤', avgLikes);
-      html += mkMetric('Avg RT', avgRt);
+      html += mkMetric('Avg ❤',  '<span style="color:#ff9800;">' + avgLikes + '</span>');
+      html += mkMetric('Avg RT',  '<span style="color:#4fc3f7;">' + avgRt + '</span>');
+      html += mkMetric('Total ❤', '<span style="color:rgba(255,152,0,0.7);">' + totalLikes.toLocaleString() + '</span>');
     }
     html += '</div>';
 
-    /* ── Top Post Engagement (from bulk response data only) ── */
+    /* ── Top Post Engagement ── */
     if (topTweet && xCount > 0) {
-      html += '<div style="font-size:0.58rem;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:4px;">Top Engagement Post (from scan)</div>';
+      html += '<div style="font-size:0.56rem;font-weight:700;color:var(--text-muted);letter-spacing:0.6px;text-transform:uppercase;margin-bottom:4px;">Top Engagement Post</div>';
       html += '<div style="padding:6px 8px;background:rgba(29,161,242,0.06);border:1px solid rgba(29,161,242,0.15);border-radius:4px;margin-bottom:8px;">';
       html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px;">';
       html += '<span style="font-size:0.62rem;font-weight:700;color:#1DA1F2;">' + topAuthor + '</span>';
@@ -8670,37 +8946,36 @@ async function runSocialScan(isDeep) {
       html += '<span style="font-size:0.56rem;color:#4fc3f7;">⟳ ' + topRt.toLocaleString() + '</span>';
       html += '</div>';
       if (topTweet.text) {
-        var previewText = topTweet.text.slice(0, 160) + (topTweet.text.length > 160 ? '…' : '');
-        html += '<div style="font-size:0.56rem;color:rgba(255,255,255,0.45);line-height:1.4;word-break:break-word;">' + previewText.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+        var previewText = topTweet.text.slice(0, 180) + (topTweet.text.length > 180 ? '…' : '');
+        html += '<div style="font-size:0.55rem;color:rgba(255,255,255,0.45);line-height:1.4;word-break:break-word;">' + previewText.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
       }
       html += '</div>';
     }
 
-    /* ── Scan Diagnostics ── */
+    /* ── Scan Diagnostics (collapsible) ── */
     html += '<details style="margin-top:2px;">';
-    html += '<summary style="cursor:pointer;font-size:0.58rem;color:var(--text-muted);user-select:none;outline:none;">';
+    html += '<summary style="cursor:pointer;font-size:0.57rem;color:var(--text-muted);user-select:none;outline:none;">';
     html += '<i class="fa-solid fa-stethoscope" style="margin-right:4px;"></i>Scan Diagnostics</summary>';
     html += '<div style="margin-top:6px;padding:8px;background:rgba(0,0,0,0.25);border-radius:5px;border-left:2px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:3px;">';
 
-    var mkDiagRow = function(l, v) {
+    var mkDR = function(l, v) {
       return '<div style="display:flex;gap:5px;align-items:flex-start;flex-wrap:wrap;min-width:0;">' +
-        '<span style="color:var(--text-muted);font-size:0.56rem;min-width:100px;flex-shrink:0;">' + l + ':</span>' +
-        '<span style="font-size:0.56rem;word-break:break-all;min-width:0;">' + (v||'—') + '</span></div>';
+        '<span style="color:var(--text-muted);font-size:0.55rem;min-width:100px;flex-shrink:0;">' + l + ':</span>' +
+        '<span style="font-size:0.55rem;word-break:break-all;min-width:0;">' + (v || '—') + '</span></div>';
     };
 
-    html += mkDiagRow('Query Used', (xResult.usedQuery || '—') + (xResult.queryValue ? ' ("' + xResult.queryValue + '")' : ''));
-    html += mkDiagRow('Providers Tried', tried.length ? tried.join(' → ') : '—');
-    html += mkDiagRow('Provider Success', succeeded.length ? succeeded.join(', ') : 'None');
-    html += mkDiagRow('X Posts Retrieved', String(xCount) + ' of ' + xLimit + ' requested');
-    html += mkDiagRow('Reddit Posts', String(rdCount) + ' of ' + rdLimit + ' requested');
-    if (respCodes.length) html += mkDiagRow('HTTP Status Codes', respCodes.join(', '));
-    if (postCounts.length) html += mkDiagRow('Raw Post Counts', postCounts.join(', ') + ' (per provider attempt)');
-    if (errs.length) {
-      html += mkDiagRow('Errors', '<span style="color:#ff9800;">' + errs.join(' | ') + '</span>');
-    }
-    if (isIncremental) html += mkDiagRow('Scan Type', 'Incremental — only posts since last scan timestamp');
-    html += mkDiagRow('Total Likes (batch)', totalLikes.toLocaleString());
-    html += mkDiagRow('Total Retweets (batch)', totalRt.toLocaleString());
+    html += mkDR('Scan Mode', scanModeLabel);
+    html += mkDR('Query Used', (xResult.usedQuery || '—') + (xResult.queryValue ? ' ("' + xResult.queryValue + '")' : ''));
+    html += mkDR('Providers Tried', tried.length ? tried.join(' → ') : '—');
+    html += mkDR('Providers Succeeded', succeeded.length ? succeeded.join(', ') : 'None');
+    html += mkDR('X Posts', xCount + ' of ' + xLimit + ' requested');
+    html += mkDR('Reddit Posts', rdCount + ' of ' + rdLimit + ' requested');
+    if (isIncremental) html += mkDR('Scan Type', 'Incremental — only posts since last scan');
+    if (respCodes.length) html += mkDR('HTTP Codes', respCodes.join(', '));
+    if (postCounts.length) html += mkDR('Raw Counts', postCounts.join(', ') + ' (per attempt)');
+    if (errs.length) html += mkDR('Errors', '<span style="color:#ff9800;">' + errs.join(' · ') + '</span>');
+    html += mkDR('Total ❤ (batch)', totalLikes.toLocaleString());
+    html += mkDR('Total RT (batch)', totalRt.toLocaleString());
 
     html += '</div></details>';
     html += '</div>';

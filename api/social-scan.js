@@ -1,13 +1,35 @@
 // /api/social-scan — Vercel serverless function
 // Routes all X/Twitter social API calls through the server to avoid CORS.
-// Provider waterfall: TwitterAPI.io → GetXAPI → Apify
-// Each provider logs request URL, response code, post count, and error details.
+// Scan modes: first_success | auto_fallback | merge_all
+// Supports 5 configurable Apify actors.
 
 'use strict';
 
 const PRIORITY_KEYS = ['ca', 'ticker', 'ticker_dollar', 'name'];
 const DEFAULT_TIMEOUT_MS = 15000;
 const APIFY_TIMEOUT_MS  = 58000;
+
+const APIFY_ACTORS = {
+  getxapi_actor:  'getxapi~twitter-scraper',
+  xquik:          'xquik~x-tweet-scraper',
+  quadraphonic:   'celebrated-quadraphonic~x-twitter-scraper-v3',
+  kaitoeasyapi:   'kaitoeasyapi~twitter-x-data-tweet-scraper-pay-per-result-cheapest',
+  igolaizola:     'igolaizola~x-twitter-scraper-ppe',
+};
+
+const COST_PER_TWEET = {
+  'twitterapi.io':      0.00015,
+  'getxapi':            0.00005,
+  'apify_getxapi_actor':0.00005,
+  'apify_xquik':        0.00015,
+  'apify_quadraphonic': 0.00020,
+  'apify_kaitoeasyapi': 0.00025,
+  'apify_igolaizola':   0.00015,
+};
+
+function apifyCostKey(actor) {
+  return 'apify_' + (actor || 'getxapi_actor');
+}
 
 async function fetchTimeout(url, options, ms) {
   const ctrl = new AbortController();
@@ -40,6 +62,23 @@ function normalizeTweet(t) {
   };
 }
 
+function buildApifyInput(actorKey, query, limit) {
+  switch (actorKey) {
+    case 'getxapi_actor':
+      return { searchQuery: query, count: limit, searchType: 'Latest' };
+    case 'xquik':
+      return { searchTerms: [query], maxItems: limit, sort: 'Latest', includeReplies: false };
+    case 'quadraphonic':
+      return { searchQueries: [query], maxTweets: limit, mode: 'latest' };
+    case 'kaitoeasyapi':
+      return { searchQueries: [query], maxItems: limit, searchType: 'Latest' };
+    case 'igolaizola':
+      return { queries: [{ term: query }], maxResults: limit, sort: 'latest' };
+    default:
+      return { searchTerms: [query], maxItems: limit, sort: 'Latest' };
+  }
+}
+
 async function tryTwitterAPIio(queries, limit, sinceTs, apiKey, log) {
   for (const key of PRIORITY_KEYS) {
     const q = queries[key];
@@ -53,18 +92,19 @@ async function tryTwitterAPIio(queries, limit, sinceTs, apiKey, log) {
       const resp = await fetchTimeout(url, { headers: { 'X-API-Key': apiKey } });
       log.response_codes.push(resp.status);
       if (resp.status === 401 || resp.status === 403) {
-        const msg = 'Invalid API key (HTTP ' + resp.status + ')';
-        log.errors.push('TwitterAPI.io: ' + msg);
+        const msg = 'TwitterAPI.io Invalid API Key (HTTP ' + resp.status + ')';
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       if (resp.status === 429) {
-        const msg = 'Rate limited (HTTP 429) — wait 60s and retry';
-        log.errors.push('TwitterAPI.io: ' + msg);
+        const msg = 'TwitterAPI.io Rate Limited — wait 60s and retry';
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       if (!resp.ok) {
-        log.errors.push('TwitterAPI.io: HTTP ' + resp.status);
-        return { ok: false, error: 'HTTP ' + resp.status, tweets: [] };
+        const msg = 'TwitterAPI.io HTTP ' + resp.status;
+        log.errors.push(msg);
+        return { ok: false, error: msg, tweets: [] };
       }
       const json = await resp.json();
       const raw  = Array.isArray(json.tweets) ? json.tweets :
@@ -75,8 +115,9 @@ async function tryTwitterAPIio(queries, limit, sinceTs, apiKey, log) {
       if (!tweets.length) continue;
       return { ok: true, tweets, usedQuery: key, queryValue: fullQuery, provider: 'twitterapi.io' };
     } catch (e) {
-      log.errors.push('TwitterAPI.io: ' + (e.message || 'Unknown error'));
-      return { ok: false, error: e.message || 'Unknown error', tweets: [] };
+      const msg = 'TwitterAPI.io ' + (e.message && e.message.includes('timed out') ? 'Request Timed Out (15s)' : (e.message || 'Unknown error'));
+      log.errors.push(msg);
+      return { ok: false, error: msg, tweets: [] };
     }
   }
   return { ok: true, tweets: [], usedQuery: null, provider: 'twitterapi.io',
@@ -96,25 +137,25 @@ async function tryGetXAPI(queries, limit, sinceTs, apiKey, log) {
       const resp = await fetchTimeout(url, { headers: { Authorization: 'Bearer ' + apiKey } });
       log.response_codes.push(resp.status);
       if (resp.status === 401) {
-        const msg = 'Invalid Bearer token (HTTP 401)';
-        log.errors.push('GetXAPI: ' + msg);
+        const msg = 'GetXAPI Invalid Bearer Token (HTTP 401)';
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       if (resp.status === 403) {
-        const msg = 'Forbidden — endpoint not enabled for this plan (HTTP 403)';
-        log.errors.push('GetXAPI: ' + msg);
+        const msg = 'GetXAPI Forbidden — endpoint not enabled for this plan (HTTP 403)';
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       if (resp.status === 429) {
-        const msg = 'Rate limited (HTTP 429) — retry in a few seconds';
-        log.errors.push('GetXAPI: ' + msg);
+        const msg = 'GetXAPI Rate Limited — retry in a few seconds';
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       if (!resp.ok) {
         let errMsg = '';
         try { errMsg = (await resp.json()).error || ''; } catch (_) {}
-        const msg = 'HTTP ' + resp.status + (errMsg ? ': ' + errMsg : '');
-        log.errors.push('GetXAPI: ' + msg);
+        const msg = 'GetXAPI HTTP ' + resp.status + (errMsg ? ': ' + errMsg : '');
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       const json = await resp.json();
@@ -126,48 +167,66 @@ async function tryGetXAPI(queries, limit, sinceTs, apiKey, log) {
       if (!tweets.length) continue;
       return { ok: true, tweets, usedQuery: key, queryValue: fullQuery, provider: 'getxapi' };
     } catch (e) {
-      log.errors.push('GetXAPI: ' + (e.message || 'Unknown error'));
-      return { ok: false, error: e.message || 'Unknown error', tweets: [] };
+      const msg = 'GetXAPI ' + (e.message && e.message.includes('timed out') ? 'Request Timed Out' : (e.message || 'Unknown error'));
+      log.errors.push(msg);
+      return { ok: false, error: msg, tweets: [] };
     }
   }
   return { ok: true, tweets: [], usedQuery: null, provider: 'getxapi',
            warning: 'No posts found for any query format' };
 }
 
-async function tryApify(queries, limit, token, log) {
+async function tryApify(queries, limit, token, actorKey, log) {
+  const actorId = APIFY_ACTORS[actorKey] || APIFY_ACTORS.getxapi_actor;
   for (const key of PRIORITY_KEYS) {
     const q = queries[key];
     if (!q) continue;
-    const url = 'https://api.apify.com/v2/acts/apidojo~tweet-scraper/run-sync-get-dataset-items' +
-      '?token=' + encodeURIComponent(token) + '&timeout=45';
+    const url = 'https://api.apify.com/v2/acts/' + actorId +
+      '/run-sync-get-dataset-items?token=' + encodeURIComponent(token) + '&timeout=45';
     log.request_urls.push(url);
     log.queries_attempted.push({ provider: 'apify', key, query: q });
     try {
+      const input = buildApifyInput(actorKey, q, limit);
       const resp = await fetchTimeout(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchTerms: [q], sort: 'Latest', maxItems: limit, includeReplies: false }),
+        body: JSON.stringify(input),
       }, APIFY_TIMEOUT_MS);
       log.response_codes.push(resp.status);
       if (resp.status === 401) {
-        const msg = 'Invalid Apify token (HTTP 401)';
-        log.errors.push('Apify: ' + msg);
+        const msg = 'Apify Invalid Token (HTTP 401)';
+        log.errors.push(msg);
+        return { ok: false, error: msg, tweets: [] };
+      }
+      if (resp.status === 400) {
+        const msg = 'Apify Invalid Actor Input (HTTP 400) — check actor configuration';
+        log.errors.push(msg);
+        return { ok: false, error: msg, tweets: [] };
+      }
+      if (resp.status === 404) {
+        const msg = 'Apify Actor Not Found (HTTP 404) — actor may be unavailable or retired';
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       if (!resp.ok) {
-        const msg = 'HTTP ' + resp.status;
-        log.errors.push('Apify: ' + msg);
+        const msg = 'Apify HTTP ' + resp.status;
+        log.errors.push(msg);
         return { ok: false, error: msg, tweets: [] };
       }
       const arr = await resp.json();
-      log.post_counts.push(Array.isArray(arr) ? arr.length : 0);
-      if (!Array.isArray(arr) || !arr.length) continue;
+      if (!Array.isArray(arr)) {
+        const msg = 'Apify Actor Returned Invalid Response (expected array, got ' + typeof arr + ')';
+        log.errors.push(msg);
+        return { ok: false, error: msg, tweets: [] };
+      }
+      log.post_counts.push(arr.length);
+      if (!arr.length) continue;
       const tweets = arr.slice(0, limit).map(t => {
         const created = t.created_at || t.createdAt || '';
         const ts      = created ? new Date(created).getTime() : null;
         const auth    = (t.author && t.author.userName) || (t.user && t.user.screen_name) || '';
         return {
-          id:       t.id || '',
+          id:       String(t.id || t.rest_id || ''),
           text:     t.full_text || t.text || '',
           ts,
           author:   auth.toLowerCase(),
@@ -175,15 +234,49 @@ async function tryApify(queries, limit, token, log) {
           likes:    t.favorite_count || t.likeCount      || 0,
         };
       }).filter(t => t.ts);
-      if (!tweets.length) continue;
+      if (!tweets.length) {
+        log.errors.push('Apify Actor Returned Zero Results');
+        continue;
+      }
       return { ok: true, tweets, usedQuery: key, queryValue: q, provider: 'apify' };
     } catch (e) {
-      log.errors.push('Apify: ' + (e.message || 'Unknown error'));
-      return { ok: false, error: e.message || 'Unknown error', tweets: [] };
+      const msg = 'Apify ' + (e.message && e.message.includes('timed out') ? 'Actor Request Timed Out (45s)' : (e.message || 'Unknown error'));
+      log.errors.push(msg);
+      return { ok: false, error: msg, tweets: [] };
     }
   }
   return { ok: true, tweets: [], usedQuery: null, provider: 'apify',
-           warning: 'No posts found for any query format' };
+           warning: 'Apify Actor Returned Zero Results' };
+}
+
+function mergeTweets(arrays, limit) {
+  const seen   = new Set();
+  const merged = [];
+  for (const arr of arrays) {
+    for (const t of (arr || [])) {
+      const key = t.id || (t.author + ':' + String(t.text || '').slice(0, 40));
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(t);
+      }
+    }
+  }
+  return limit ? merged.slice(0, limit) : merged;
+}
+
+async function runProvider(name, fn, cost_key, log) {
+  const t0 = Date.now();
+  const r  = await fn();
+  const ms = Date.now() - t0;
+  const cnt    = (r.tweets || []).length;
+  const cost   = cnt * (COST_PER_TWEET[cost_key] || 0);
+  const status = r.ok && cnt > 0 ? 'Success' : r.ok ? 'No Results' : 'Failed';
+  if (r.ok && cnt > 0) log.providers_succeeded.push(name);
+  const fp = r.ok && cnt > 0
+    ? ('✓ ' + name + ' returned ' + cnt + ' posts' + (r.usedQuery ? ' (query: ' + r.usedQuery + ')' : ''))
+    : ('⚠ ' + name + ': ' + (r.error || r.warning || 'No results'));
+  log.fallback_path.push(fp);
+  return { r, diag: { provider: name, status, error: r.error || null, tweets: cnt, requestTimeMs: ms, costEstimate: cost } };
 }
 
 module.exports = async function handler(req, res) {
@@ -206,76 +299,173 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  const { queries, limit = 15, sinceTs = null, apiKeys = {} } = body || {};
+  const {
+    queries,
+    limit       = 15,
+    sinceTs     = null,
+    apiKeys     = {},
+    scanMode    = 'auto_fallback',
+    providerConfig = {},
+    apifyActor  = 'getxapi_actor',
+  } = body || {};
+
   if (!queries) { res.status(400).json({ error: 'Missing required field: queries' }); return; }
 
   const twKey = apiKeys.twitterapio || '';
   const gxKey = apiKeys.getxapi     || '';
   const apKey = apiKeys.apify        || '';
 
+  const twEnabled = providerConfig.twitterapi !== false;
+  const gxEnabled = providerConfig.getxapi    !== false;
+  const apEnabled = providerConfig.apify       !== false;
+
   const log = {
-    providers_tried:    [],
+    scan_mode:           scanMode,
+    apify_actor:         apifyActor,
+    providers_tried:     [],
     providers_succeeded: [],
-    errors:             [],
-    fallback_path:      [],
-    queries_attempted:  [],
-    request_urls:       [],
-    response_codes:     [],
-    post_counts:        [],
-    queries_used:       queries,
+    errors:              [],
+    fallback_path:       [],
+    queries_attempted:   [],
+    request_urls:        [],
+    response_codes:      [],
+    post_counts:         [],
+    queries_used:        queries,
   };
 
+  const providerDiagnostics = [];
   let result = null;
 
-  if (twKey) {
-    log.providers_tried.push('twitterapi.io');
-    const r = await tryTwitterAPIio(queries, limit, sinceTs, twKey, log);
-    if (r.ok && r.tweets && r.tweets.length > 0) {
-      result = r;
-      log.providers_succeeded.push('twitterapi.io');
-      log.fallback_path.push('✓ TwitterAPI.io returned ' + r.tweets.length + ' posts (query key: ' + r.usedQuery + ')');
+  // ── Disabled-provider helper ──────────────────────────────────────────────
+  function skipDiag(label, reason, costKey) {
+    log.fallback_path.push('— ' + label + ': ' + reason);
+    providerDiagnostics.push({ provider: label, status: 'Disabled', error: reason, tweets: 0, requestTimeMs: 0, costEstimate: 0, costKey });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEQUENTIAL MODES: first_success / auto_fallback
+  // ─────────────────────────────────────────────────────────────────────────
+  if (scanMode === 'first_success' || scanMode === 'auto_fallback') {
+
+    // TwitterAPI.io
+    if (twEnabled && twKey) {
+      log.providers_tried.push('twitterapi.io');
+      const { r, diag } = await runProvider('TwitterAPI.io', () =>
+        tryTwitterAPIio(queries, limit, sinceTs, twKey, log), 'twitterapi.io', log);
+      diag.costKey = 'twitterapi';
+      providerDiagnostics.push(diag);
+      if (r.ok && (r.tweets || []).length > 0) result = r;
+    } else if (!twEnabled) {
+      skipDiag('TwitterAPI.io', 'Provider Disabled By User', 'twitterapi');
     } else {
-      const msg = r.error || r.warning || 'No results';
-      log.fallback_path.push('⚠ TwitterAPI.io: ' + msg);
+      skipDiag('TwitterAPI.io', 'No API key configured', 'twitterapi');
+    }
+
+    // GetXAPI
+    if (!result) {
+      if (gxEnabled && gxKey) {
+        log.providers_tried.push('getxapi');
+        const { r, diag } = await runProvider('GetXAPI', () =>
+          tryGetXAPI(queries, limit, sinceTs, gxKey, log), 'getxapi', log);
+        diag.costKey = 'getxapi';
+        providerDiagnostics.push(diag);
+        if (r.ok && (r.tweets || []).length > 0) result = r;
+      } else if (!gxEnabled) {
+        skipDiag('GetXAPI', 'Provider Disabled By User', 'getxapi');
+      } else {
+        skipDiag('GetXAPI', 'No API key configured', 'getxapi');
+      }
+    }
+
+    // Apify
+    if (!result) {
+      if (apEnabled && apKey) {
+        log.providers_tried.push('apify');
+        const actorLabel = 'Apify (' + (apifyActor || 'getxapi_actor') + ')';
+        const { r, diag } = await runProvider(actorLabel, () =>
+          tryApify(queries, limit, apKey, apifyActor, log), apifyCostKey(apifyActor), log);
+        diag.costKey = 'apify';
+        providerDiagnostics.push(diag);
+        if (r.ok && (r.tweets || []).length > 0) result = r;
+      } else if (!apEnabled) {
+        skipDiag('Apify', 'Provider Disabled By User', 'apify');
+      } else {
+        skipDiag('Apify', 'No Apify token configured', 'apify');
+      }
     }
   }
 
-  if (!result && gxKey) {
-    log.providers_tried.push('getxapi');
-    const r = await tryGetXAPI(queries, limit, sinceTs, gxKey, log);
-    if (r.ok && r.tweets && r.tweets.length > 0) {
-      result = r;
-      log.providers_succeeded.push('getxapi');
-      log.fallback_path.push('✓ GetXAPI returned ' + r.tweets.length + ' posts (query key: ' + r.usedQuery + ')');
+  // ─────────────────────────────────────────────────────────────────────────
+  // MERGE ALL MODE: run all enabled providers concurrently, deduplicate
+  // ─────────────────────────────────────────────────────────────────────────
+  if (scanMode === 'merge_all') {
+    const tasks = [];
+
+    if (twEnabled && twKey) {
+      log.providers_tried.push('twitterapi.io');
+      tasks.push(runProvider('TwitterAPI.io', () =>
+        tryTwitterAPIio(queries, limit, sinceTs, twKey, log), 'twitterapi.io', log)
+        .then(({ r, diag }) => { diag.costKey = 'twitterapi'; providerDiagnostics.push(diag); return r; }));
     } else {
-      const msg = r.error || r.warning || 'No results';
-      log.fallback_path.push('⚠ GetXAPI: ' + msg);
+      skipDiag('TwitterAPI.io', twEnabled ? 'No API key configured' : 'Provider Disabled By User', 'twitterapi');
+      tasks.push(Promise.resolve({ ok: false, tweets: [] }));
+    }
+
+    if (gxEnabled && gxKey) {
+      log.providers_tried.push('getxapi');
+      tasks.push(runProvider('GetXAPI', () =>
+        tryGetXAPI(queries, limit, sinceTs, gxKey, log), 'getxapi', log)
+        .then(({ r, diag }) => { diag.costKey = 'getxapi'; providerDiagnostics.push(diag); return r; }));
+    } else {
+      skipDiag('GetXAPI', gxEnabled ? 'No API key configured' : 'Provider Disabled By User', 'getxapi');
+      tasks.push(Promise.resolve({ ok: false, tweets: [] }));
+    }
+
+    if (apEnabled && apKey) {
+      log.providers_tried.push('apify');
+      const actorLabel = 'Apify (' + (apifyActor || 'getxapi_actor') + ')';
+      tasks.push(runProvider(actorLabel, () =>
+        tryApify(queries, limit, apKey, apifyActor, log), apifyCostKey(apifyActor), log)
+        .then(({ r, diag }) => { diag.costKey = 'apify'; providerDiagnostics.push(diag); return r; }));
+    } else {
+      skipDiag('Apify', apEnabled ? 'No Apify token configured' : 'Provider Disabled By User', 'apify');
+      tasks.push(Promise.resolve({ ok: false, tweets: [] }));
+    }
+
+    const settled = await Promise.all(tasks);
+    const merged  = mergeTweets(settled.map(r => r.tweets), limit * 2);
+    const anyOk   = settled.some(r => r.ok && (r.tweets || []).length > 0);
+
+    if (anyOk) {
+      const firstOk = settled.find(r => r.ok && (r.tweets || []).length > 0);
+      result = {
+        ok: true,
+        tweets: merged,
+        provider: log.providers_succeeded.length > 1 ? 'merged' : (firstOk ? firstOk.provider : null),
+        usedQuery: firstOk ? firstOk.usedQuery : null,
+        queryValue: firstOk ? firstOk.queryValue : null,
+      };
+      log.fallback_path.push('✓ Merged ' + merged.length + ' unique posts from ' + log.providers_succeeded.length + ' provider(s)');
     }
   }
 
-  if (!result && apKey) {
-    log.providers_tried.push('apify');
-    const r = await tryApify(queries, limit, apKey, log);
-    if (r.ok && r.tweets && r.tweets.length > 0) {
-      result = r;
-      log.providers_succeeded.push('apify');
-      log.fallback_path.push('✓ Apify returned ' + r.tweets.length + ' posts (query key: ' + r.usedQuery + ')');
-    } else {
-      const msg = r.error || r.warning || 'No results';
-      log.fallback_path.push('⚠ Apify: ' + msg);
-    }
-  }
-
+  // ── Final fallback ────────────────────────────────────────────────────────
   if (!result) {
     result = { ok: false, tweets: [], provider: null, usedQuery: null };
-    if (!twKey && !gxKey && !apKey) {
-      const noKeyMsg = 'No X API keys configured — add a TwitterAPI.io, GetXAPI, or Apify key in Settings';
-      log.errors.push(noKeyMsg);
-      log.fallback_path.push('✗ ' + noKeyMsg);
+    const noKey = !twKey && !gxKey && !apKey;
+    const allOff = !twEnabled && !gxEnabled && !apEnabled;
+    if (allOff) {
+      const msg = 'All providers disabled — enable at least one in Social Provider Settings';
+      log.errors.push(msg);
+      log.fallback_path.push('✗ ' + msg);
+    } else if (noKey) {
+      const msg = 'No X API keys configured — add a TwitterAPI.io, GetXAPI, or Apify key in Settings';
+      log.errors.push(msg);
+      log.fallback_path.push('✗ ' + msg);
     } else {
-      log.fallback_path.push('✗ All configured providers exhausted with no results');
+      log.fallback_path.push('✗ All configured providers exhausted — no results returned');
     }
   }
 
-  res.status(200).json({ ...result, diagnostics: log });
+  res.status(200).json({ ...result, diagnostics: log, providerDiagnostics });
 };
