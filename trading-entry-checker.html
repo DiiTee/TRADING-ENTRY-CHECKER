@@ -3359,6 +3359,7 @@ async function fetchFromCA(ca) {
           window._tecHolderH1    = fetched.holdersH1  || parseInt((el('fHoldersH1')||{}).value||'0') || 0;
           window._tecHolderH6    = fetched.holdersH6  || parseInt((el('fHoldersH6')||{}).value||'0') || 0;
           window._tecHolderH24   = fetched.holdersH24 || parseInt((el('fHoldersH24')||{}).value||'0') || 0;
+          window._tecMarketCap   = fetched.marketCap  || 0;
           window._tecSettings    = settings;
           gtStructuralAnalysis = computeStructuralAnalysis(gt15mList, saPoolAttrs);
           if (gtStructuralAnalysis) {
@@ -6143,7 +6144,7 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   var hldH24 = window._tecHolderH24 || 0;
 
   /* Holder Count Quality — market-cap-relative ratio scoring */
-  var hcMcap = (fetched && fetched.marketCap) ? fetched.marketCap : 0;
+  var hcMcap = window._tecMarketCap || 0;
   /* Expected holder range lookup by market cap */
   var hcExpLow, hcExpHigh;
   if      (hcMcap <= 0)           { hcExpLow =   25; hcExpHigh =    50; }
