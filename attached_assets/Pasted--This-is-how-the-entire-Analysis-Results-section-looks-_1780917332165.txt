@@ -1,0 +1,188 @@
+
+
+This is how the entire Analysis Results section looks like on Mobile. (attached image)
+It's unreadable, lots of lines cut off.
+Audit the Mobile Display setup code and locate the culprit for this issue and fix it.
+
+Suggestions found in the Audit below:
+
+---
+
+ AUDIT FROM CLAUDE: 
+
+### 🔴 Bug #1 — CRITICAL: The Entire Mobile CSS Block Is Targeting a Ghost ID
+
+This is the **primary culprit**. Look at your CSS from line 575 onward:
+
+```css
+#analysisResults,
+#analysisResults .briefing-section,
+#analysisResults .card { ... }
+
+#analysisResults [style*="display:flex"],
+#analysisResults [style*="display: flex"] {
+  flex-wrap: wrap !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 480px) {
+  #analysisResults [style*="repeat(auto-fill"] { ... }
+  #analysisResults [style*="display:flex;gap:10px"] { ... }
+  ...
+}
+```
+
+Every single one of these rules targets `#analysisResults`. **That ID does not exist in your HTML.** Your actual container is:
+
+```html
+<div class="card hidden" id="checklistCard">
+```
+
+So every `flex-wrap` fix, every grid collapse rule, every `min-width` override, every monospace address wrap rule — **none of them fire**. They're completely inert dead CSS. Prior attempts wrote mobile fixes for a container that has never existed. This is the one bug that invalidates all the others.
+
+---
+
+### 🔴 Bug #2 — `.verdict-section` Has `padding: 24px` With Zero Mobile Reduction
+
+Your CSS:
+```css
+.verdict-section {
+  padding: 24px;   /* <-- never reduced on mobile */
+  ...
+}
+
+@media (max-width: 768px) {
+  .verdict-section { flex-direction: column; text-align: center; }
+  /* padding: 24px still in effect — not touched */
+}
+```
+
+On a 360px phone, with `.app` padding 8px and `.card` padding 12px, your available content width is already down to ~318px before this. The `verdict-section` consumes another 48px (24px each side), leaving **270px** for everything inside. No wonder content is getting clipped.
+
+---
+
+### 🔴 Bug #3 — Padding Stack Compounds Across Three Nesting Levels
+
+After bug #2's 270px, `buildRecommendedEntryChecklist` injects an additional inline-padded wrapper:
+
+```javascript
+// Line 9084
+html = '<div style="margin-top:14px;padding:12px 14px;...;">';
+```
+
+That's another 28px gone → **~242px** left. The Security Briefing sections inside then render their own content with `padding: 8px 14px` and `padding: 7px 10px` boxes. By the time you're at the "FINAL SECURITY VERDICT" text, you have roughly **~148px** for that column. "MODERATE RISK" at `font-size:1.20rem; letter-spacing:1px` is borderline at that width.
+
+---
+
+### 🔴 Bug #4 — `flex-shrink: 0` + `min-width: 110px` on the Security Tier Column
+
+```javascript
+// Line 5044
+nt += '<div style="min-width:110px;...;flex-shrink:0;">';
+// Contains "B" at font-size:2.4rem; letter-spacing:3px
+```
+
+`flex-shrink: 0` means this column will **never** compress. Combined with `letter-spacing: 3px` on the grade letter, the first column locks at minimum 110px, forcing the "Final Security Verdict" column into whatever's left. On narrow phones that's under 148px for text like "MODERATE RISK" at 1.2rem.
+
+---
+
+### 🔴 Bug #5 — The Score Line Is Too Wide for Narrow Viewports
+
+```javascript
+// Line 9110
+'Score: '+oScore+'/100 ('+_wLabel+')'
+// Renders as: "Score: 54/100 (Sec 38% · Str 38% · Att 24%)"
+```
+
+That's a 44-character string at `font-size: 0.57rem` with no line-break points in the numbers/percentages. At 242px available content width, this string is right at the overflow boundary. Since the `#analysisResults` CSS rules are dead (Bug #1), there's nothing catching the overflow.
+
+---
+
+## The Fixes
+
+### Fix #1 — Replace the Ghost ID (do this first, it fixes the most)
+
+Do a find-and-replace throughout the CSS section. Replace every instance of `#analysisResults` with `#checklistCard`:
+
+```css
+/* BEFORE (lines 575–778) */
+#analysisResults { ... }
+#analysisResults .briefing-section { ... }
+#analysisResults .card { ... }
+#analysisResults [style*="display:flex"] { ... }
+/* etc. */
+
+/* AFTER */
+#checklistCard { ... }
+#checklistCard .briefing-section { ... }
+#checklistCard .card { ... }
+#checklistCard [style*="display:flex"] { ... }
+/* etc. */
+```
+
+That's ~15 selector replacements in your CSS block. This single change activates all the mobile fixes that have been silently doing nothing.
+
+---
+
+### Fix #2 — Reduce `.verdict-section` Padding on Mobile
+
+```css
+@media (max-width: 768px) {
+  .verdict-section { 
+    flex-direction: column; 
+    text-align: center;
+    padding: 12px;   /* ADD THIS LINE */
+    gap: 14px;       /* ADD THIS — reduces the 28px gap too */
+  }
+}
+@media (max-width: 480px) {
+  .verdict-section {
+    padding: 8px;    /* ADD THIS — even tighter on small phones */
+  }
+}
+```
+
+---
+
+### Fix #3 — Reduce the Score Line Letter-Spacing on Mobile
+
+In `buildRecommendedEntryChecklist` (line 9110), the score line currently has no explicit letter-spacing. The parent `.briefing-title` can bleed through. Add an explicit clamp and allow the label to break:
+
+```javascript
+// Line 9110 — change:
+if (hasData) html += '<div style="font-size:0.57rem;color:var(--text-muted);overflow-wrap:break-word;word-break:break-word;margin-top:2px;">Score: '+oScore+'/100 ('+_wLabel+')</div>';
+
+// To:
+if (hasData) html += '<div style="font-size:0.57rem;color:var(--text-muted);overflow-wrap:break-word;word-break:break-word;white-space:normal;letter-spacing:0;margin-top:2px;">Score: '+oScore+'/100 ('+_wLabel+')</div>';
+```
+
+---
+
+### Fix #4 — Allow the Security Tier Column to Flex-Wrap on Mobile
+
+The Security Tier + Final Security Verdict row (line 5043) already has `flex-wrap:wrap`, which is correct. But once Fix #1 is applied, the `#checklistCard [style*="display:flex"]` rule will add `flex-wrap: wrap !important` to the inner `display:flex;flex-direction:column` div too. The remaining issue is `font-size:2.4rem; letter-spacing:3px` on the tier grade. Target it via the now-working selector:
+
+```css
+/* Add this to your existing @media (max-width: 480px) block targeting #checklistCard */
+@media (max-width: 480px) {
+  #checklistCard [style*="letter-spacing:3px"] {
+    font-size: 1.8rem !important;
+    letter-spacing: 1px !important;
+  }
+}
+```
+
+This rule already exists in your CSS (line 733–736) — it just needs the selector changed from `#analysisResults` to `#checklistCard` (which Fix #1 already handles).
+
+---
+
+### Summary Priority Order
+
+| Priority | Fix | Impact |
+|---|---|---|
+| 🔴 1 | Replace `#analysisResults` → `#checklistCard` everywhere in CSS | Activates all dormant mobile rules |
+| 🔴 2 | Add `padding: 12px` / `padding: 8px` to `.verdict-section` media queries | Reclaims 24-32px on each side |
+| 🟡 3 | Add `letter-spacing:0` to score line (line 9110) | Stops the score string overflow |
+| 🟡 4 | Flows automatically from Fix #1 (the 3px letter-spacing rule activates) | Fixes Security Tier column size |
+
+Fix #1 alone will resolve most of what you see in the screenshot. Fixes #2 and #3 handle the remaining tightness.
