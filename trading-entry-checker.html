@@ -2699,6 +2699,41 @@ async function fetchWithFallback(url, extraHeaders) {
   }
 }
 
+/* ── Holder Snapshot History ──────────────────────────────────────────────────
+   Stores timestamped holder counts in localStorage (key: tec_hs_{ca}).
+   Each entry is a 2-element array [timestamp_ms, holder_count].
+   Snapshots older than 48h are pruned; max 200 entries per CA.
+   Used to auto-populate holdersH1/H6/H24 for Holder Momentum calculations.
+   ─────────────────────────────────────────────────────────────────────────── */
+function tecSaveHolderSnap(ca, count) {
+  if (!ca || !(count > 0)) return;
+  try {
+    var key = 'tec_hs_' + ca;
+    var snaps = JSON.parse(localStorage.getItem(key) || '[]');
+    var now = Date.now();
+    snaps.push([now, count]);
+    var cutoff = now - 172800000; /* 48h */
+    snaps = snaps.filter(function(s) { return s[0] > cutoff; });
+    if (snaps.length > 200) snaps = snaps.slice(-200);
+    localStorage.setItem(key, JSON.stringify(snaps));
+  } catch(e) {}
+}
+function tecGetHolderSnap(ca, msBefore, toleranceMs) {
+  if (!ca) return 0;
+  try {
+    var key = 'tec_hs_' + ca;
+    var snaps = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!snaps.length) return 0;
+    var targetTs = Date.now() - msBefore;
+    var best = null, bestDiff = Infinity;
+    snaps.forEach(function(s) {
+      var diff = Math.abs(s[0] - targetTs);
+      if (diff < bestDiff) { bestDiff = diff; best = s; }
+    });
+    return (best && bestDiff <= toleranceMs) ? best[1] : 0;
+  } catch(e) { return 0; }
+}
+
 async function fetchFromCA(ca) {
   if (!ca || ca.trim().length < 10) {
     showToast('Please enter a valid Solana contract address (44 characters, base-58).', 'error');
@@ -3467,6 +3502,42 @@ async function fetchFromCA(ca) {
       addDiag('fail', 'GeckoTerminal', _gtDiagDetail);
     }
   }
+
+  /* ── Holder History: snapshot tracking + H1/H6/H24 auto-population ─────────
+     In HINT/FLOW mode the holder count globals are not set by the candle block
+     above, so we set them here from fetched.holders / form fields.
+     Then we save a timestamped snapshot and back-fill H1/H6/H24 from the
+     closest stored snapshot within a ±tolerance window so Holder Momentum
+     metrics are populated automatically on repeated fetches of the same token. */
+  (function() {
+    /* HINT/FLOW: set holder count globals (STRUCTURE mode already did this) */
+    if (window._tecEngineMode !== 'STRUCTURE') {
+      var _hc = fetched.holders || parseInt((el('fHolders')||{}).value||'0') || 0;
+      if (_hc > 0) {
+        window._tecHolderCount = _hc;
+        window._tecHolderH1  = fetched.holdersH1  || parseInt((el('fHoldersH1') ||{}).value||'0') || 0;
+        window._tecHolderH6  = fetched.holdersH6  || parseInt((el('fHoldersH6') ||{}).value||'0') || 0;
+        window._tecHolderH24 = fetched.holdersH24 || parseInt((el('fHoldersH24')||{}).value||'0') || 0;
+      }
+    }
+    /* Save a snapshot of current holder count (both STRUCTURE and HINT/FLOW) */
+    if (window._tecHolderCount > 0) tecSaveHolderSnap(ca, window._tecHolderCount);
+    /* Auto-load from localStorage where H1/H6/H24 are still missing */
+    if (window._tecHolderCount > 0) {
+      var _s1  = !window._tecHolderH1  ? tecGetHolderSnap(ca, 3600000,   1800000)  : 0;
+      var _s6  = !window._tecHolderH6  ? tecGetHolderSnap(ca, 21600000,  3600000)  : 0;
+      var _s24 = !window._tecHolderH24 ? tecGetHolderSnap(ca, 86400000, 10800000) : 0;
+      if (_s1)  { window._tecHolderH1  = _s1;  window._tecDataAvailability.holderHistory = true; }
+      if (_s6)  { window._tecHolderH6  = _s6;  window._tecDataAvailability.holderHistory = true; }
+      if (_s24) { window._tecHolderH24 = _s24; window._tecDataAvailability.holderHistory = true; }
+    }
+    /* Reflect auto-loaded history in form fields (only if the field is currently empty) */
+    try {
+      if (window._tecHolderH1  > 0 && !(parseInt((el('fHoldersH1') ||{}).value||'0'))) el('fHoldersH1').value  = window._tecHolderH1;
+      if (window._tecHolderH6  > 0 && !(parseInt((el('fHoldersH6') ||{}).value||'0'))) el('fHoldersH6').value  = window._tecHolderH6;
+      if (window._tecHolderH24 > 0 && !(parseInt((el('fHoldersH24')||{}).value||'0'))) el('fHoldersH24').value = window._tecHolderH24;
+    } catch(e) {}
+  })();
 
   /* ── 5a: DEX Screener OHLCV note ─────────────────────────────────────────
      DexScreener's public API does not expose an OHLCV/candle endpoint.
