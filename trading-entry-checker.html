@@ -3452,19 +3452,25 @@ async function fetchFromCA(ca) {
         } else {
           window._tecEngineReason = 'GeckoTerminal returned candles but Structure Engine returned no result (possible empty/invalid candle data). Candle count: ' + (gt15mList ? gt15mList.length : 0) + '.';
         }
-        if (gtMacroFloor > 0 || gtLocalFloor > 0) {
+        if (gtStructuralAnalysis && (gtMacroFloor > 0 || gtLocalFloor > 0)) {
           addBadge('GeckoTerminal', 'ok');
           addDiag('ok', 'GeckoTerminal',
             'Macro Floor: $' + fmtP(gtMacroFloor) +
             ' | Local Floor (15m Shelf): $' + fmtP(gtLocalFloor || gtMacroFloor) +
             ' | 1h Ceiling: $' + fmtP(ceiling1hHigh) +
-            (gtStructuralAnalysis ? ' | Structural Analysis: Tier ' + gtStructuralAnalysis.confidenceTier : '') +
+            ' | Structural Analysis: Tier ' + gtStructuralAnalysis.confidenceTier +
             ' | Vol M5: $' + gtVolM5.toFixed(0) + ', H1: $' + gtVolH1.toFixed(0) + '.');
+        } else if (gtMacroFloor > 0 || gtLocalFloor > 0) {
+          /* Candles returned floors via wick-low fallback but structural analysis needs more candles */
+          addBadge('GeckoTerminal', 'partial');
+          addDiag('partial', 'GeckoTerminal',
+            'Candle data loaded (' + (gt15mList ? gt15mList.length : 0) + ' candles) but insufficient for full Structural Analysis (needs ~50+ candles). ' +
+            'Floor/ceiling estimated from wick lows: Macro $' + fmtP(gtMacroFloor) + ', Local $' + fmtP(gtLocalFloor || gtMacroFloor) + '. ' +
+            'Engine will use Hint Mode for structure estimation.');
         } else {
           addBadge('GeckoTerminal', 'partial');
           addDiag('partial', 'GeckoTerminal',
-            'Candle data loaded' + (gtStructuralAnalysis ? ' (Structural Analysis: Tier ' + gtStructuralAnalysis.confidenceTier + ')' : '') +
-            ' but floor/ceiling levels unclear — may be a very new or illiquid token.');
+            'Candle data loaded but floor/ceiling levels unclear — may be a very new or illiquid token.');
         }
       } else {
         window._tecCandles = null;
@@ -7518,17 +7524,27 @@ function buildEntryBriefingHTML(d, analysis) {
       t += ' <span style="font-size:0.70rem;color:var(--text-muted);">— '+sa.checklistReason+'</span>';
       t += '</div>';
     } else if (_em === 'HINT' && hs) {
+      /* Use activeShelfMC as the authoritative floor — it already incorporates candle-derived
+         floors (localFloorMC) when available, falling back to hs.estimatedFloorMC only when
+         candles have no valid floor data. This ensures the displayed floor and entry range
+         match the Active Shelf (item 04) and Safe Entry Range (item 05) exactly. */
+      var _hintFloor      = activeShelfMC !== null ? activeShelfMC : hs.estimatedFloorMC;
+      var _hintEntryLow   = _hintFloor * 1.03;
+      var _hintEntryHigh  = _hintFloor * 1.10;
+      var _candleBacked   = activeShelfMC !== null && activeShelfMC !== hs.estimatedFloorMC;
       t += '<div style="padding:8px 10px;background:rgba(255,152,0,0.08);border-left:3px solid #ff9800;border-radius:3px;">';
       t += '<div style="color:#ff9800;font-size:0.68rem;font-weight:700;letter-spacing:0.8px;margin-bottom:4px;">⚡ HINT MODE — ESTIMATED STRUCTURE</div>';
       t += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:3px;">';
-      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Est. Floor MC: <strong style="color:#ff9800;">' + formatUSD(hs.estimatedFloorMC) + '</strong></div>';
-      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Entry Range: <strong style="color:#ff9800;">' + formatUSD(hs.entryRangeLow) + ' – ' + formatUSD(hs.entryRangeHigh) + '</strong></div>';
+      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Est. Floor MC: <strong style="color:#ff9800;">' + formatUSD(_hintFloor) + '</strong></div>';
+      t += '<div style="font-size:0.67rem;color:var(--text-muted);">Entry Range: <strong style="color:#ff9800;">' + formatUSD(_hintEntryLow) + ' – ' + formatUSD(_hintEntryHigh) + '</strong></div>';
       t += '<div style="font-size:0.67rem;color:var(--text-muted);">Floor Confidence: <strong style="color:' + (hs.floorColor || '#ff9800') + ';">' + (hs.floorStrength || '—') + '</strong></div>';
       t += '<div style="font-size:0.67rem;color:var(--text-muted);">Demand Signal: <strong style="color:' + (hs.demandColor || 'var(--text-muted)') + ';">' + (hs.demandSignal || '—') + '</strong></div>';
       if (hs.volSignal) t += '<div style="font-size:0.67rem;color:var(--text-muted);">Volume: <strong style="color:' + (hs.volColor || 'var(--text-muted)') + ';">' + hs.volSignal + '</strong></div>';
       if (hs.holderTrend) t += '<div style="font-size:0.67rem;color:var(--text-muted);">Holders: <strong style="color:' + (hs.holderColor || 'var(--text-muted)') + ';">' + hs.holderTrend + '</strong></div>';
       t += '</div>';
-      t += '<div style="margin-top:5px;font-size:0.62rem;color:rgba(255,255,255,0.38);">OHLCV candles unavailable — checklist requires 15m candle data. Estimates based on MC price history, LP depth, and transaction data. Max confidence tier: B.</div>';
+      t += '<div style="margin-top:5px;font-size:0.62rem;color:rgba(255,255,255,0.38);">' +
+           (_candleBacked ? 'Floor anchored to candle wick lows — insufficient candles for full Structural Analysis. ' : 'OHLCV candles unavailable — ') +
+           'Estimates based on MC price history, LP depth, and transaction data. Max confidence tier: B.</div>';
       t += '</div>';
     } else if (_em === 'FLOW') {
       t += '<span style="color:#ff9800;font-size:0.72rem;">⚡ Flow Mode active — Structure Checklist requires OHLCV candle data. Fetch Data to attempt candle retrieval from GeckoTerminal or DEX Screener.</span>';
