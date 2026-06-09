@@ -342,6 +342,10 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .rickbot-btn.btn-defade:hover { background: rgba(156,39,176,0.25); border-color: rgba(156,39,176,0.55); }
 .rickbot-btn.btn-soul { background: rgba(255,255,255,0.1); color: #ffffff; border-color: rgba(255,255,255,0.3); }
 .rickbot-btn.btn-soul:hover { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.55); }
+.rickbot-btn.btn-trojan-terminal { background: rgba(255,107,0,0.12); color: #ff6b00; border-color: rgba(255,107,0,0.3); }
+.rickbot-btn.btn-trojan-terminal:hover { background: rgba(255,107,0,0.25); border-color: rgba(255,107,0,0.55); }
+.rickbot-btn.btn-mevx { background: rgba(138,43,226,0.12); color: #b44fff; border-color: rgba(138,43,226,0.3); }
+.rickbot-btn.btn-mevx:hover { background: rgba(138,43,226,0.25); border-color: rgba(138,43,226,0.55); }
 .btn-trojan {
   background: linear-gradient(135deg, #ff6b00, #ff9500); color: #0a0e27;
   box-shadow: 0 4px 20px rgba(255,107,0,0.25); font-weight: 700;
@@ -1683,6 +1687,8 @@ p, span, td, th {
             <div class="rickbot-label"><i class="fa-solid fa-arrow-up-right-from-square"></i> Token Pages</div>
             <div class="rickbot-links-row">
               <a id="rlGMGN"      class="rickbot-btn btn-gmgn disabled"   href="#" target="_blank"><i class="fa-solid fa-bolt"></i> GMGN</a>
+              <a id="rlTrojanTerminal" class="rickbot-btn btn-trojan-terminal disabled" href="#" target="_blank"><i class="fa-solid fa-terminal"></i> Trojan Terminal</a>
+              <a id="rlMevX"     class="rickbot-btn btn-mevx disabled"    href="#" target="_blank"><i class="fa-solid fa-rocket"></i> MevX</a>
               <a id="rlAxiom"     class="rickbot-btn btn-axiom disabled"  href="#" target="_blank"><i class="fa-solid fa-atom"></i> Axiom</a>
               <a id="rlDexToken"  class="rickbot-btn btn-dex disabled"    href="#" target="_blank"><i class="fa-solid fa-chart-bar"></i> DexScreener</a>
               <a id="rlDeFade"    class="rickbot-btn btn-defade disabled" href="#" target="_blank"><i class="fa-solid fa-fire"></i> DeFade</a>
@@ -5516,7 +5522,7 @@ function computeHintStructure(fetched) {
   estimatedFloorMC = Math.min(estimatedFloorMC, currentMC * 0.92);
 
   var pullbackDepth  = ((currentMC - estimatedFloorMC) / currentMC) * 100;
-  var entryRangeLow  = estimatedFloorMC * 1.01;
+  var entryRangeLow  = estimatedFloorMC * 1.03;
   var entryRangeHigh = estimatedFloorMC * 1.10;
 
   /* ── Floor strength ── */
@@ -10089,8 +10095,10 @@ function updateRickbotLinks() {
   setLink('rlDev',     devAddr  ? base + 'dev-' + encodeURIComponent(devAddr)  : null);
   setLink('rlTwit',    twitterU ? base + 'twit-' + encodeURIComponent(twitterU) : null);
   setLink('rlMoniBtn', moniU    ? base + 'moni-' + encodeURIComponent(moniU)    : null);
-  setLink('rlGMGN',      ca ? 'https://gmgn.ai/sol/token/' + ca                    : null);
-  setLink('rlAxiom',     ca ? 'https://axiom.trade/meme/' + ca + '?chain=sol'      : null);
+  setLink('rlGMGN',           ca ? 'https://gmgn.ai/sol/token/' + ca                    : null);
+  setLink('rlTrojanTerminal', ca ? 'https://trojan.com/terminal?token=' + ca           : null);
+  setLink('rlMevX',           ca ? 'https://mevx.io/solana/' + ca                      : null);
+  setLink('rlAxiom',          ca ? 'https://axiom.trade/meme/' + ca + '?chain=sol'     : null);
   setLink('rlDexToken',  ca ? 'https://dexscreener.com/solana/' + ca               : null);
   setLink('rlDeFade',    ca ? 'https://defade.org/token/'  + ca                    : null);
   setLink('rlSoulToken', ca ? 'https://t.me/soul_scanner_bot?start=' + ca          : null);
