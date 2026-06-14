@@ -5498,7 +5498,7 @@ function buildSecurityBriefingHTML(d) {
   window._tecDistQuality = { score: _dqScore, label: _dqLabel, lines: _dqLines };
 
   return '<div class="briefing-section">' +
-    '<div class="briefing-title"><i class="fa-solid fa-user-secret"></i> Security Briefing</div>' +
+    '<div class="briefing-title" style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fa-solid fa-user-secret"></i> Security Briefing</span><button onclick="document.getElementById(\'tec-rec-section\').scrollIntoView({behavior:\'smooth\',block:\'start\'})" style="font-size:0.55rem;padding:3px 9px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:var(--accent-cyan);cursor:pointer;letter-spacing:0.5px;font-weight:600;white-space:nowrap;flex-shrink:0;">Go to REC ↓</button></div>' +
     nt +
     bmSection +
     '<ul class="briefing-list" id="cabRiskList">' + (_cabRiskBaseListHTML = listHTML) + '</ul>' +
@@ -7710,7 +7710,7 @@ function buildEntryBriefingHTML(d, analysis) {
   })();
 
   return '<div class="briefing-section">' +
-    '<div class="briefing-title"><i class="fa-solid fa-crosshairs"></i> Structure Briefing</div>' +
+    '<div class="briefing-title" style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fa-solid fa-crosshairs"></i> Structure Briefing</span><button onclick="document.getElementById(\'tec-rec-section\').scrollIntoView({behavior:\'smooth\',block:\'start\'})" style="font-size:0.55rem;padding:3px 9px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:var(--accent-cyan);cursor:pointer;letter-spacing:0.5px;font-weight:600;white-space:nowrap;flex-shrink:0;">Go to REC ↓</button></div>' +
     actionSummary +
     confBanner +
     checklistBlock +
@@ -8716,7 +8716,7 @@ function buildAttentionBriefingHTML(d, analysis) {
   })();
 
   return '<div class="briefing-section">' +
-    '<div class="briefing-title"><i class="fa-solid fa-satellite-dish"></i> Attention Briefing</div>' +
+    '<div class="briefing-title" style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fa-solid fa-satellite-dish"></i> Attention Briefing</span><button onclick="document.getElementById(\'tec-rec-section\').scrollIntoView({behavior:\'smooth\',block:\'start\'})" style="font-size:0.55rem;padding:3px 9px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:var(--accent-cyan);cursor:pointer;letter-spacing:0.5px;font-weight:600;white-space:nowrap;flex-shrink:0;">Go to REC ↓</button></div>' +
     nt +
     _postPreview +
     _attDiag +
@@ -9360,7 +9360,7 @@ function buildRecommendedEntryChecklist(d, analysis) {
   window._tecOverallColor = oColor;
   window._tecOverallRec   = oRec;
 
-  var html = '<div style="margin-top:14px;padding:12px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">';
+  var html = '<div id="tec-rec-section" style="margin-top:14px;padding:12px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;">';
   html += '<div style="font-size:0.68rem;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;"><i class="fa-solid fa-list-check" style="margin-right:6px;"></i>Recommended Entry Checklist</div>';
 
   /* Three-briefing side-by-side */
