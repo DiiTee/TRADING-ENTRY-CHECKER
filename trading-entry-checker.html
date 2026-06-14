@@ -12709,6 +12709,14 @@ var WL_FIELDS  = [
   'fSocRdM1h','fSocRdM24h','fSocRdUp1h','fSocRdUp24h'
 ];
 
+var SOC_FIELDS = [
+  'fSocXM15','fSocXM30','fSocXM1h','fSocXM3h','fSocXM24h',
+  'fSocXUp1h','fSocXUp24h','fSocXRt',
+  'fSocTgM15','fSocTgM30','fSocTgM1h','fSocTgM3h','fSocTgM24h',
+  'fSocTgCh1h','fSocTgCh24h','fSocTgFwd',
+  'fSocRdM1h','fSocRdM24h','fSocRdUp1h','fSocRdUp24h'
+];
+
 /* ── Storage ── */
 function wlLoad() {
   try { watchlist = JSON.parse(localStorage.getItem(WL_KEY) || '[]'); } catch(e) { watchlist = []; }
@@ -12761,6 +12769,24 @@ function wlPopulateForm(entry) {
   WL_FIELDS.forEach(function(id) {
     var e = el(id);
     if (e && data[id] !== undefined && data[id] !== null) e.value = data[id];
+  });
+}
+
+function wlCaptureSocial() {
+  var snap = {};
+  SOC_FIELDS.forEach(function(id) { var e = el(id); if (e) snap[id] = e.value; });
+  return snap;
+}
+
+function wlHasSocialData(snap) {
+  return SOC_FIELDS.some(function(id) { return snap && snap[id] && snap[id] !== '0'; });
+}
+
+function wlRestoreSocial(snap) {
+  if (!snap) return;
+  SOC_FIELDS.forEach(function(id) {
+    var e = el(id);
+    if (e && snap[id] !== undefined) e.value = snap[id];
   });
 }
 
@@ -12818,7 +12844,14 @@ function wlSyncEntry(id) {
     attTier:          window._tecAttentionBriefing ? window._tecAttentionBriefing.attTier : (orig.attTier || '—'),
     attVerdict:       window._tecAttentionBriefing ? window._tecAttentionBriefing.attVerdict : (orig.attVerdict || '—'),
     passPct:          Math.round(currentAnalysis.passPct || 0),
-    formData:         wlCaptureForm()
+    formData:         (function() {
+      var fd = wlCaptureForm();
+      var origFD = orig.formData || {};
+      SOC_FIELDS.forEach(function(id) {
+        if ((!fd[id] || fd[id] === '0') && origFD[id] && origFD[id] !== '0') fd[id] = origFD[id];
+      });
+      return fd;
+    })()
   };
 }
 
@@ -13059,7 +13092,10 @@ async function wlRefresh(id) {
   var itemEl = el('wlItem_' + id);
   if (itemEl) itemEl.classList.add('wl-refreshing');
   showToast('Fetching latest data for ' + (entry.name||'coin') + '\u2026', 'info');
+  var _socSnap = wlCaptureSocial();
   wlPopulateForm(entry);
+  var _savedSoc = wlCaptureSocial();
+  wlRestoreSocial(wlHasSocialData(_socSnap) ? _socSnap : (wlHasSocialData(_savedSoc) ? _savedSoc : _socSnap));
   try { await fetchFromCA(entry.ca); } catch(e) {}
   analyzeCoin();
   if (currentAnalysis) {
@@ -13074,7 +13110,10 @@ async function wlRefresh(id) {
 function wlReanalyze(id) {
   var entry = watchlist.find(function(e) { return e.id === id; });
   if (!entry) return;
+  var _socSnap = wlCaptureSocial();
   wlPopulateForm(entry);
+  var _savedSoc = wlCaptureSocial();
+  wlRestoreSocial(wlHasSocialData(_socSnap) ? _socSnap : (wlHasSocialData(_savedSoc) ? _savedSoc : _socSnap));
   analyzeCoin();
   if (currentAnalysis) {
     wlSyncEntry(id);
