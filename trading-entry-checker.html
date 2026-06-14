@@ -11933,7 +11933,7 @@ function qecAutoParse() {
     var lineCA = text.match(new RegExp('^\\s*('+b58+'{32,44})\\s*$','m'));
     var anyCA  = text.match(new RegExp(b58+'{43,44}'));
     var ca = (lineCA&&lineCA[1]) || (anyCA&&anyCA[0]) || '';
-    if (ca && el('fCA') && !el('fCA').value.trim()) el('fCA').value = ca;
+    if (ca && el('fCA') && !el('fCA').value.trim()) { el('fCA').value = ca; updateRickbotLinks(); }
 
     var mcRaw = qecTryMatch(text, /\bMC\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i, /Market\s*Cap\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i, /Mcap\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
     var liqRaw= qecTryMatch(text, /\bLiq(?:uidity)?\s*:\s*\$?([\d.]+\s*[KkMmBb]?)/i);
@@ -12801,6 +12801,7 @@ function wlPopulateForm(entry) {
     var e = el(id);
     if (e && data[id] !== undefined && data[id] !== null) e.value = data[id];
   });
+  updateRickbotLinks();
 }
 
 function wlCaptureSocial() {
