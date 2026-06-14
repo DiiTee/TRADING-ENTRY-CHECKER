@@ -2102,6 +2102,7 @@ p, span, td, th {
         <button class="btn btn-watchlist" id="addWatchlistBtn"><i class="fa-solid fa-star"></i> Add to Watchlist</button>
         <button class="btn btn-refresh-analysis" id="refreshAnalysisBtn"><i class="fa-solid fa-arrows-rotate"></i> Refresh Analysis</button>
         <button class="btn btn-secondary" id="analyzeAnotherBtn"><i class="fa-solid fa-rotate"></i> Analyze Another</button>
+        <button class="btn btn-secondary" id="backToTopBtn"><i class="fa-solid fa-arrow-up"></i> Back to Top</button>
       </div>
     </div>
   </div>
@@ -11616,6 +11617,10 @@ el('analyzeAnotherBtn').addEventListener('click', function() {
   _manualRuleHits = [false, false, false, false];
   _cabRiskBaseListHTML = '';
   _currentAnalysisCA = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+el('backToTopBtn').addEventListener('click', function() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
