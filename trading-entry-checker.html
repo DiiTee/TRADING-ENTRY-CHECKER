@@ -7048,19 +7048,75 @@ function buildEntryBriefingHTML(d, analysis) {
   }
   var distToFloor = distFromShelfPct; /* alias — used by R/R calc below */
 
-  /* ── Safe Entry Range (shelf-anchored) ── */
-  var safeEntryLow  = activeShelfMC !== null ? activeShelfMC * 1.03 : lpFloor * 1.05;
-  var safeEntryHigh = activeShelfMC !== null ? activeShelfMC * 1.10 : (localFloorMC || currentMC * 0.97);
-  var safeEntryStr  = formatUSD(safeEntryLow) + ' \u2013 ' + formatUSD(safeEntryHigh);
+  /* ── Entry Model Router — Entry Classification is the parent decision ── */
+  var _entryType = _ecl.entryType; /* DISCOVERY / MOMENTUM / STRUCTURE */
 
-  /* ── Action Signal ── */
-  var actionSignal, actionColor;
-  if (isAirEntry) {
-    actionSignal = 'WAIT FOR DIP';  actionColor = '#ff4757';
-  } else if (currentMC > safeEntryHigh * 1.05) {
-    actionSignal = 'WAIT FOR DIP';  actionColor = 'var(--caution)';
+  /* Discovery: lowestMcObserved hierarchy → LP floor → participation zone */
+  var _lowestMcObs = macroFloorMC ||
+                     (hs && hs.histMin && hs.histMin > 0 ? hs.histMin : null);
+
+  var safeEntryLow, safeEntryHigh, safeEntryStr, safeEntryModel, safeEntryNote;
+  if (_entryType === 'DISCOVERY') {
+    if (_lowestMcObs !== null && _lowestMcObs > 0 && _lowestMcObs < currentMC) {
+      safeEntryLow   = _lowestMcObs;
+      safeEntryHigh  = _lowestMcObs * 1.05;
+      safeEntryModel = 'Lowest MC Observed';
+      safeEntryNote  = 'Anchored to lowest observed MC — estimated floor, not confirmed support';
+    } else if (lpFloor > 0 && lpFloor < currentMC) {
+      safeEntryLow   = lpFloor;
+      safeEntryHigh  = lpFloor * 1.08;
+      safeEntryModel = 'LP Depth Estimate';
+      safeEntryNote  = 'Anchored to LP-derived floor estimate — low confidence';
+    } else {
+      safeEntryLow   = currentMC;
+      safeEntryHigh  = currentMC * 1.05;
+      safeEntryModel = 'Participation Zone';
+      safeEntryNote  = 'No floor data available — participation zone at current MC';
+    }
+  } else if (_entryType === 'MOMENTUM') {
+    var _momFloor  = activeShelfMC !== null ? activeShelfMC : lpFloor;
+    safeEntryLow   = _momFloor * 1.02;
+    safeEntryHigh  = currentMC * 1.01;
+    if (safeEntryHigh <= safeEntryLow) safeEntryHigh = safeEntryLow * 1.06;
+    safeEntryModel = 'Support-Anchored';
+    safeEntryNote  = 'Anchored between active support and current MC — developing structure';
   } else {
-    actionSignal = 'BUY';           actionColor = 'var(--safe)';
+    /* STRUCTURE — existing shelf-based formula, unchanged */
+    safeEntryLow   = activeShelfMC !== null ? activeShelfMC * 1.03 : lpFloor * 1.05;
+    safeEntryHigh  = activeShelfMC !== null ? activeShelfMC * 1.10 : (localFloorMC || currentMC * 0.97);
+    safeEntryModel = 'Shelf-Based';
+    safeEntryNote  = 'Active Shelf +3% → +10%';
+  }
+  safeEntryStr = formatUSD(safeEntryLow) + ' \u2013 ' + formatUSD(safeEntryHigh);
+
+  /* ── Action Signal — driven by Entry Classification ── */
+  var actionSignal, actionColor;
+  if (_entryType === 'DISCOVERY') {
+    actionSignal = 'PROBE';      actionColor = '#ff9800';
+  } else if (_entryType === 'MOMENTUM') {
+    actionSignal = 'ACCUMULATE'; actionColor = '#ffeb3b';
+  } else {
+    /* STRUCTURE: use existing air-entry / distance logic */
+    if (isAirEntry) {
+      actionSignal = 'WAIT FOR DIP'; actionColor = '#ff4757';
+    } else if (currentMC > safeEntryHigh * 1.05) {
+      actionSignal = 'WAIT FOR DIP'; actionColor = 'var(--caution)';
+    } else {
+      actionSignal = 'BUY';          actionColor = 'var(--safe)';
+    }
+  }
+
+  /* ── Sizing Recommendation — driven by Entry Classification ── */
+  var sizingLabel, sizingColor, sizingNote;
+  if (_entryType === 'DISCOVERY') {
+    sizingLabel = 'PROBE ONLY';  sizingColor = '#ff9800';
+    sizingNote  = '25–50% Max Allocation';
+  } else if (_entryType === 'MOMENTUM') {
+    sizingLabel = 'REDUCED';     sizingColor = '#ffeb3b';
+    sizingNote  = 'Reduced sizing — structure developing';
+  } else {
+    sizingLabel = 'FULL SIZE';   sizingColor = '#00e676';
+    sizingNote  = 'Full sizing — validated structure';
   }
 
   /* ── Ceiling ── */
@@ -7297,12 +7353,21 @@ function buildEntryBriefingHTML(d, analysis) {
 
         return t;
       })() },
-    { num: '05', label: 'Safe Entry Range &amp; Action Signal', text: (function() {
-        var t = '<strong style="color:var(--accent-cyan);">' + safeEntryStr + '</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">(Active Shelf +3% → +10%)</span>';
+    { num: '05', label: 'Safe Entry Range, Action Signal &amp; Sizing', text: (function() {
+        var t = '';
+        /* ── Safe Entry Range ── */
+        t += '<strong style="color:var(--accent-cyan);">' + safeEntryStr + '</strong>';
+        t += ' <span style="padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.07);font-size:0.62rem;color:var(--text-muted);">' + safeEntryModel + ' Model</span>';
+        t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">' + safeEntryNote + '</span>';
+        /* ── Action Signal ── */
         t += '<br>Action Signal: <strong style="color:' + actionColor + ';font-size:1.05em;letter-spacing:1px;">' + actionSignal + '</strong>';
-        t += ' &nbsp;<strong style="color:' + distColor + ';">[' + distLabel + ']</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">— ' + distFromShelfPct.toFixed(1) + '% from Active Shelf</span>';
+        if (_entryType === 'STRUCTURE') {
+          t += ' &nbsp;<strong style="color:' + distColor + ';">[' + distLabel + ']</strong>';
+          t += ' <span style="color:var(--text-muted);font-size:0.72rem;">— ' + distFromShelfPct.toFixed(1) + '% from Active Shelf</span>';
+        }
+        /* ── Sizing Recommendation ── */
+        t += '<br>Sizing: <strong style="color:' + sizingColor + ';font-size:1.0em;letter-spacing:1px;">' + sizingLabel + '</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.72rem;">' + sizingNote + '</span>';
         return t;
       })() },
     { num: '06', label: 'Structural Analysis Scores', text: (function() {
@@ -7788,16 +7853,21 @@ function buildEntryBriefingHTML(d, analysis) {
     t += '<div style="color:var(--text-muted);font-size:0.57rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">R:R RATIO</div>';
     t += '<div style="font-size:1.3rem;font-weight:900;color:'+_rrColor+';letter-spacing:1px;line-height:1.1;">'+_rrStr+'</div>';
     t += '</div>';
+    t += '<div style="text-align:center;padding:4px 2px;">';
+    t += '<div style="color:var(--text-muted);font-size:0.57rem;font-weight:700;letter-spacing:1px;margin-bottom:2px;">SIZING</div>';
+    t += '<div style="font-size:1.0rem;font-weight:900;color:'+sizingColor+';letter-spacing:0.8px;line-height:1.1;">'+sizingLabel+'</div>';
+    t += '<div style="color:var(--text-muted);font-size:0.55rem;margin-top:1px;">'+sizingNote+'</div>';
+    t += '</div>';
     t += '</div>';
     t += '<div style="display:flex;gap:7px;margin-bottom:8px;flex-wrap:wrap;">';
     t += '<div style="flex:1;min-width:130px;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid var(--accent-cyan);">';
     t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">CURRENT MC</div>';
     t += '<div style="font-size:0.98rem;font-weight:700;color:var(--accent-cyan);">'+formatUSD(currentMC)+'</div>';
     t += '</div>';
-    t += '<div style="flex:2;min-width:0;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid #00e676;">';
+    t += '<div style="flex:2;min-width:0;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid '+sizingColor+';">';
     t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">SAFE ENTRY RANGE</div>';
-    t += '<div style="font-size:0.98rem;font-weight:700;color:#00e676;">'+safeEntryStr+'</div>';
-    t += '<div style="font-size:0.60rem;color:var(--text-muted);">Preview — full detail in item 05 below</div>';
+    t += '<div style="font-size:0.98rem;font-weight:700;color:'+sizingColor+';">'+safeEntryStr+'</div>';
+    t += '<div style="font-size:0.60rem;color:var(--text-muted);">'+safeEntryModel+' Model · '+actionSignal+' · full detail in item 05</div>';
     t += '</div>';
     t += '</div>';
     return t;
@@ -11593,10 +11663,34 @@ function buildSetupText(d, analysis) {
   var txtDistClass = txtSA ? (txtSA.distClassification || '—') : (txtDistShelf <= 5 ? 'Shelf Entry' : txtDistShelf <= 12 ? 'Near Support' : txtDistShelf <= 20 ? 'Extended' : 'Air Entry');
   var txtIsAir     = txtDistClass === 'Air Entry';
 
-  /* ── Safe entry range (shelf-anchored) ── */
-  var safeEntryLow  = txtActiveShelfMC ? txtActiveShelfMC * 1.03 : txtLpFloor * 1.05;
-  var safeEntryHigh = txtActiveShelfMC ? txtActiveShelfMC * 1.10 : (txtLocalMC || txtCurrentMC * 0.97);
-  var txtActionSig  = (txtIsAir || txtCurrentMC > safeEntryHigh * 1.05) ? 'WAIT FOR DIP' : 'BUY';
+  /* ── Safe entry range + action signal (mirrors entry model router in buildEntryBriefingHTML) ── */
+  var _txtEntryType   = _ecl ? _ecl.entryType : 'STRUCTURE';
+  var _txtLowestMcObs = txtMacroMC ||
+                        (window._tecHintStructure && window._tecHintStructure.histMin > 0 ? window._tecHintStructure.histMin : null);
+  var safeEntryLow, safeEntryHigh;
+  if (_txtEntryType === 'DISCOVERY') {
+    if (_txtLowestMcObs && _txtLowestMcObs > 0 && _txtLowestMcObs < txtCurrentMC) {
+      safeEntryLow = _txtLowestMcObs;      safeEntryHigh = _txtLowestMcObs * 1.05;
+    } else if (txtLpFloor > 0 && txtLpFloor < txtCurrentMC) {
+      safeEntryLow = txtLpFloor;            safeEntryHigh = txtLpFloor * 1.08;
+    } else {
+      safeEntryLow = txtCurrentMC;          safeEntryHigh = txtCurrentMC * 1.05;
+    }
+  } else if (_txtEntryType === 'MOMENTUM') {
+    var _txtMomFloor = txtActiveShelfMC || txtLpFloor;
+    safeEntryLow  = _txtMomFloor * 1.02;
+    safeEntryHigh = txtCurrentMC * 1.01;
+    if (safeEntryHigh <= safeEntryLow) safeEntryHigh = safeEntryLow * 1.06;
+  } else {
+    safeEntryLow  = txtActiveShelfMC ? txtActiveShelfMC * 1.03 : txtLpFloor * 1.05;
+    safeEntryHigh = txtActiveShelfMC ? txtActiveShelfMC * 1.10 : (txtLocalMC || txtCurrentMC * 0.97);
+  }
+  var txtActionSig  = _txtEntryType === 'DISCOVERY' ? 'PROBE'
+                    : _txtEntryType === 'MOMENTUM'  ? 'ACCUMULATE'
+                    : (txtIsAir || txtCurrentMC > safeEntryHigh * 1.05) ? 'WAIT FOR DIP' : 'BUY';
+  var txtSizingLabel = _txtEntryType === 'DISCOVERY' ? 'PROBE ONLY (25-50% Max)'
+                     : _txtEntryType === 'MOMENTUM'  ? 'REDUCED SIZING'
+                     :                                  'FULL SIZING';
   var txtGain       = txtCurrentMC > 0 ? ((ceilMC - txtCurrentMC) / txtCurrentMC) * 100 : 0;
   var txtRR         = txtDistShelf > 0 ? txtGain / txtDistShelf : 0;
 
@@ -11636,7 +11730,8 @@ function buildSetupText(d, analysis) {
   }
   /* ── 05. Safe Entry + Action Signal ── */
   lines.push('05. Safe Entry: ' + formatUSD(safeEntryLow) + ' – ' + formatUSD(safeEntryHigh) + '  |  Signal: ' + txtActionSig
-    + '  |  Position: ' + txtDistClass + ' (' + txtDistShelf.toFixed(1) + '% from shelf)');
+    + '  |  Sizing: ' + txtSizingLabel
+    + (_txtEntryType === 'STRUCTURE' ? '  |  Position: ' + txtDistClass + ' (' + txtDistShelf.toFixed(1) + '% from shelf)' : ''));
   /* ── 06. Structural Analysis Scores ── */
   if (txtSA) {
     var txtTps = computeTransactionPressureScore(d);

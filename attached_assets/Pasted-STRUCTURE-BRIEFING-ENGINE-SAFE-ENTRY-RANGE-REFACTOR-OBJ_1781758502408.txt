@@ -1,0 +1,203 @@
+STRUCTURE BRIEFING ENGINE – SAFE ENTRY RANGE REFACTOR
+
+OBJECTIVE
+
+The current engine correctly classifies tokens into DISCOVERY, MOMENTUM, and STRUCTURE using computeStructureReliability().
+
+However, the Safe Entry Range is currently generated independently from that classification. This creates situations where a token can be classified as DISCOVERY while simultaneously displaying a mature Structure Safe Entry Range and a BUY signal.
+
+This creates conflicting trade guidance.
+
+We need to refactor the decision flow so that Entry Classification becomes the parent decision that determines:
+
+1. Safe Entry Range generation
+2. Action Signal
+3. Sizing Recommendation
+
+The engine should produce one unified trade thesis.
+
+---
+
+NEW DECISION HIERARCHY
+
+Current Flow:
+
+Structure Analysis
+→ Safe Entry Range
+→ Action Signal
+→ Classification
+
+New Flow:
+
+Structure Analysis
+→ computeStructureReliability()
+→ Entry Classification
+→ Entry Model Selection
+→ Safe Entry Range
+→ Action Signal
+→ Sizing Recommendation
+
+Classification must become the controlling variable.
+
+---
+
+ENTRY MODELS
+
+DISCOVERY ENTRY MODEL
+
+Conditions:
+
+* Classified as DISCOVERY
+
+Purpose:
+
+* Extremely early token
+* Limited structure
+* Low confidence support
+
+Safe Entry Range:
+
+* Do NOT use mature Structure Entry calculations.
+* Generate a defensive range using:
+
+  * lowestMcObserved
+    OR 
+  * a configurable discount from current market cap
+    OR
+  * existing Discovery Participation Zone logic
+
+Use the above criteria as a hierarchy, if one is unavailable, then fall back to the next.
+
+Action Signal:
+PROBE
+
+Sizing:
+PROBE ONLY
+25–50% Maximum Allocation
+
+---
+
+MOMENTUM ENTRY MODEL
+
+Conditions:
+
+* Classified as MOMENTUM
+
+Purpose:
+
+* Developing structure
+* Support exists but not fully validated
+
+Safe Entry Range:
+
+* Use support-based calculations.
+* Anchor range between active support and current market cap.
+* Do not use full mature Structure Entry assumptions.
+
+Action Signal:
+ACCUMULATE
+
+Sizing:
+REDUCED SIZING
+
+---
+
+STRUCTURE ENTRY MODEL
+
+Conditions:
+
+* Classified as STRUCTURE
+
+Purpose:
+
+* Mature validated structure
+* Reliable support
+
+Safe Entry Range:
+
+* Use existing shelf-based mathematical calculations exactly as currently implemented.
+
+Action Signal:
+BUY
+
+Sizing:
+FULL SIZING
+
+---
+
+CRITICAL RULE
+
+A Safe Entry Range must represent the safest location to enter the trade given the maturity level of the chart.
+
+It must NOT simply represent where support currently exists.
+
+The classification determines which entry model generates the Safe Entry Range.
+
+Therefore:
+
+DISCOVERY
+→ Discovery Entry Formula
+→ Discovery Safe Entry Range
+
+MOMENTUM
+→ Momentum Entry Formula
+→ Momentum Safe Entry Range
+
+STRUCTURE
+→ Existing Shelf Formula
+→ Structure Safe Entry Range
+
+---
+
+UI CHANGES
+
+Replace ambiguous labels with:
+
+Analysis Mode:
+FULL MODE 
+or
+HINT MODE 
+or
+FLOW MODE
+
+Trade Classification:
+DISCOVERY ENTRY
+or
+MOMENTUM ENTRY
+or
+STRUCTURE ENTRY
+
+Display:
+
+SAFE ENTRY RANGE
+ACTION SIGNAL
+SIZING RECOMMENDATION
+
+All three outputs must be generated from the same classification model and must never conflict with one another.
+
+
+RULE:
+
+Safe Entry Range, Action Signal, and Sizing Recommendation
+must always originate from the same Entry Model.
+
+The UI must never display a DISCOVERY classification
+alongside a STRUCTURE Action Signal or STRUCTURE Sizing Recommendation.
+
+---
+
+DO NOT MODIFY
+
+* computeStructureReliability()
+* shelf detection
+* retrace detection
+* support calculations
+* structural analysis engine
+
+Only modify the decision routing and rendering layer so that classification determines which entry model is used.
+
+
+NOTE IMPORTANT: 
+Analysis Mode is mapped directly to your existing engineMode variable (e.g., FULL MODE, HINT MODE, FLOW MODE), while Trade Classification is mapped to the output of computeStructureReliability().
+
+
