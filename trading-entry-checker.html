@@ -5555,8 +5555,20 @@ function buildSecurityBriefingHTML(d) {
   window._tecSecScore    = Math.round(secPct * 100);
   window._tecDistQuality = { score: _dqScore, label: _dqLabel, lines: _dqLines };
 
+  var _bcBanner = '';
+  if (d.bondingCurve === 'Bonding') {
+    var _bcPctStr = (!isNaN(d.bondingPct) && d.bondingPct > 0) ? d.bondingPct.toFixed(1) + '% filled' : 'progress unknown';
+    _bcBanner = '<div style="margin-bottom:12px;padding:10px 13px;background:rgba(255,152,0,0.12);border:2px solid #ff9800;border-radius:7px;display:flex;align-items:flex-start;gap:10px;">' +
+      '<span style="font-size:1.2rem;line-height:1;flex-shrink:0;">⚠️</span>' +
+      '<div>' +
+      '<div style="font-size:0.72rem;font-weight:800;color:#ff9800;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:3px;">Still on the Bonding Curve — ' + _bcPctStr + '</div>' +
+      '<div style="font-size:0.67rem;color:rgba(255,152,0,0.85);line-height:1.5;">Liquidity is <strong>unprotected</strong> — LP has not migrated to Raydium yet. There is no burned/locked LP and the curve can be abandoned at any time. Assess carefully before entering.</div>' +
+      '</div></div>';
+  }
+
   return '<div class="briefing-section">' +
     '<div class="briefing-title" style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fa-solid fa-user-secret"></i> Security Briefing</span><button onclick="document.getElementById(\'tec-rec-section\').scrollIntoView({behavior:\'smooth\',block:\'start\'})" style="font-size:0.55rem;padding:3px 9px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:var(--accent-cyan);cursor:pointer;letter-spacing:0.5px;font-weight:600;white-space:nowrap;flex-shrink:0;">Go to REC ↓</button></div>' +
+    _bcBanner +
     nt +
     bmSection +
     '<ul class="briefing-list" id="cabRiskList">' + (_cabRiskBaseListHTML = listHTML) + '</ul>' +
@@ -9779,6 +9791,17 @@ function buildRecommendedEntryChecklist(d, analysis) {
   var html = '<div id="tec-rec-section" style="margin-top:14px;padding:12px 14px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;box-sizing:border-box;max-width:100%;overflow:hidden;">';
   html += '<div style="font-size:0.68rem;color:var(--accent-cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;"><i class="fa-solid fa-list-check" style="margin-right:6px;"></i>Recommended Entry Checklist</div>';
 
+  /* Bonding Curve conspicuous warning */
+  if (d.bondingCurve === 'Bonding') {
+    var _recBcPct = (!isNaN(d.bondingPct) && d.bondingPct > 0) ? ' (' + d.bondingPct.toFixed(1) + '% filled)' : '';
+    html += '<div style="margin-bottom:12px;padding:9px 13px;background:rgba(255,152,0,0.13);border:2px solid #ff9800;border-radius:7px;display:flex;align-items:flex-start;gap:9px;">' +
+      '<span style="font-size:1.1rem;line-height:1.2;flex-shrink:0;">⚠️</span>' +
+      '<div>' +
+      '<div style="font-size:0.71rem;font-weight:800;color:#ff9800;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:2px;">Bonding Curve' + _recBcPct + ' — Liquidity Unprotected</div>' +
+      '<div style="font-size:0.65rem;color:rgba(255,152,0,0.85);line-height:1.5;">Token has <strong>not yet migrated to Raydium</strong>. No burned or locked LP exists. The curve can be abandoned at any time — factor this into your sizing decision.</div>' +
+      '</div></div>';
+  }
+
   /* Three-briefing side-by-side */
   html += '<div class="mob-rec-grid">';
   var briefings = [
@@ -10178,11 +10201,14 @@ function parseTelegramText(text) {
   /* ── Holders ─────────────────────────────────────────────────────────── */
   /* Patterns: "TH: 755", "HLD: 781", "Hodls: 782", "Holders: 500",
      "👥 755", "👥 Hodls: 782", "Total Holders: 500", "500 holders",
-     "Wallets: 500", "Unique Holders: 500" */
+     "Wallets: 500", "Unique Holders: 500",
+     "🤝 Total: 228" (Rick), "228 (total)" (Phanes) */
   var hldStr = rxf('Total\\s+Holders?\\s*:?\\s*([\\d,]+)(?!%)') ||
                rxf('Unique\\s+Holders?\\s*:?\\s*([\\d,]+)(?!%)') ||
                rxf('(?:TH|HLD|Hodls?|Holders?|Wallets?)\\s*:?\\s*([\\d,]+)(?!%)') ||
-               rxf('[👥🧑‍🤝‍🧑👤]\\s*:?\\s*([\\d,]+)(?!%)') ||
+               rxf('[👥🧑‍🤝‍🧑👤]\\s*(?:Hodls?|Holders?|Wallets?)?\\s*:?\\s*([\\d,]+)(?!%)') ||
+               rxf('[🤝]\\s*Total\\s*:?\\s*([\\d,]+)(?!%)') ||
+               rxf('([\\d,]+)\\s*\\(total\\)') ||
                rxf('([\\d,]+)\\s+(?:holders?|wallets?|hodls?)(?!\\s*%)');
   if (hldStr) {
     var hldN = parseInt(hldStr.replace(/,/g,''), 10);
