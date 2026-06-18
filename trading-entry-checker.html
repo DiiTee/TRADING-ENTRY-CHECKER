@@ -7314,25 +7314,18 @@ function buildEntryBriefingHTML(d, analysis) {
         /* ── Entry Zone (type-specific guidance) ── */
         t += '<div style="margin-bottom:8px;padding:8px 10px;border-radius:4px;border:1px solid ' + _e.entryTypeColor + '44;background:rgba(0,0,0,0.18);">';
         t += '<div style="font-size:0.58rem;font-weight:700;color:' + _e.entryTypeColor + ';letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">' + _e.entryType + ' ENTRY ZONE</div>';
+        t += '<div style="font-size:0.70rem;color:var(--text-secondary);">';
+        t += 'Entry Range: <strong style="color:' + _e.entryTypeColor + ';">' + safeEntryStr + '</strong>';
+        t += ' <span style="font-size:0.62rem;color:var(--text-muted);">(' + safeEntryModel + ' Model)</span>';
+        t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">' + safeEntryNote + '</span>';
         if (_e.entryType === 'DISCOVERY') {
-          t += '<div style="font-size:0.70rem;color:var(--text-secondary);">';
-          t += 'Participation Zone: <strong style="color:' + _e.entryTypeColor + ';">' + formatUSD(currentMC) + ' – ' + formatUSD(currentMC * 1.05) + '</strong> MC';
-          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Suggested exposure: 25–50% of normal position size</span>';
-          t += '<br><span style="font-size:0.62rem;color:#ff9800;">⚠ Floor shown below is an <em>Estimated Floor</em> — not a confirmed support level</span>';
-          t += '</div>';
+          t += '<br><span style="font-size:0.62rem;color:#ff9800;">⚠ Estimated floor — not a confirmed support level · Probe sizing only (25–50%)</span>';
         } else if (_e.entryType === 'MOMENTUM') {
-          t += '<div style="font-size:0.70rem;color:var(--text-secondary);">';
-          t += 'Aggressive Zone: <strong style="color:' + _e.entryTypeColor + ';">' + formatUSD(currentMC * 0.98) + ' – ' + formatUSD(currentMC * 1.05) + '</strong> MC <span style="font-size:0.60rem;color:var(--text-muted);">(–2% to +5%)</span>';
-          t += '<br>Safe Entry: <strong>' + formatUSD(currentMC * 0.95) + ' – ' + formatUSD(currentMC * 1.02) + '</strong> MC <span style="font-size:0.60rem;color:var(--text-muted);">(–5% to +2%)</span>';
-          t += '<br>Conservative: Wait for first pullback toward estimated floor';
-          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Avoid if buy pressure collapses or distribution appears · Floor estimate is not yet confirmed support</span>';
-          t += '</div>';
+          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Avoid if buy pressure collapses or distribution appears · Reduced sizing</span>';
         } else {
-          t += '<div style="font-size:0.70rem;color:#00e676;">';
-          t += 'Structure-based entry — use Safe Entry Range (item 05) and floor levels (item 04).';
-          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Floor and shelf calculations are reliable — confidence: HIGH</span>';
-          t += '</div>';
+          t += '<br><span style="font-size:0.62rem;color:#00e676;">Floor and shelf calculations are reliable — full sizing permitted</span>';
         }
+        t += '</div>';
         t += '</div>';
 
         /* ── Price Discovery Warning ── */
