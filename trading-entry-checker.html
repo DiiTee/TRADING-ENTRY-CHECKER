@@ -994,8 +994,24 @@ p, span, td, th {
 .wl-item:hover { border-color: rgba(0,212,255,0.4); box-shadow: 0 0 16px rgba(0,212,255,0.08); }
 .wl-item-header {
   display: flex; align-items: center; gap: 8px;
-  margin-bottom: 10px; flex-wrap: wrap;
+  margin-bottom: 0; flex-wrap: nowrap;
+  cursor: pointer; user-select: none;
 }
+.wl-item.expanded .wl-item-header { margin-bottom: 8px; }
+.wl-item-body { max-height: 0; overflow: hidden; transition: max-height 0.28s ease; }
+.wl-item.expanded .wl-item-body { max-height: 600px; }
+.wl-chevron {
+  color: var(--text-muted); font-size: 1.05rem; flex-shrink: 0;
+  transition: transform 0.25s; line-height: 1; margin-left: auto; padding-left: 4px;
+}
+.wl-item.expanded .wl-chevron { transform: rotate(90deg); }
+.wl-compact-summary {
+  font-size: 0.59rem; color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-shrink: 1; min-width: 0;
+}
+.wl-item.expanded .wl-compact-summary { display: none; }
 .wl-name {
   font-family: 'Orbitron', sans-serif; font-weight: 700;
   font-size: 0.78rem; color: var(--text-primary);
@@ -13337,32 +13353,44 @@ function wlRender() {
     var secTierColor = entry.secTier==='A'?'#00ffcc':entry.secTier==='B'?'#00e676':entry.secTier==='C'?'#ffeb3b':entry.secTier==='D'?'#ff4757':'var(--text-muted)';
     var attTierColor = entry.attTier==='A'?'#00ffcc':entry.attTier==='B'?'#00e676':entry.attTier==='C'?'#ffeb3b':entry.attTier==='D'?'#ff9800':entry.attTier==='F'?'#ff4757':'var(--text-muted)';
 
+    var _compSum = [
+      entry.overallTier    ? ('T:' + entry.overallTier) : null,
+      entry.secTier        ? ('Sec:' + entry.secTier) : null,
+      entry.confidenceTier ? ('Str:' + entry.confidenceTier) : null,
+      entry.runnerPotential|| null,
+      fresh.label
+    ].filter(Boolean).join(' · ');
+
     return '<div class="wl-item" id="wlItem_' + entry.id + '">' +
-      '<div class="wl-item-header">' +
+      '<div class="wl-item-header" onclick="wlToggle(\'' + entry.id + '\')">' +
         '<span class="wl-name" title="' + (entry.name||'') + '">' + (entry.name||'—') + '</span>' +
         '<span class="wl-ticker">' + (entry.ticker||'—') + '</span>' +
         '<span class="wl-verdict ' + vClass + '">' + (entry.entryVerdict||'—') + '</span>' +
+        '<span class="wl-compact-summary">' + _compSum + '</span>' +
+        '<span class="wl-chevron">&#x203A;</span>' +
       '</div>' +
-      '<div class="wl-scores">' +
-        '<div class="wl-chip"><span class="wl-chip-label">Tier</span><span class="wl-chip-val" style="color:' + (entry.overallColor||'var(--text-muted)') + ';font-size:0.82rem;font-weight:900;">' + (entry.overallTier||'—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">PF</span><span class="wl-chip-val">' + (entry.passPct !== undefined ? entry.passPct + '%' : '—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">Sec</span><span class="wl-chip-val" style="color:' + secTierColor + ';">' + (entry.secTier||'—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">Str</span><span class="wl-chip-val" style="color:' + tierColor + ';">' + (entry.confidenceTier||'—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">Att</span><span class="wl-chip-val" style="color:' + attTierColor + ';">' + (entry.attTier||'—') + '</span></div>' +
-        '<div class="wl-chip"><span class="wl-chip-label">Runner</span><span class="wl-chip-val" style="color:' + runColor + ';">' + (entry.runnerPotential||'—') + '</span></div>' +
-      '</div>' +
-      '<div class="wl-item-meta">' +
-        '<div class="wl-meta-item"><span class="wl-meta-label">CA</span><span class="wl-meta-val" title="' + (entry.ca||'') + '">' + caShort + '</span></div>' +
-        '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + (entry.mcAtAdd ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtAdd) + ']</span>' : '') + '</span></div>' +
-        '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + (entry.mcAtRefresh ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtRefresh) + ']</span>' : '') + '</span></div>' +
-        '<div class="wl-meta-item"><span class="wl-meta-label">Analysis Freshness</span><span class="wl-freshness wl-fresh-' + entry.id + '" style="color:' + fresh.color + ';">' + fresh.label + '</span></div>' +
-      '</div>' +
-      '<div class="wl-item-actions" onclick="event.stopPropagation();">' +
-        '<button class="btn btn-sm btn-wl-load"      onclick="wlLoadCoin(\''    + entry.id + '\')"><i class="fa-solid fa-arrow-up-right-from-square"></i> Load</button>' +
-        '<button class="btn btn-sm btn-wl-clear"     onclick="wlClearInput()"><i class="fa-solid fa-eraser"></i> Clear</button>' +
-        '<button class="btn btn-sm btn-wl-refresh"   onclick="wlRefresh(\''     + entry.id + '\')"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>' +
-        '<button class="btn btn-sm btn-wl-reanalyze" onclick="wlReanalyze(\''   + entry.id + '\')"><i class="fa-solid fa-magnifying-glass-chart"></i> Re-analyze</button>' +
-        '<button class="btn btn-sm btn-wl-remove"    onclick="wlRemove(\''      + entry.id + '\')"><i class="fa-solid fa-trash"></i></button>' +
+      '<div class="wl-item-body">' +
+        '<div class="wl-scores">' +
+          '<div class="wl-chip"><span class="wl-chip-label">Tier</span><span class="wl-chip-val" style="color:' + (entry.overallColor||'var(--text-muted)') + ';font-size:0.82rem;font-weight:900;">' + (entry.overallTier||'—') + '</span></div>' +
+          '<div class="wl-chip"><span class="wl-chip-label">PF</span><span class="wl-chip-val">' + (entry.passPct !== undefined ? entry.passPct + '%' : '—') + '</span></div>' +
+          '<div class="wl-chip"><span class="wl-chip-label">Sec</span><span class="wl-chip-val" style="color:' + secTierColor + ';">' + (entry.secTier||'—') + '</span></div>' +
+          '<div class="wl-chip"><span class="wl-chip-label">Str</span><span class="wl-chip-val" style="color:' + tierColor + ';">' + (entry.confidenceTier||'—') + '</span></div>' +
+          '<div class="wl-chip"><span class="wl-chip-label">Att</span><span class="wl-chip-val" style="color:' + attTierColor + ';">' + (entry.attTier||'—') + '</span></div>' +
+          '<div class="wl-chip"><span class="wl-chip-label">Runner</span><span class="wl-chip-val" style="color:' + runColor + ';">' + (entry.runnerPotential||'—') + '</span></div>' +
+        '</div>' +
+        '<div class="wl-item-meta">' +
+          '<div class="wl-meta-item"><span class="wl-meta-label">CA</span><span class="wl-meta-val" title="' + (entry.ca||'') + '">' + caShort + '</span></div>' +
+          '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + (entry.mcAtAdd ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtAdd) + ']</span>' : '') + '</span></div>' +
+          '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + (entry.mcAtRefresh ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtRefresh) + ']</span>' : '') + '</span></div>' +
+          '<div class="wl-meta-item"><span class="wl-meta-label">Analysis Freshness</span><span class="wl-freshness wl-fresh-' + entry.id + '" style="color:' + fresh.color + ';">' + fresh.label + '</span></div>' +
+        '</div>' +
+        '<div class="wl-item-actions" onclick="event.stopPropagation();">' +
+          '<button class="btn btn-sm btn-wl-load"      onclick="wlLoadCoin(\''    + entry.id + '\')"><i class="fa-solid fa-arrow-up-right-from-square"></i> Load</button>' +
+          '<button class="btn btn-sm btn-wl-clear"     onclick="wlClearInput()"><i class="fa-solid fa-eraser"></i> Clear</button>' +
+          '<button class="btn btn-sm btn-wl-refresh"   onclick="wlRefresh(\''     + entry.id + '\')"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>' +
+          '<button class="btn btn-sm btn-wl-reanalyze" onclick="wlReanalyze(\''   + entry.id + '\')"><i class="fa-solid fa-magnifying-glass-chart"></i> Re-analyze</button>' +
+          '<button class="btn btn-sm btn-wl-remove"    onclick="wlRemove(\''      + entry.id + '\')"><i class="fa-solid fa-trash"></i></button>' +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -13377,6 +13405,12 @@ setInterval(function() {
     spans.forEach(function(s) { s.textContent = f.label; s.style.color = f.color; });
   });
 }, 30000);
+
+/* ── Toggle individual item expand/collapse ── */
+function wlToggle(id) {
+  var item = el('wlItem_' + id);
+  if (item) item.classList.toggle('expanded');
+}
 
 /* ── Actions ── */
 function wlAdd() {
