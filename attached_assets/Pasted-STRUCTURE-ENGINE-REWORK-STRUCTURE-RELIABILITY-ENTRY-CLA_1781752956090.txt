@@ -1,0 +1,775 @@
+STRUCTURE ENGINE REWORK — STRUCTURE RELIABILITY, ENTRY CLASSIFICATION & OHLCV SUFFICIENCY UPGRADE
+
+IMPORTANT
+
+DO NOT remove the Structure Engine.
+
+DO NOT remove:
+
+- Floor calculations
+- Shelf detection
+- Historical Low calculations
+- Safe Entry Range calculations
+- Existing Entry Range calculations
+- Structural diagnostics
+
+DO NOT rebuild:
+
+- Security Engine
+- Attention Engine
+- Holder Engine
+- Flow Engine
+- Dev Reputation Engine
+- Audit Engine
+
+DO NOT remove:
+
+- Full Mode (new name for Structure Mode)
+- Hint Mode
+- Flow Mode
+
+This is NOT a replacement of the Structure Engine.
+
+This is a Structure Reliability and Entry Classification layer that sits on top of the existing Structure Engine.
+
+────────────────────────────
+PRIMARY GOAL
+────────────────────────────
+
+The current Structure Engine treats many estimated floors as if they have similar confidence levels.
+
+This becomes problematic for:
+
+- Fresh launches
+- Early Telegram signal coins
+- Coins in active price discovery
+- Coins with only a few candles
+- Coins with little retrace history
+- Coins whose floor is mostly LP-derived
+
+The engine should continue providing Entry recommendations.
+
+However:
+
+The app must first determine:
+
+1. How reliable the current structure is.
+2. What type of entry is appropriate.
+3. Whether OHLCV is missing OR simply insufficient.
+
+────────────────────────────
+KEEP EXISTING MODES
+────────────────────────────
+
+Do NOT replace:
+
+- Full Mode (new name for Structure Mode)
+- Hint Mode
+- Flow Mode
+
+These modes should remain exactly as they are.
+
+The new system should operate ABOVE them.
+
+Conceptually:
+
+ENTRY CLASSIFICATION
+↓
+DISCOVERY ENTRY
+MOMENTUM ENTRY
+STRUCTURE ENTRY
+
+Then:
+
+STRUCTURE MODE
+↓
+Hint Mode
+Flow Mode
+Full Mode
+
+Example:
+
+Entry Type:
+DISCOVERY ENTRY
+
+Structure Mode:
+Hint Mode
+
+Structure Reliability:
+18/100
+
+This preserves existing architecture.
+
+────────────────────────────
+NEW METRIC:
+STRUCTURE RELIABILITY SCORE
+────────────────────────────
+
+Create:
+
+Structure Reliability Score
+
+Range:
+
+0–100
+
+Purpose:
+
+Measure how trustworthy current floor, shelf and support calculations actually are.
+
+Display:
+
+Structure Reliability:
+XX / 100
+
+Classification:
+
+0–30
+UNUSABLE STRUCTURE
+
+31–60
+ESTIMATED STRUCTURE
+
+61–80
+RELIABLE STRUCTURE
+
+81–100
+HIGH CONFIDENCE STRUCTURE
+
+────────────────────────────
+STRUCTURE RELIABILITY FACTORS
+────────────────────────────
+
+Positive Factors:
+
++ OHLCV available
++ Candle count
++ Coin age
++ Retrace count
++ Shelf count
++ Confirmed support retests
++ Historical low confidence
++ Multiple successful support reactions
+
+Negative Factors:
+
+- Missing OHLCV
+- Very low candle count
+- Coin age under 2 hours
+- No retraces
+- No shelf structure
+- Low transaction count
+- LP-derived floor estimate
+- Active price discovery
+- Vertical expansion without pullbacks
+
+────────────────────────────
+OHLCV STATUS REWORK
+────────────────────────────
+
+CURRENT PROBLEM
+
+The app sometimes reports:
+
+"OHLCV Unavailable"
+
+when OHLCV actually exists but contains only a few candles.
+
+This is misleading.
+
+Separate:
+
+1. Data Availability
+2. Data Sufficiency
+
+Required Display:
+
+OHLCV Status:
+Available / Unavailable
+
+Candle Count:
+X
+
+Data Sufficiency:
+Insufficient / Limited / Developing / Reliable / Mature
+
+Examples:
+
+OHLCV Status:
+Available
+
+Candle Count:
+2
+
+Data Sufficiency:
+Insufficient
+
+Structure Confidence:
+Low
+
+Reason:
+OHLCV exists but historical sample size is too small.
+
+DO NOT report OHLCV Unavailable if candles actually exist.
+
+────────────────────────────
+CANDLE SUFFICIENCY ANALYSIS
+────────────────────────────
+
+Add explicit candle structure analysis.
+
+Suggested ranges:
+
+0–5 candles
+Insufficient Structure
+
+6–20 candles
+Limited Structure
+
+21–50 candles
+Developing Structure
+
+51–100 candles
+Reliable Structure
+
+100+ candles
+Mature Structure
+
+OHLCV availability alone should not be treated as evidence of reliable structure.
+
+A coin with 2 candles should not be treated similarly to a coin with 100 candles.
+
+────────────────────────────
+RETRACE ANALYSIS
+────────────────────────────
+
+Add:
+
+Retrace Count
+
+Display:
+
+Retraces Detected:
+X
+
+Suggested confidence contribution:
+
+0 retraces
+Very Weak
+
+1 retrace
+Weak
+
+2 retraces
+Moderate
+
+3+ retraces
+Strong
+
+A coin with many candles but no retraces should still have low structural confidence.
+
+Retrace count should carry more weight than candle availability.
+
+────────────────────────────
+ENTRY TYPE CLASSIFIER
+────────────────────────────
+
+Before Entry recommendations are displayed:
+
+Classify the market into:
+
+1. DISCOVERY ENTRY
+2. MOMENTUM ENTRY
+3. STRUCTURE ENTRY
+
+Display in a new panel.
+
+────────────────────────────
+DISCOVERY ENTRY
+────────────────────────────
+
+
+Primary trigger:
+Structure Reliability < 30
+
+Secondary trigger:
+Two or more Discovery conditions below:
+
+- Structure Reliability < 30
+- Coin age < 60 minutes
+- Candle Sufficiency = Insufficient
+- No meaningful shelf
+- No meaningful retraces
+
+Display:
+
+ENTRY TYPE:
+DISCOVERY ENTRY
+
+Description:
+
+Price discovery is active.
+Structure is immature.
+Support calculations are low confidence.
+
+Suggested Exposure:
+
+25–50% of normal position size.
+
+Display:
+
+DISCOVERY ENTRY ZONE
+
+Current MC → Current MC + 5%
+
+This is participation guidance.
+
+Not support-based guidance.
+
+Keep existing floor calculations visible.
+
+Add:
+
+Floor Confidence:
+Low
+
+Disclaimer:
+
+Estimated floor should not be treated as confirmed support.
+
+────────────────────────────
+MOMENTUM ENTRY
+────────────────────────────
+
+Trigger when:
+
+Structure Reliability 30–60
+
+AND
+
+Flow remains positive.
+
+Examples:
+
+- Buy pressure positive
+- Holder growth positive
+- Attention score positive
+- No major distribution
+
+Display:
+
+ENTRY TYPE:
+MOMENTUM ENTRY
+
+Purpose:
+
+Continuation entry based on flow rather than confirmed support.
+
+Display:
+
+Aggressive Zone:
+Current MC → Current MC + 8%
+
+Conservative Zone:
+Wait for first pullback.
+
+Avoid Entry If:
+
+- Buy pressure collapses
+- Major holder distribution appears
+- Dev selling emerges
+
+Keep existing floor visible.
+
+Add note:
+
+Current floor estimate exists but is not yet considered confirmed support.
+
+────────────────────────────
+STRUCTURE ENTRY
+────────────────────────────
+
+Trigger when:
+
+Structure Reliability > 60
+
+AND at least one:
+
+- Confirmed shelf
+- Multiple support tests
+- Reliable candle history
+- Reliable historical low
+
+KEEP CURRENT ENTRY LOGIC.
+
+No changes.
+
+Continue using:
+
+- Floor calculations
+- Shelf calculations
+- Safe Entry Range
+- Existing Entry Range formulas
+- Existing support-based logic
+
+Display:
+
+ENTRY TYPE:
+STRUCTURE ENTRY
+
+Confidence:
+Reliable
+
+────────────────────────────
+PRICE DISCOVERY DETECTION
+────────────────────────────
+
+Add:
+
+PRICE DISCOVERY ACTIVE
+
+Trigger if:
+
+- Age < 60 minutes
+  OR
+- Vertical expansion without retrace
+  OR
+- No identifiable shelf
+  OR
+- Candle Sufficiency = Insufficient
+
+Display warning:
+
+Market structure has not fully formed.
+
+Support estimates should be treated cautiously.
+
+────────────────────────────
+NEW UI PANEL
+────────────────────────────
+
+Place above Entry Range panel.
+
+Title:
+
+ENTRY CLASSIFICATION
+
+Display:
+
+Entry Type:
+Discovery / Momentum / Structure
+
+Structure Mode:
+Hint / Flow / Full
+
+Structure Reliability:
+XX / 100
+
+OHLCV Status:
+Available / Unavailable
+
+Candle Count:
+X
+
+Data Sufficiency:
+Insufficient / Limited / Developing / Reliable / Mature
+
+Retrace Count:
+X
+
+Reasoning:
+
+List factors that influenced classification.
+
+Examples:
+
+- Coin age 18 minutes
+- Candle count only 2
+- No retraces detected
+- Floor derived from LP estimate
+
+OR
+
+- 75 candles available
+- 3 retraces detected
+- Shelf confirmed
+- Multiple support reactions observed
+
+────────────────────────────
+FINAL RULE
+────────────────────────────
+
+The purpose of this upgrade is NOT to replace the current Structure Engine.
+
+The purpose is to:
+
+1. Measure structure quality.
+2. Distinguish missing data from insufficient data.
+3. Classify entry type appropriately.
+4. Improve confidence communication.
+5. Preserve all existing floor, shelf and entry calculations.
+
+The user should always receive Entry guidance.
+
+The app should simply communicate whether that guidance is based on:
+
+DISCOVERY, MOMENTUM,
+or
+CONFIRMED STRUCTURE.
+
+
+
+────────────────────────────
+ENTRY RANGE ENGINE
+
+IMPORTANT
+
+Do NOT remove existing Entry Range calculations.
+
+Do NOT remove existing Floor calculations.
+
+Instead:
+
+Continue generating Entry Ranges for ALL coins.
+
+The purpose of this new Entry Range system is to classify confidence and methodology, not to remove actionable entry guidance.
+
+────────────────────────────
+ENTRY RANGE MUST ALWAYS EXIST
+────────────────────────────
+
+Every scan must output:
+
+- Entry Range
+- Safe Entry Range
+- Entry Type
+- Entry Confidence
+
+Even when structure is weak.
+
+Never output:
+
+"Entry Unknown"
+
+Never suppress Entry Range.
+
+────────────────────────────
+DISCOVERY ENTRY RANGE
+────────────────────────────
+
+Trigger:
+
+Structure Reliability < 30
+
+Goal:
+
+Provide an actionable entry despite limited structure.
+
+Base Floor:
+
+Use existing estimated floor calculation.
+
+DO NOT replace current floor engine.
+
+Entry Range:
+
+Discovery Entry should continue using the existing floor engine.
+
+The engine may apply a more conservative multiplier profile than Structure Entry, but the exact multiplier values should remain configurable and not be hardcoded in this specification.
+
+Safe Entry Range:
+
+Low =
+Estimated Floor × 1.00
+
+High =
+Estimated Floor × 1.05
+
+Display:
+
+Entry Type:
+DISCOVERY ENTRY
+
+Confidence:
+LOW
+
+Reason:
+
+- Limited candle history
+- Insufficient retraces
+- Price discovery active
+
+IMPORTANT
+
+The floor remains visible.
+
+However the floor should be labelled:
+
+Estimated Floor
+
+Not Confirmed Support
+
+────────────────────────────
+MOMENTUM ENTRY RANGE
+────────────────────────────
+
+Trigger:
+
+Structure Reliability 30-60
+
+Base:
+
+Current MC
+
+Formula:
+
+Low Entry =
+Current MC × 0.98
+
+High Entry =
+Current MC × 1.05
+
+Safe Entry:
+
+Current MC × 0.95
+to
+Current MC × 1.02
+
+Display:
+
+Entry Type:
+MOMENTUM ENTRY
+
+Confidence:
+MEDIUM
+
+Purpose:
+
+Continuation entry while flow remains positive.
+
+────────────────────────────
+STRUCTURE ENTRY RANGE
+────────────────────────────
+
+Trigger:
+
+Structure Reliability > 60
+
+KEEP CURRENT ENGINE.
+
+No changes.
+
+Continue using:
+
+Floor × existing multiplier logic
+
+Continue using:
+
+Safe Entry Range calculations
+
+Continue using:
+
+Shelf calculations
+
+Continue using:
+
+Historical low calculations
+
+Display:
+
+Entry Type:
+STRUCTURE ENTRY
+
+Confidence:
+HIGH
+
+────────────────────────────
+ENTRY CONFIDENCE SCORE
+────────────────────────────
+
+Add:
+
+Entry Confidence
+
+Separate from Structure Reliability.
+
+Structure Reliability measures:
+
+How trustworthy market structure is.
+
+Entry Confidence measures:
+
+How trustworthy the current Entry Range is.
+
+Display:
+
+Entry Confidence:
+XX / 100
+
+Suggested factors:
+
++ Candle count
++ Retrace count
++ Shelf confirmations
++ Historical support tests
++ Coin age
+
+Penalties:
+
+- Price discovery active
+- LP-dependent floor estimate
+- No retraces
+- Very low candle count
+
+────────────────────────────
+LP DEPTH RULE
+────────────────────────────
+
+LP depth must NOT be used as a primary floor generator.
+
+LP depth may only:
+
+- Reduce confidence
+- Act as a fallback diagnostic
+- Support risk calculations
+
+LP depth alone should never create a high-confidence support level.
+
+A floor generated primarily from LP assumptions must be labelled:
+
+Estimated Floor
+
+and receive reduced Entry Confidence.
+
+
+Floor mostly LP-derived should simply apply:
+-20 Floor Confidence
+
+It shouldn't directly affect any Entry Type.
+
+────────────────────────────
+FLOOR CONFIDENCE
+
+Add Floor Confidence
+
+Display: 
+Floor Confidence:
+XX / 100
+
+
+Because these can diverge:
+For example:
+Structure Reliability = 55
+Floor Confidence = 22
+Entry Confidence = 48
+
+
+────────────────────────────
+ENTRY CLASSIFICATION MUST NOT CHANGE THE EXISTING STRUCTURE ENGINE OUTPUTS.
+
+Its purpose is to classify confidence, explain methodology, and adjust presentation.
+
+Floor calculations, shelf calculations, and entry calculations remain driven by the existing Structure Engine unless explicitly overridden by future updates.
+
+
+

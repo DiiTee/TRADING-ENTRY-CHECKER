@@ -6755,6 +6755,209 @@ function computeDataCoverage(d, sa) {
   return { pct: pct, items: items, quality: quality };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   STRUCTURE RELIABILITY & ENTRY CLASSIFICATION ENGINE
+   A confidence / classification layer that sits ABOVE the existing Structure
+   Engine.  Does NOT modify floor, shelf or entry calculations — it classifies
+   how trustworthy those calculations are and what type of entry is appropriate.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function computeStructureReliability(ctx) {
+  var engineMode  = ctx.engineMode  || 'FLOW';
+  var n           = ctx.candleCount || 0;
+  var ageMin      = ctx.ageMinutes;          /* null when not supplied */
+  var sa          = ctx.sa;                  /* structural analysis object (STRUCTURE mode) */
+  var hs          = ctx.hs;                  /* hint structure (HINT mode) */
+  var currentMC   = ctx.currentMC   || 0;
+
+  var score       = 0;
+  var factors     = [];
+  var isLPDerived = false;
+
+  /* ── OHLCV availability (n>0 means candles were retrieved, regardless of mode) ── */
+  var ohlcvAvailable = n > 0;
+  var structureRan   = engineMode === 'STRUCTURE';
+
+  /* ── Candle Sufficiency ── */
+  var candleSufficiency = !ohlcvAvailable ? 'Unavailable'
+                        : n <= 5   ? 'Insufficient'
+                        : n <= 20  ? 'Limited'
+                        : n <= 50  ? 'Developing'
+                        : n <= 100 ? 'Reliable'
+                        :            'Mature';
+
+  /* ── Retrace Count — uses higherLows (swing lows higher than prior = confirmed retrace+bounce) ── */
+  var retraceCount      = sa ? (sa.higherLows || 0) : 0;
+  var retraceConfidence = retraceCount >= 3 ? 'Strong' : retraceCount === 2 ? 'Moderate' : retraceCount === 1 ? 'Weak' : 'Very Weak';
+
+  /* ── Score: OHLCV / Engine mode ── */
+  if (structureRan) {
+    score += 15;
+    factors.push('OHLCV data available — Structure Engine active');
+  } else if (engineMode === 'HINT' && hs && hs.hasPriceHistory) {
+    score += 20;
+    factors.push('Hint Mode — price history available');
+  } else if (engineMode === 'HINT') {
+    factors.push('Hint Mode — no price history available');
+  } else {
+    factors.push('Flow Mode — no OHLCV or market history');
+  }
+
+  /* ── Score: Candle count ── */
+  if      (n >= 100) { score += 20; factors.push(n + ' candles (Mature)'); }
+  else if (n >= 51)  { score += 15; factors.push(n + ' candles (Reliable)'); }
+  else if (n >= 21)  { score += 10; factors.push(n + ' candles (Developing)'); }
+  else if (n >= 6)   { score += 5;  factors.push(n + ' candles (Limited)'); }
+  else if (n > 0)    { score += 2;  factors.push(n + ' candle' + (n === 1 ? '' : 's') + ' (Insufficient)'); }
+
+  /* ── Score: Coin age ── */
+  if (ageMin !== null && ageMin !== undefined) {
+    if      (ageMin >= 1440) { score += 12; factors.push('Age: ' + Math.round(ageMin / 60) + 'h (mature)'); }
+    else if (ageMin >= 360)  { score += 8;  factors.push('Age: ' + Math.round(ageMin / 60) + 'h'); }
+    else if (ageMin >= 120)  { score += 5;  factors.push('Age: ~' + Math.round(ageMin) + ' min'); }
+    else if (ageMin >= 60)   { score += 2;  factors.push('Age: ~' + Math.round(ageMin) + ' min — early stage'); }
+    else                     { score -= 5;  factors.push('Coin age under 60 min (' + Math.round(ageMin) + ' min) — price discovery'); }
+  }
+
+  /* ── Score: Retrace count (only when Structure Engine ran) ── */
+  if (structureRan) {
+    if      (retraceCount >= 3) { score += 20; factors.push(retraceCount + ' retraces detected (' + retraceConfidence + ')'); }
+    else if (retraceCount === 2){ score += 14; factors.push('2 retraces detected (' + retraceConfidence + ')'); }
+    else if (retraceCount === 1){ score += 8;  factors.push('1 retrace detected (' + retraceConfidence + ')'); }
+    else                        { score -= 10; factors.push('No retraces detected — immature structure history'); }
+  } else {
+    factors.push('Retrace analysis unavailable (no OHLCV)');
+  }
+
+  /* ── Score: Price history snapshots (HINT / FLOW) ── */
+  if (!structureRan && hs && hs.hasPriceHistory) {
+    var _hmc = hs.histMCCount || 0;
+    if      (_hmc >= 3) { score += 8; factors.push('Price history: ' + _hmc + ' snapshots'); }
+    else if (_hmc >= 2) { score += 5; factors.push('Price history: ' + _hmc + ' snapshots (limited)'); }
+    else                { score += 2; factors.push('Price history: 1 snapshot (minimal)'); }
+  }
+
+  /* ── Score: Shelf detection ── */
+  if (sa) {
+    var _defNum = typeof sa.defenseCount === 'number' ? sa.defenseCount : 0;
+    if (sa.activeShelfValid) {
+      score += 10;
+      if      (_defNum >= 4) { score += 8; factors.push('Valid shelf + ' + _defNum + ' defenses (Strong)'); }
+      else if (_defNum >= 2) { score += 4; factors.push('Valid shelf + ' + _defNum + ' defenses (Moderate)'); }
+      else if (_defNum >= 1) { score += 2; factors.push('Valid shelf + 1 defense (Weak)'); }
+      else                   { factors.push('Valid shelf identified (no defenses yet)'); }
+    } else {
+      score -= 5;
+      factors.push('No valid shelf identified');
+    }
+    if (sa.parabolicRisk && retraceCount === 0) {
+      score -= 5;
+      factors.push('Parabolic expansion — no meaningful pullbacks detected');
+    }
+  }
+
+  /* ── Score: LP-derived floor penalty ── */
+  if (engineMode === 'FLOW') {
+    isLPDerived = true;
+    score -= 5;
+    factors.push('Floor estimate: LP depth only (no price history)');
+  } else if (!structureRan && hs && hs.lpFloor > 0 && (!hs.hasPriceHistory || (hs.histMCCount || 0) < 2)) {
+    isLPDerived = true;
+    score -= 10;
+    factors.push('Floor mostly LP-derived — limited price history');
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  /* ── Reliability Classification ── */
+  var reliabilityClass = score >= 81 ? 'HIGH CONFIDENCE' : score >= 61 ? 'RELIABLE' : score >= 31 ? 'ESTIMATED' : 'UNUSABLE';
+  var reliabilityColor = score >= 81 ? '#00ffcc' : score >= 61 ? '#00e676' : score >= 31 ? '#ff9800' : '#ff4757';
+
+  /* ── Price Discovery Active ── */
+  var priceDiscoveryActive = (ageMin !== null && ageMin !== undefined && ageMin < 60)
+    || candleSufficiency === 'Insufficient'
+    || candleSufficiency === 'Unavailable'
+    || (sa && !sa.activeShelfValid && retraceCount === 0);
+
+  /* ── Entry Type Classification ── */
+  var _dCnt = 0;
+  if (score < 30)                                                           _dCnt++;
+  if (ageMin !== null && ageMin !== undefined && ageMin < 60)               _dCnt++;
+  if (candleSufficiency === 'Insufficient' || candleSufficiency === 'Unavailable') _dCnt++;
+  if (sa && !sa.activeShelfValid)                                           _dCnt++;
+  if (structureRan && retraceCount === 0)                                   _dCnt++;
+
+  var entryType, entryTypeColor, entryTypeDesc;
+  if (score < 30 || _dCnt >= 2) {
+    entryType      = 'DISCOVERY';
+    entryTypeColor = '#ff9800';
+    entryTypeDesc  = 'Price discovery is active. Structure is immature. Support calculations are low confidence.';
+  } else if (score <= 60) {
+    entryType      = 'MOMENTUM';
+    entryTypeColor = '#ffeb3b';
+    entryTypeDesc  = 'Continuation entry based on flow rather than confirmed support.';
+  } else {
+    entryType      = 'STRUCTURE';
+    entryTypeColor = '#00e676';
+    entryTypeDesc  = 'Confirmed structure with reliable candle history and shelf analysis.';
+  }
+
+  /* ── Floor Confidence ── */
+  var floorConfidence;
+  if (sa) {
+    var _rcSc = retraceCount >= 3 ? 80 : retraceCount === 2 ? 60 : retraceCount === 1 ? 40 : 15;
+    var _nSc  = n >= 100 ? 80 : n >= 50 ? 65 : n >= 21 ? 50 : n >= 6 ? 30 : 10;
+    floorConfidence = Math.round((sa.shelfQualityScore || 0) * 0.50 + _rcSc * 0.30 + _nSc * 0.20);
+  } else if (hs && hs.hasPriceHistory) {
+    floorConfidence = (hs.histMCCount || 0) >= 3 ? 30 : (hs.histMCCount || 0) >= 2 ? 20 : 12;
+  } else {
+    floorConfidence = 8;
+  }
+  if (isLPDerived) floorConfidence = Math.max(0, floorConfidence - 20);
+  floorConfidence = Math.max(0, Math.min(100, floorConfidence));
+
+  /* ── Entry Confidence ── */
+  var entryConfidence;
+  if (entryType === 'STRUCTURE') {
+    var _ec = 0;
+    _ec += n >= 100 ? 22 : n >= 51 ? 18 : n >= 21 ? 12 : n >= 6 ? 6 : 2;
+    _ec += retraceCount >= 3 ? 25 : retraceCount === 2 ? 18 : retraceCount === 1 ? 10 : 0;
+    var _ecDefN = (sa && typeof sa.defenseCount === 'number') ? sa.defenseCount : 0;
+    _ec += _ecDefN >= 4 ? 18 : _ecDefN >= 2 ? 10 : _ecDefN >= 1 ? 5 : 0;
+    _ec += (sa && (sa.shelfQualityScore || 0) >= 70) ? 15 : (sa && (sa.shelfQualityScore || 0) >= 55) ? 8 : 3;
+    if (ageMin !== null && ageMin !== undefined) {
+      _ec += ageMin >= 1440 ? 15 : ageMin >= 360 ? 10 : ageMin >= 120 ? 5 : ageMin >= 60 ? 2 : 0;
+    }
+    if (priceDiscoveryActive)            _ec -= 15;
+    if (isLPDerived)                     _ec -= 10;
+    if (structureRan && retraceCount === 0) _ec -= 12;
+    if (n > 0 && n <= 5)                 _ec -= 15;
+    entryConfidence = Math.max(0, Math.min(100, Math.round(_ec)));
+  } else if (entryType === 'MOMENTUM') {
+    entryConfidence = Math.max(25, Math.min(60, score));
+  } else {
+    entryConfidence = Math.max(5, Math.min(30, score + 5));
+  }
+
+  return {
+    structureReliability: score,
+    reliabilityClass:     reliabilityClass,
+    reliabilityColor:     reliabilityColor,
+    ohlcvAvailable:       ohlcvAvailable,
+    candleCount:          n,
+    candleSufficiency:    candleSufficiency,
+    retraceCount:         retraceCount,
+    retraceConfidence:    retraceConfidence,
+    entryType:            entryType,
+    entryTypeColor:       entryTypeColor,
+    entryTypeDesc:        entryTypeDesc,
+    priceDiscoveryActive: priceDiscoveryActive,
+    isLPDerived:          isLPDerived,
+    floorConfidence:      floorConfidence,
+    entryConfidence:      entryConfidence,
+    reasoningFactors:     factors
+  };
+}
+
 function buildEntryBriefingHTML(d, analysis) {
   var ageMin = analysis.ageMinutes;
   var sClass = analysis.status.toLowerCase();
@@ -6790,6 +6993,16 @@ function buildEntryBriefingHTML(d, analysis) {
   var currentMC = d.marketCap || 0;
   var sa = d.structuralAnalysis || null; /* structural analysis shorthand */
   var hs = window._tecHintStructure || null; /* hint structure shorthand (HINT mode) */
+
+  /* ── Entry Classification (reliability layer above the Structure Engine) ── */
+  var _ecl = computeStructureReliability({
+    engineMode:  window._tecEngineMode  || 'FLOW',
+    candleCount: window._tecGtCandleCount || 0,
+    ageMinutes:  ageMin,
+    sa:          sa,
+    hs:          hs,
+    currentMC:   currentMC
+  });
 
   /* ── LP Floor: catastrophic collapse only — NOT used for entry calculation ── */
   var lpFloor = (d.liquidity > 0 && lmcR > 0) ? (d.liquidity / (lmcR / 100)) * 0.75 : currentMC * 0.65;
@@ -7003,6 +7216,85 @@ function buildEntryBriefingHTML(d, analysis) {
            + ((d.priceChangeM5 !== null ? (d.priceChangeM5 >= 0 ? '+' : '') + d.priceChangeM5.toFixed(2) : 'N/A') + '%</strong>');
         t += '<br>Velocity Ratio (M5 / avg-H1-slice): <strong>' + volVelocity.toFixed(2) + 'x</strong>';
         t += '<br><strong style="color:' + volVerdictColor + ';font-size:1.05em;">' + volVerdictText + '</strong>';
+        return t;
+      })() },
+    { num: '04d', label: 'Entry Classification', text: (function() {
+        var _e  = _ecl;
+        var _em = window._tecEngineMode || 'FLOW';
+        var _modeLabel = _em === 'STRUCTURE' ? 'Full Mode' : _em === 'HINT' ? 'Hint Mode' : 'Flow Mode';
+        var _modeColor = _em === 'STRUCTURE' ? 'var(--accent-cyan)' : _em === 'HINT' ? '#ff9800' : '#ff4757';
+        var t = '';
+
+        /* ── Header: Entry Type + Structural Mode + Reliability ── */
+        t += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;flex-wrap:wrap;">';
+        t += '<span style="padding:4px 11px;border-radius:4px;background:' + _e.entryTypeColor + ';color:#111;font-weight:700;font-size:0.78rem;letter-spacing:1.5px;">' + _e.entryType + ' ENTRY</span>';
+        t += '<span style="padding:3px 9px;border-radius:4px;border:1px solid ' + _modeColor + ';color:' + _modeColor + ';font-size:0.65rem;font-weight:700;letter-spacing:1px;">' + _modeLabel.toUpperCase() + '</span>';
+        t += '<span style="font-size:0.70rem;color:var(--text-muted);">Structure Reliability: <strong style="color:' + _e.reliabilityColor + ';">' + _e.structureReliability + '/100</strong> <span style="font-size:0.60rem;color:' + _e.reliabilityColor + ';">[' + _e.reliabilityClass + ']</span></span>';
+        t += '</div>';
+        t += '<div style="font-size:0.70rem;color:var(--text-secondary);margin-bottom:8px;font-style:italic;">' + _e.entryTypeDesc + '</div>';
+
+        /* ── Data Quality Grid ── */
+        t += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:2px 12px;padding:6px 8px;background:rgba(0,0,0,0.20);border-radius:4px;margin-bottom:8px;">';
+        t += '<span style="font-size:0.60rem;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;grid-column:1/-1;margin-bottom:2px;">DATA QUALITY</span>';
+        var _oC = _e.ohlcvAvailable ? '#00e676' : '#ff4757';
+        t += '<span style="font-size:0.63rem;color:var(--text-muted);">OHLCV Status: <strong style="color:' + _oC + ';">' + (_e.ohlcvAvailable ? 'Available' : 'Unavailable') + '</strong></span>';
+        t += '<span style="font-size:0.63rem;color:var(--text-muted);">Candle Count: <strong style="color:var(--accent-cyan);">' + _e.candleCount + '</strong></span>';
+        var _sfC = (_e.candleSufficiency === 'Mature' || _e.candleSufficiency === 'Reliable') ? '#00e676'
+                 : _e.candleSufficiency === 'Developing' ? '#ffeb3b'
+                 : _e.candleSufficiency === 'Limited'    ? '#ff9800' : '#ff4757';
+        t += '<span style="font-size:0.63rem;color:var(--text-muted);">Data Sufficiency: <strong style="color:' + _sfC + ';">' + _e.candleSufficiency + '</strong></span>';
+        var _rcC = _e.retraceCount >= 3 ? '#00e676' : _e.retraceCount === 2 ? '#ffeb3b' : _e.retraceCount === 1 ? '#ff9800' : '#ff4757';
+        t += '<span style="font-size:0.63rem;color:var(--text-muted);">Retraces Detected: <strong style="color:' + _rcC + ';">' + _e.retraceCount + '</strong> <span style="font-size:0.58rem;color:' + _rcC + ';">(' + _e.retraceConfidence + ')</span></span>';
+        t += '</div>';
+
+        /* ── Confidence Scores ── */
+        var _fcC = _e.floorConfidence >= 60 ? '#00e676' : _e.floorConfidence >= 35 ? '#ff9800' : '#ff4757';
+        var _ecC = _e.entryConfidence >= 60 ? '#00e676' : _e.entryConfidence >= 35 ? '#ff9800' : '#ff4757';
+        t += '<div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;">';
+        t += '<span style="font-size:0.65rem;color:var(--text-muted);">Floor Confidence: <strong style="color:' + _fcC + ';">' + _e.floorConfidence + '/100</strong></span>';
+        t += '<span style="font-size:0.65rem;color:var(--text-muted);">Entry Confidence: <strong style="color:' + _ecC + ';">' + _e.entryConfidence + '/100</strong></span>';
+        t += '</div>';
+
+        /* ── Entry Zone (type-specific guidance) ── */
+        t += '<div style="margin-bottom:8px;padding:8px 10px;border-radius:4px;border:1px solid ' + _e.entryTypeColor + '44;background:rgba(0,0,0,0.18);">';
+        t += '<div style="font-size:0.58rem;font-weight:700;color:' + _e.entryTypeColor + ';letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;">' + _e.entryType + ' ENTRY ZONE</div>';
+        if (_e.entryType === 'DISCOVERY') {
+          t += '<div style="font-size:0.70rem;color:var(--text-secondary);">';
+          t += 'Participation Zone: <strong style="color:' + _e.entryTypeColor + ';">' + formatUSD(currentMC) + ' – ' + formatUSD(currentMC * 1.05) + '</strong> MC';
+          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Suggested exposure: 25–50% of normal position size</span>';
+          t += '<br><span style="font-size:0.62rem;color:#ff9800;">⚠ Floor shown below is an <em>Estimated Floor</em> — not a confirmed support level</span>';
+          t += '</div>';
+        } else if (_e.entryType === 'MOMENTUM') {
+          t += '<div style="font-size:0.70rem;color:var(--text-secondary);">';
+          t += 'Aggressive Zone: <strong style="color:' + _e.entryTypeColor + ';">' + formatUSD(currentMC * 0.98) + ' – ' + formatUSD(currentMC * 1.05) + '</strong> MC <span style="font-size:0.60rem;color:var(--text-muted);">(–2% to +5%)</span>';
+          t += '<br>Safe Entry: <strong>' + formatUSD(currentMC * 0.95) + ' – ' + formatUSD(currentMC * 1.02) + '</strong> MC <span style="font-size:0.60rem;color:var(--text-muted);">(–5% to +2%)</span>';
+          t += '<br>Conservative: Wait for first pullback toward estimated floor';
+          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Avoid if buy pressure collapses or distribution appears · Floor estimate is not yet confirmed support</span>';
+          t += '</div>';
+        } else {
+          t += '<div style="font-size:0.70rem;color:#00e676;">';
+          t += 'Structure-based entry — use Safe Entry Range (item 05) and floor levels (item 04).';
+          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Floor and shelf calculations are reliable — confidence: HIGH</span>';
+          t += '</div>';
+        }
+        t += '</div>';
+
+        /* ── Price Discovery Warning ── */
+        if (_e.priceDiscoveryActive) {
+          t += '<div style="margin-bottom:8px;padding:5px 10px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.07);border-radius:0 4px 4px 0;">';
+          t += '<span style="font-size:0.65rem;font-weight:700;color:#ff9800;">⚠ PRICE DISCOVERY ACTIVE</span>';
+          t += '<br><span style="font-size:0.62rem;color:var(--text-muted);">Market structure has not fully formed. Support estimates should be treated cautiously.</span>';
+          t += '</div>';
+        }
+
+        /* ── Reasoning Factors ── */
+        t += '<div style="font-size:0.58rem;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:2px;text-transform:uppercase;">Classification Reasoning</div>';
+        t += '<div style="display:flex;flex-direction:column;gap:1px;">';
+        _e.reasoningFactors.forEach(function(f) {
+          t += '<span style="font-size:0.62rem;color:var(--text-muted);">· ' + f + '</span>';
+        });
+        t += '</div>';
+
         return t;
       })() },
     { num: '05', label: 'Safe Entry Range &amp; Action Signal', text: (function() {
