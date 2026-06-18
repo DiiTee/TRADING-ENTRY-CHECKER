@@ -7051,35 +7051,38 @@ function buildEntryBriefingHTML(d, analysis) {
   /* ── Entry Model Router — Entry Classification is the parent decision ── */
   var _entryType = _ecl.entryType; /* DISCOVERY / MOMENTUM / STRUCTURE */
 
-  /* Discovery: lowestMcObserved hierarchy → LP floor → participation zone */
+  /* Discovery: lowestMcObserved → -30% discount → participation zone */
   var _lowestMcObs = macroFloorMC ||
                      (hs && hs.histMin && hs.histMin > 0 ? hs.histMin : null);
 
   var safeEntryLow, safeEntryHigh, safeEntryStr, safeEntryModel, safeEntryNote;
   if (_entryType === 'DISCOVERY') {
     if (_lowestMcObs !== null && _lowestMcObs > 0 && _lowestMcObs < currentMC) {
+      /* Primary: lowest MC ever observed */
       safeEntryLow   = _lowestMcObs;
       safeEntryHigh  = _lowestMcObs * 1.05;
       safeEntryModel = 'Lowest MC Observed';
       safeEntryNote  = 'Anchored to lowest observed MC — estimated floor, not confirmed support';
-    } else if (lpFloor > 0 && lpFloor < currentMC) {
-      safeEntryLow   = lpFloor;
-      safeEntryHigh  = lpFloor * 1.08;
-      safeEntryModel = 'LP Depth Estimate';
-      safeEntryNote  = 'Anchored to LP-derived floor estimate — low confidence';
+    } else if (currentMC > 0) {
+      /* First fallback: flat −30% configurable discount */
+      safeEntryLow   = currentMC * 0.70;
+      safeEntryHigh  = currentMC * 0.75;
+      safeEntryModel = '−30% Discount';
+      safeEntryNote  = 'No observed floor — defensive range at −30% to −25% from current MC';
     } else {
+      /* Final fallback: original Participation Zone */
       safeEntryLow   = currentMC;
       safeEntryHigh  = currentMC * 1.05;
       safeEntryModel = 'Participation Zone';
-      safeEntryNote  = 'No floor data available — participation zone at current MC';
+      safeEntryNote  = 'No floor data — participation zone at current MC';
     }
   } else if (_entryType === 'MOMENTUM') {
     var _momFloor  = activeShelfMC !== null ? activeShelfMC : lpFloor;
     safeEntryLow   = _momFloor * 1.02;
-    safeEntryHigh  = currentMC * 1.01;
+    safeEntryHigh  = Math.min(currentMC * 0.98, _momFloor * 1.10);
     if (safeEntryHigh <= safeEntryLow) safeEntryHigh = safeEntryLow * 1.06;
     safeEntryModel = 'Support-Anchored';
-    safeEntryNote  = 'Anchored between active support and current MC — developing structure';
+    safeEntryNote  = 'Entry below current price — retrace target, not a chase';
   } else {
     /* STRUCTURE — existing shelf-based formula, unchanged */
     safeEntryLow   = activeShelfMC !== null ? activeShelfMC * 1.03 : lpFloor * 1.05;
@@ -11664,15 +11667,15 @@ function buildSetupText(d, analysis) {
   if (_txtEntryType === 'DISCOVERY') {
     if (_txtLowestMcObs && _txtLowestMcObs > 0 && _txtLowestMcObs < txtCurrentMC) {
       safeEntryLow = _txtLowestMcObs;      safeEntryHigh = _txtLowestMcObs * 1.05;
-    } else if (txtLpFloor > 0 && txtLpFloor < txtCurrentMC) {
-      safeEntryLow = txtLpFloor;            safeEntryHigh = txtLpFloor * 1.08;
+    } else if (txtCurrentMC > 0) {
+      safeEntryLow = txtCurrentMC * 0.70;  safeEntryHigh = txtCurrentMC * 0.75;
     } else {
-      safeEntryLow = txtCurrentMC;          safeEntryHigh = txtCurrentMC * 1.05;
+      safeEntryLow = txtCurrentMC;         safeEntryHigh = txtCurrentMC * 1.05;
     }
   } else if (_txtEntryType === 'MOMENTUM') {
     var _txtMomFloor = txtActiveShelfMC || txtLpFloor;
     safeEntryLow  = _txtMomFloor * 1.02;
-    safeEntryHigh = txtCurrentMC * 1.01;
+    safeEntryHigh = Math.min(txtCurrentMC * 0.98, _txtMomFloor * 1.10);
     if (safeEntryHigh <= safeEntryLow) safeEntryHigh = safeEntryLow * 1.06;
   } else {
     safeEntryLow  = txtActiveShelfMC ? txtActiveShelfMC * 1.03 : txtLpFloor * 1.05;
