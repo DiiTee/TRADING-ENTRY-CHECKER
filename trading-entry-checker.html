@@ -3788,6 +3788,16 @@ async function fetchFromCA(ca) {
   fetchIcon.classList.remove('hidden');
   fetchLabel.textContent = 'Fetch Data';
 
+  /* Auto Parse & Fill: if the paste area already has bot text, run the same
+     logic as clicking "Parse & Fill" so the QEC fills without a manual click. */
+  (function() {
+    var pa = el('pasteArea');
+    if (pa && pa.value.trim()) {
+      var pb = el('parseBtn');
+      if (pb) pb.click();
+    }
+  })();
+
   /* Kick off Bubblemaps holder analysis in the background (non-blocking) */
   _heliusHolderData = null;
   fetchHeliusTopHolders(ca);
@@ -11008,7 +11018,15 @@ el('fCA').addEventListener('keydown', function(e) {
 
 initDiagToggle();
 
-el('analyzeBtn').addEventListener('click', analyzeCoin);
+el('analyzeBtn').addEventListener('click', function() {
+  analyzeCoin();
+  /* Sync watchlist entry if the analyzed CA is already on the watchlist */
+  if (currentAnalysis) {
+    var _d = currentAnalysis.data;
+    var _wlMatch = _d.ca ? watchlist.find(function(e) { return e.ca === _d.ca; }) : null;
+    if (_wlMatch) { wlSyncEntry(_wlMatch.id); wlSave(); wlRender(); }
+  }
+});
 
 el('addTableBtn').addEventListener('click', function() {
   if (!currentAnalysis) return;
@@ -13147,10 +13165,8 @@ async function wlRefresh(id) {
 function wlReanalyze(id) {
   var entry = watchlist.find(function(e) { return e.id === id; });
   if (!entry) return;
-  var _socSnap = wlCaptureSocial();
-  wlPopulateForm(entry);
-  var _savedSoc = wlCaptureSocial();
-  wlRestoreSocial(wlHasSocialData(_socSnap) ? _socSnap : (wlHasSocialData(_savedSoc) ? _savedSoc : _socSnap));
+  /* Analyze using whatever is currently in the form — including any manual
+     edits — without resetting fields back to the saved watchlist snapshot. */
   analyzeCoin();
   if (currentAnalysis) {
     wlSyncEntry(id);
