@@ -1,0 +1,105 @@
+
+If a coin is identified as Bonding (i.e. still in the Bonding Curve), please place a conspicuous note about this in the Security Briefing and Recommended Entry section, so I know (this usually leads to unprotected liquidity, and I'd appreciate knowing at a glance that a coin is still in the bonding curve so that I can quickly decide if it's worth my trade at all)
+
+ALSO: 
+Holders count is not being identified and parsed correctly.
+
+Here's a sample of Telegram scanner bot text pasted in Coin Input box:
+
+Rick:
+💊 Only Goes Up - $Helium
+⏳ 89% @ Pump 🔥 #1 ⋅ 📺 70
+💎 FDV: 16.8K ⇨ 24.2K [4m] 
+📊 Vol: 55.3K ⋅ Age: 25m 
+📉 5M: 13.4K ⋅ -15.1% 🅑 227 Ⓢ 124
+
+👥 TH: 3.3⋅3.3⋅2.8⋅2.6⋅2.2 [24%]
+🤝 Total: 228 ⋅ avg 24w old
+  ↳ 📦 11% 🧑‍💻 1.9%  guide
+🌱 Fresh 1D: 8% ⋅ 7D: 18%
+👨‍💻 DEV ⋅ DP: ✅
+💹 Chart: DEX⋅DEF
+🧰 More: 🫧 🎨 💪 📦 🐦 [♺]
+
+Bh77MrPYg8RRQPZ8kxRUyCCa5VrQzFzqLzdFtBgwpump
+MAE⋅BAN⋅BNK⋅PDR⋅BLO⋅STB
+TRO⋅TRT⋅GMG⋅PHO⋅AXI⋅EXP⋅TW
+
+💨 You are first @ 16.8K 👀 196
+  ↳ NEW: Click this emoji to view user stats in DMs
+
+Phanes: 
+­💊 Only Goes Up ($HELIUM) 
+ ├ Bh77MrPYg8RRQPZ8kxRUyCCa5VrQzFzqLzdFtBgwpump
+ └ #SOL (Pump @ 88%) | 🌱25m | 👁️146 | 📺70
+
+📊 Stats
+ ├ USD   $0.0₄1678 (+715%)
+ ├ MC    $16.8K
+ ├ Vol   $55.3K
+ ├ LP    $4.1K 
+ ├ Sup   1B/1B
+ ├ 1H    +715% 🟩470 🟥290
+ └ ATH   $24.4K (-31% / 2m)
+
+🔗 Socials [105d]
+ └ 𝕏 [♽] • [about]
+
+🔒 Security
+ ├ Fresh     8.3% 1D | 18% 7D
+ ├ Top 10    24% | 228 (total)
+ ├ TH        3.3|3.3|2.8|2.2|2.2
+ ├ Dev Sold  🟢  🅳
+ └ DEX Paid  🟢 [info] • [lens]
+
+DEF•DS•GT•EXP•𝕏s
+
+GM•AXI•TRO•TRT•FMO•BLO
+OKX•MAE•TRM•BSD•NEO•PHO
+
+🔥 First Call dwisdoo @ $16.8K
+
+🦖 TIP: Trade Faster with GMGN!
+
+Soul Scanner:
+💊 ‎Only Goes Up • $HELIUM
+🕒 Age:  25m [+722%] • 🤝 CTO
+💰 MC:   $16.8K •🔝$24.4K
+💧 vLiq:  $12.4K [57.2 SOL]
+📊 Vol:    $54.8K [1h]
+┗   Fake: $4.3K [8%]
+
+🦅 Dex: Paid✅ Ads❌ 10⚡
+⚡ Scans: 93 | 🔗 X
+👥 Hodls: 227 • Top: 0%
+ ┗ Fake: 41 [18%]
+
+📦 /Bundles: 6 • 54% → 4.7%
+🔫 Snipers: 25 • 38% → 2.2% 🤍
+🎯 First 20: 26% | 📦 7% | 🌱 6%
+🛠📦📦📦📦📦📦📦🌱🐟
+🍤🍤🍤🍤🍤🐟🍤🐟🍤🐟
+
+🛠️ Dev: 1 SOL • 1.9%
+┣ Bundled: 22% 🤍 | Sold: 2% 🔴
+┗ Airdrop: 20% ⚠️
+
+Bh77MrPYg8RRQPZ8kxRUyCCa5VrQzFzqLzdFtBgwpump
+📊 Chart | Soul | Axm | Phtn | Bulx | Gm | Troj | Bonk | Mtro | Stb
+👻 Soul: TG | X | IG | FB | Ann | Terminal
+
+
+
+From the above, here are the Holder Count details: 
+
+Rick: 
+🤝 Total: 228
+
+Phanes: 
+228 (total)
+
+Soul Scanner: 
+👥 Hodls: 227
+
+
+
