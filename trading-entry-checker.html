@@ -10172,12 +10172,17 @@ function parseTelegramText(text) {
   if (liqStr) data.liquidity = pNum(liqStr);
 
   /* ── Volume ──────────────────────────────────────────────────────────── */
-  /* "VOL:  $262.39K (24h)", "Vol:    $154K [1h]", "├ Vol   $202.3K", "1h $154K" */
-  var vol24h = rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\(?24h\\)?');
-  var vol1h  = rxf('1h\\s+\\$([\\d.,]+[KMBkmb])');
+  /* "VOL: $262K (24h)" / "Vol: $54.8K [1h]" (Soul Scanner) / "├ Vol $202K" / "1h $154K"
+     IMPORTANT: vol24h requires an EXPLICIT "24h" label — do NOT make it optional,
+     or Soul Scanner's "[1h]" vol will be wrongly treated as 24h. */
+  var vol24h = rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\(?24[hH]\\)') ||
+               rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\[24[hH]\\]');
+  /* Soul Scanner: "$54.8K [1h]" — number comes BEFORE the [1h] tag */
+  var vol1h  = rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\[1[hH]\\]') ||
+               rxf('(?:^|\\s)1[hH]\\s+\\$([\\d.,]+[KMBkmb])');
   var volGen = rxf('[├└]\\s*Vol\\s+\\$?([\\d.,]+[KMBkmb])') ||
                rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])');
-  if (vol24h) data.volume = pNum(vol24h);
+  if (vol24h) { data.volume = pNum(vol24h); data.vol24h = pNum(vol24h); }
   else if (vol1h)  data.volume = pNum(vol1h);
   else if (volGen) data.volume = pNum(volGen);
 
@@ -10199,15 +10204,16 @@ function parseTelegramText(text) {
   if (p5m) data.perf5m = parseFloat(p5m);
 
   /* ── Holders ─────────────────────────────────────────────────────────── */
-  /* Patterns: "TH: 755", "HLD: 781", "Hodls: 782", "Holders: 500",
-     "👥 755", "👥 Hodls: 782", "Total Holders: 500", "500 holders",
-     "Wallets: 500", "Unique Holders: 500",
-     "🤝 Total: 228" (Rick), "228 (total)" (Phanes) */
+  /* Priority order matters — specific patterns before ambiguous ones.
+     "👥 Hodls: 519" (Soul Scanner) · "🤝 Total: 228" (Rick) · "228 (total)" (Phanes)
+     "Total Holders: 500" · "Holders: 500" · "HLD: 781" · "500 holders"
+     NOTE: "TH" is intentionally NOT matched on its own because Phanes/Rick use
+     "TH: 3.3⋅3.3⋅..." for top-holder distribution (not total count). */
   var hldStr = rxf('Total\\s+Holders?\\s*:?\\s*([\\d,]+)(?!%)') ||
                rxf('Unique\\s+Holders?\\s*:?\\s*([\\d,]+)(?!%)') ||
-               rxf('(?:TH|HLD|Hodls?|Holders?|Wallets?)\\s*:?\\s*([\\d,]+)(?!%)') ||
-               rxf('[👥🧑‍🤝‍🧑👤]\\s*(?:Hodls?|Holders?|Wallets?)?\\s*:?\\s*([\\d,]+)(?!%)') ||
-               rxf('[🤝]\\s*Total\\s*:?\\s*([\\d,]+)(?!%)') ||
+               rxf('Hodls?\\s*:\\s*([\\d,]+)(?!%)') ||
+               rxf('(?:HLD|Holders?|Wallets?)\\s*:?\\s*([\\d,]+)(?!%)') ||
+               rxf('Total\\s*:\\s*([\\d,]+)(?!%)') ||
                rxf('([\\d,]+)\\s*\\(total\\)') ||
                rxf('([\\d,]+)\\s+(?:holders?|wallets?|hodls?)(?!\\s*%)');
   if (hldStr) {
