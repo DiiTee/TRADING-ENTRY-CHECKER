@@ -2199,8 +2199,19 @@ var currentAnalysis = null;
 var filterSafeOnly = false;
 var _heliusHolderData = null;
 var _manualRuleHits = [false, false, false, false];
-var _tecFeeCache = {};       /* 60-second cache: { [poolAddr]: { ts, tx24hTotal, tx24hBuys, tx24hSells, mediumFeeMicroPerCU, highFeeMicroPerCU, avgFeeSol, accFeesSol, accFeesUSD, poolAddr } } */
+var _tecFeeCache = {};       /* 20-min cache: { [poolAddr]: feeEntry } */
 var _tecAccFeeData = null;   /* most recent accumulated-fee result (set during fetchData, read in briefing) */
+/* ── Jito validator tip accounts (mainnet, static) ── */
+var JITO_TIP_ACCOUNTS = {
+  '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5': 1,
+  'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe': 1,
+  'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY': 1,
+  'ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49': 1,
+  'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh': 1,
+  'ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt': 1,
+  'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL': 1,
+  '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT': 1
+};
 var _cabRiskBaseListHTML = '';
 var _currentAnalysisCA = '';
 
@@ -3737,19 +3748,53 @@ async function fetchFromCA(ca) {
         var _txData = await _txResp.json();
         if (!Array.isArray(_txData) || _txData.length === 0) throw new Error('no tx data');
 
-        /* Step 3 — sum fee fields; skip LP/admin noise */
-        var _feeSum = 0, _feeCount = 0;
+        /* Step 3 — per-tx: base fee + Jito tip detection; skip LP/admin noise */
+        var _baseSum = 0, _tipSum = 0, _effSum = 0, _feeCount = 0;
         _txData.forEach(function(tx) {
           if (!tx) return;
           if (tx.type && _feeExclude[tx.type]) return;
-          var _f = typeof tx.fee === 'number' ? tx.fee : parseInt(tx.fee || 0, 10);
-          if (_f > 0) { _feeSum += _f; _feeCount++; }
+          /* Base fee (lamports) */
+          var _base = typeof tx.fee === 'number' ? tx.fee : parseInt(tx.fee || 0, 10);
+          if (_base <= 0) return;
+          /* Tip detection — nativeTransfers is the most reliable Helius field;
+             also walk inner instructions as a secondary source */
+          var _tip = 0;
+          /* Primary: nativeTransfers[] { toUserAccount, amount } */
+          if (Array.isArray(tx.nativeTransfers)) {
+            tx.nativeTransfers.forEach(function(nt) {
+              if (nt && JITO_TIP_ACCOUNTS[nt.toUserAccount]) {
+                _tip += (parseInt(nt.amount || 0, 10) || 0);
+              }
+            });
+          }
+          /* Secondary: inner instructions — SystemProgram transfer to tip account */
+          if (_tip === 0 && Array.isArray(tx.innerInstructions)) {
+            tx.innerInstructions.forEach(function(ii) {
+              if (!ii || !Array.isArray(ii.instructions)) return;
+              ii.instructions.forEach(function(ix) {
+                if (!ix) return;
+                var prog = ix.programId || ix.program || '';
+                var info = (ix.parsed && ix.parsed.info) || ix.info || {};
+                var dest = info.destination || info.dest || '';
+                var amt  = parseInt(info.lamports || info.amount || 0, 10) || 0;
+                if (prog === '11111111111111111111111111111111' &&
+                    JITO_TIP_ACCOUNTS[dest] && amt > 0) {
+                  _tip += amt;
+                }
+              });
+            });
+          }
+          _baseSum += _base;
+          _tipSum  += _tip;
+          _effSum  += (_base + _tip);
+          _feeCount++;
         });
         if (_feeCount === 0) throw new Error('no fee data in sample');
 
-        /* Step 4 — avg observed fee × GT 24h swap count */
-        var _avgFeeLam  = _feeSum / _feeCount;
-        var _avgFeeSol  = _avgFeeLam / 1e9;
+        /* Step 4 — avg effective fee (base + tip) × GT 24h swap count */
+        var _avgBaseSol = (_baseSum / _feeCount) / 1e9;
+        var _avgTipSol  = (_tipSum  / _feeCount) / 1e9;
+        var _avgFeeSol  = (_effSum  / _feeCount) / 1e9;   /* effective = base + tip */
         var _obsTxTotal = window._tecGt24hTotal || _feeCount;
         var _obsAccSOL  = _avgFeeSol * _obsTxTotal;
         var _obsSolPx   = window._tecSolPrice || 0;
@@ -3757,7 +3802,10 @@ async function fetchFromCA(ca) {
           ts:           _feeNow,
           source:       'OBSERVED',
           sampleSize:   _feeCount,
+          avgBaseSol:   _avgBaseSol,
+          avgTipSol:    _avgTipSol,
           avgFeeSol:    _avgFeeSol,
+          tipDetected:  _tipSum > 0,
           tx24hTotal:   _obsTxTotal,
           tx24hBuys:    window._tecGt24hBuys  || 0,
           tx24hSells:   window._tecGt24hSells || 0,
@@ -7496,7 +7544,7 @@ function buildEntryBriefingHTML(d, analysis) {
           return t;
         }
 
-        /* ── Source badge + avg fee ── */
+        /* ── Source badge + avg fee breakdown ── */
         var _srcLabel = _afd.source === 'OBSERVED'  ? 'OBSERVED SAMPLE'
                       : _afd.source === 'ESTIMATED' ? 'ESTIMATED'
                       : _afd.source || 'ESTIMATED';
@@ -7505,7 +7553,17 @@ function buildEntryBriefingHTML(d, analysis) {
         t += ' <span style="padding:1px 5px;border-radius:3px;background:' + _srcColor + '22;border:1px solid ' + _srcColor + '55;'
            + 'color:' + _srcColor + ';font-size:0.60rem;font-weight:700;letter-spacing:0.5px;">' + _srcLabel + '</span>';
         if (_afd.source === 'OBSERVED' && _afd.sampleSize > 0) {
-          t += ' <span style="color:var(--text-muted);font-size:0.63rem;">(n=' + _afd.sampleSize + ' sampled txs)</span>';
+          t += ' <span style="color:var(--text-muted);font-size:0.63rem;">(n=' + _afd.sampleSize + ' txs)</span>';
+          /* ── Diagnostic breakdown ── */
+          t += '<br><span style="font-size:0.63rem;color:var(--text-muted);">';
+          t += 'Base fee: <strong style="color:var(--text-secondary);">' + (_afd.avgBaseSol || 0).toFixed(6) + ' SOL</strong>';
+          if (_afd.tipDetected) {
+            t += ' &nbsp;+&nbsp; Jito tip: <strong style="color:#ffeb3b;">' + (_afd.avgTipSol || 0).toFixed(6) + ' SOL</strong>';
+            t += ' &nbsp;=&nbsp; Effective: <strong style="color:var(--accent-cyan);">' + (_afd.avgFeeSol || 0).toFixed(6) + ' SOL</strong>';
+          } else {
+            t += ' &nbsp;<span style="color:var(--text-muted);font-style:italic;">(no Jito tips detected in sample)</span>';
+          }
+          t += '</span>';
         } else if (_afd.source === 'ESTIMATED') {
           t += ' <span style="color:var(--text-muted);font-size:0.63rem;">(priority fee estimate × 200K CU)</span>';
         }
