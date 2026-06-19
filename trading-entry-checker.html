@@ -7928,6 +7928,22 @@ function buildEntryBriefingHTML(d, analysis) {
     return t;
   })();
 
+  /* ── Entry Classification banner — shown directly after Structural Verdict ── */
+  var entryClassBanner = (function() {
+    var ec    = _ecl.entryType      || 'STRUCTURE';
+    var ecC   = _ecl.entryTypeColor || '#00e676';
+    var ecD   = _ecl.entryTypeDesc  || '';
+    var ecIcon = ec === 'DISCOVERY' ? 'fa-compass' : ec === 'MOMENTUM' ? 'fa-bolt' : 'fa-layer-group';
+    var t = '<div style="margin-bottom:10px;padding:9px 13px;background:rgba(0,0,0,0.22);border:1px solid ' + ecC + '44;border-radius:6px;display:flex;align-items:flex-start;gap:10px;">';
+    t += '<div style="flex-shrink:0;margin-top:1px;"><i class="fa-solid ' + ecIcon + '" style="color:' + ecC + ';font-size:1rem;"></i></div>';
+    t += '<div style="flex:1;min-width:0;">';
+    t += '<div style="font-size:0.58rem;color:var(--text-muted);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Entry Classification</div>';
+    t += '<span style="display:inline-block;padding:3px 10px;border-radius:4px;background:' + ecC + ';color:#111;font-weight:800;font-size:0.75rem;letter-spacing:1.5px;margin-bottom:5px;">' + ec + ' ENTRY</span>';
+    t += '<div style="font-size:0.65rem;color:rgba(255,255,255,0.55);line-height:1.5;">' + ecD + '</div>';
+    t += '</div></div>';
+    return t;
+  })();
+
   /* ── Structure Checklist (card grid, mirrors Security Checklist) ── */
   var checklistBlock = (function() {
     var t = '<div style="margin-bottom:10px;">';
@@ -8141,6 +8157,7 @@ function buildEntryBriefingHTML(d, analysis) {
     '<div class="briefing-title" style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fa-solid fa-crosshairs"></i> Structure Briefing</span><button onclick="document.getElementById(\'tec-rec-section\').scrollIntoView({behavior:\'smooth\',block:\'start\'})" style="font-size:0.55rem;padding:3px 9px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:var(--accent-cyan);cursor:pointer;letter-spacing:0.5px;font-weight:600;white-space:nowrap;flex-shrink:0;">Go to REC ↓</button></div>' +
     actionSummary +
     confBanner +
+    entryClassBanner +
     checklistBlock +
     rowsHTML +
     _strucDiag +
@@ -10172,17 +10189,12 @@ function parseTelegramText(text) {
   if (liqStr) data.liquidity = pNum(liqStr);
 
   /* ── Volume ──────────────────────────────────────────────────────────── */
-  /* "VOL: $262K (24h)" / "Vol: $54.8K [1h]" (Soul Scanner) / "├ Vol $202K" / "1h $154K"
-     IMPORTANT: vol24h requires an EXPLICIT "24h" label — do NOT make it optional,
-     or Soul Scanner's "[1h]" vol will be wrongly treated as 24h. */
-  var vol24h = rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\(?24[hH]\\)') ||
-               rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\[24[hH]\\]');
-  /* Soul Scanner: "$54.8K [1h]" — number comes BEFORE the [1h] tag */
-  var vol1h  = rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\[1[hH]\\]') ||
-               rxf('(?:^|\\s)1[hH]\\s+\\$([\\d.,]+[KMBkmb])');
+  /* "VOL:  $262.39K (24h)", "Vol:    $154K [1h]", "├ Vol   $202.3K", "1h $154K" */
+  var vol24h = rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])\\s*\\(?24h\\)?');
+  var vol1h  = rxf('1h\\s+\\$([\\d.,]+[KMBkmb])');
   var volGen = rxf('[├└]\\s*Vol\\s+\\$?([\\d.,]+[KMBkmb])') ||
                rxf('V(?:OL|ol(?:ume)?)\\s*:?\\s*\\$?([\\d.,]+[KMBkmb])');
-  if (vol24h) { data.volume = pNum(vol24h); data.vol24h = pNum(vol24h); }
+  if (vol24h) data.volume = pNum(vol24h);
   else if (vol1h)  data.volume = pNum(vol1h);
   else if (volGen) data.volume = pNum(volGen);
 
