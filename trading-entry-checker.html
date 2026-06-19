@@ -2199,6 +2199,8 @@ var currentAnalysis = null;
 var filterSafeOnly = false;
 var _heliusHolderData = null;
 var _manualRuleHits = [false, false, false, false];
+var _tecFeeCache = {};       /* 60-second cache: { [poolAddr]: { ts, tx24hTotal, tx24hBuys, tx24hSells, mediumFeeMicroPerCU, highFeeMicroPerCU, avgFeeSol, accFeesSol, accFeesUSD, poolAddr } } */
+var _tecAccFeeData = null;   /* most recent accumulated-fee result (set during fetchData, read in briefing) */
 var _cabRiskBaseListHTML = '';
 var _currentAnalysisCA = '';
 
@@ -3419,6 +3421,14 @@ async function fetchFromCA(ca) {
         if (!fetched.totalFeesUSD && gtPoolAttrs.fees_24h !== undefined) {
           fetched.totalFeesUSD = parseFloat(gtPoolAttrs.fees_24h) || 0;
         }
+        /* ── 24H transaction counts (buy + sell) for Accumulated Fees calculation ── */
+        if (gtPoolAttrs.transactions && gtPoolAttrs.transactions.h24) {
+          var _gt24b = parseInt(gtPoolAttrs.transactions.h24.buys  || 0, 10) || 0;
+          var _gt24s = parseInt(gtPoolAttrs.transactions.h24.sells || 0, 10) || 0;
+          window._tecGt24hBuys  = _gt24b;
+          window._tecGt24hSells = _gt24s;
+          window._tecGt24hTotal = _gt24b + _gt24s;
+        }
       }
 
       /* ── 15m OHLCV (24 candles) → Macro Floor + Local Floor ── */
@@ -3666,6 +3676,72 @@ async function fetchFromCA(ca) {
       }
     }
   } catch(e) { /* Silent — SOL price is optional for auto-conversion */ }
+
+  /* ── 5c. HELIUS PRIORITY FEE ESTIMATE ─ Accumulated 24H Network Fees ─────
+     Uses getPriorityFeeEstimate with the pool address as the account key.
+     Assumes 200,000 compute units per swap (typical Raydium / Pump.fun).
+     Fee formula:  avgFeeSOL = (mediumFee_µL_per_CU × 200,000 / 1e12) + 0.000005
+     Accumulated:  accFeesSOL = totalTxs × avgFeeSOL
+     60-second client-side cache keyed by pool address.                        */
+  _tecAccFeeData = null; /* clear stale result from previous fetch */
+  if (heliusKey && fetched.poolAddress && (window._tecGt24hTotal || 0) > 0) {
+    var _pfAddr   = fetched.poolAddress;
+    var _pfNow    = Date.now();
+    var _pfCached = _tecFeeCache[_pfAddr];
+    if (_pfCached && (_pfNow - _pfCached.ts) < 60000) {
+      /* Serve from cache — update tx counts to latest GT values in case they changed */
+      _pfCached.tx24hTotal = window._tecGt24hTotal || _pfCached.tx24hTotal;
+      _pfCached.tx24hBuys  = window._tecGt24hBuys  || _pfCached.tx24hBuys;
+      _pfCached.tx24hSells = window._tecGt24hSells  || _pfCached.tx24hSells;
+      var _pfSolPxC = window._tecSolPrice || 0;
+      _pfCached.accFeesSol = _pfCached.tx24hTotal * _pfCached.avgFeeSol;
+      _pfCached.accFeesUSD = _pfSolPxC > 0 ? _pfCached.accFeesSol * _pfSolPxC : 0;
+      _pfCached.fromCache  = true;
+      _tecAccFeeData = _pfCached;
+    } else {
+      try {
+        var _pfRpc  = 'https://mainnet.helius-rpc.com/?api-key=' + heliusKey;
+        var _pfResp = await fetch(_pfRpc, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            jsonrpc: '2.0', id: 1,
+            method:  'getPriorityFeeEstimate',
+            params:  [{ accountKeys: [_pfAddr], options: { includeAllPriorityFeeLevels: true } }]
+          })
+        });
+        if (_pfResp.ok) {
+          var _pfJson   = await _pfResp.json();
+          var _pfLevels = _pfJson && _pfJson.result && _pfJson.result.priorityFeeLevels;
+          if (_pfLevels) {
+            /* micro-lamports per compute unit at medium priority */
+            var _pfMed  = parseFloat(_pfLevels.medium   || _pfLevels.high || 0) || 0;
+            var _pfHigh = parseFloat(_pfLevels.high     || 0) || 0;
+            /* priority fee SOL = µL/CU × 200,000 CU / 1e12 (1 SOL = 10^12 µL) */
+            var _pfAvgSol  = (_pfMed * 200000) / 1e12 + 0.000005;
+            var _pfTxTotal = window._tecGt24hTotal || 0;
+            var _pfAccSOL  = _pfTxTotal * _pfAvgSol;
+            var _pfSolPx   = window._tecSolPrice || 0;
+            var _pfEntry   = {
+              ts:                _pfNow,
+              tx24hTotal:        _pfTxTotal,
+              tx24hBuys:         window._tecGt24hBuys  || 0,
+              tx24hSells:        window._tecGt24hSells || 0,
+              mediumFeeMicroPerCU: _pfMed,
+              highFeeMicroPerCU:   _pfHigh,
+              avgFeeSol:         _pfAvgSol,
+              accFeesSol:        _pfAccSOL,
+              accFeesUSD:        _pfSolPx > 0 ? _pfAccSOL * _pfSolPx : 0,
+              poolAddr:          _pfAddr,
+              fromCache:         false
+            };
+            _tecFeeCache[_pfAddr] = _pfEntry;
+            _tecAccFeeData        = _pfEntry;
+          }
+        }
+      } catch(e) { /* Silent — accumulated fee estimate is supplemental data */ }
+    }
+  }
 
   /* ── 6. GOPLUS ─ sell tax, honeypot (no API key required) ───────────── */
   try {
@@ -7303,6 +7379,65 @@ function buildEntryBriefingHTML(d, analysis) {
            + ((d.priceChangeM5 !== null ? (d.priceChangeM5 >= 0 ? '+' : '') + d.priceChangeM5.toFixed(2) : 'N/A') + '%</strong>');
         t += '<br>Velocity Ratio (M5 / avg-H1-slice): <strong>' + volVelocity.toFixed(2) + 'x</strong>';
         t += '<br><strong style="color:' + volVerdictColor + ';font-size:1.05em;">' + volVerdictText + '</strong>';
+        return t;
+      })() },
+    { num: '04e', label: '24H Network Activity', text: (function() {
+        var _afd    = _tecAccFeeData;
+        var _vol24  = d.vol24h || d.volume || 0;
+        var _solPx  = window._tecSolPrice || 0;
+        var _b24    = window._tecGt24hBuys  || 0;
+        var _s24    = window._tecGt24hSells || 0;
+        var _t24    = window._tecGt24hTotal || (_b24 + _s24) || 0;
+
+        /* ── Volume line ── */
+        var t = '24H Volume: ';
+        if (_vol24 > 0) {
+          t += '<strong style="color:var(--accent-cyan);">' + formatUSD(_vol24) + '</strong>';
+          if (_solPx > 0) t += ' <span style="color:var(--text-muted);font-size:0.68rem;">(≈ ' + Math.round(_vol24 / _solPx).toLocaleString() + ' SOL)</span>';
+        } else {
+          t += '<span style="color:var(--text-muted);">N/A</span>';
+        }
+
+        /* ── TX count line ── */
+        if (_t24 > 0) {
+          t += '<br>24H Swaps: <strong style="color:var(--accent-cyan);">' + _t24.toLocaleString() + '</strong>';
+          if (_b24 > 0 || _s24 > 0) {
+            t += ' <span style="color:var(--text-muted);font-size:0.68rem;">(Buys: <span style="color:#00e676;">' + _b24.toLocaleString() + '</span>'
+               + ' &nbsp;/&nbsp; Sells: <span style="color:#ff4757;">' + _s24.toLocaleString() + '</span>)</span>';
+          }
+        } else {
+          t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">Swap count unavailable — requires GeckoTerminal pool data.</span>';
+        }
+
+        /* ── Accumulated fees or reason why unavailable ── */
+        if (!_afd) {
+          if (_t24 > 0 && !localStorage.getItem('tec_helius_key')) {
+            t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">💸 Accumulated Fees: set a Helius API key in Settings to enable this calculation.</span>';
+          } else if (_t24 > 0) {
+            t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">💸 Accumulated Fees: priority fee estimate unavailable for this pool.</span>';
+          }
+          return t;
+        }
+
+        /* ── Avg fee per tx ── */
+        t += '<br>Avg Fee / Swap: <strong style="color:var(--accent-cyan);">' + _afd.avgFeeSol.toFixed(6) + ' SOL</strong>';
+        t += ' <span style="color:var(--text-muted);font-size:0.65rem;">';
+        t += '(Medium priority: ' + Math.round(_afd.mediumFeeMicroPerCU).toLocaleString() + ' µL/CU';
+        t += ' × 200K CU + 0.000005 base)</span>';
+
+        /* ── Accumulated fees highlight ── */
+        var _accColor = _afd.accFeesSol >= 500 ? '#00e676'
+                      : _afd.accFeesSol >= 50  ? '#ffeb3b'
+                      : _afd.accFeesSol >= 5   ? '#ff9800'
+                      : 'var(--text-secondary)';
+        t += '<br><strong style="color:' + _accColor + ';font-size:1.05em;">💸 Accumulated 24H Fees: '
+           + _afd.accFeesSol.toFixed(2) + ' SOL</strong>';
+        if (_afd.accFeesUSD > 0) {
+          t += ' <span style="color:var(--text-muted);">≈ $' + Math.round(_afd.accFeesUSD).toLocaleString() + ' USD</span>';
+        }
+        if (_afd.fromCache) {
+          t += ' <span style="color:var(--text-muted);font-size:0.60rem;font-style:italic;"> [cached &lt;60s]</span>';
+        }
         return t;
       })() },
     { num: '04d', label: 'Entry Classification', text: (function() {
