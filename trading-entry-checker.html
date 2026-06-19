@@ -3741,6 +3741,16 @@ async function fetchFromCA(ca) {
         }
       } catch(e) { /* Silent — accumulated fee estimate is supplemental data */ }
     }
+    /* ── Auto-fill form fields from accumulated fee result ──────────────────
+       Only fills if the field is still empty (DexScreener / manual paste wins).
+       fetched.totalFeeSOL → fTotalFeeSOL
+       fetched.totalFeesUSD → fTotalFeeUSD                                     */
+    if (_tecAccFeeData) {
+      if (!fetched.totalFeeSOL && _tecAccFeeData.accFeesSol > 0)
+        fetched.totalFeeSOL = parseFloat(_tecAccFeeData.accFeesSol.toFixed(4));
+      if (!fetched.totalFeesUSD && _tecAccFeeData.accFeesUSD > 0)
+        fetched.totalFeesUSD = Math.round(_tecAccFeeData.accFeesUSD);
+    }
   }
 
   /* ── 6. GOPLUS ─ sell tax, honeypot (no API key required) ───────────── */
