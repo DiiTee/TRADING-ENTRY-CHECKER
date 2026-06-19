@@ -3677,74 +3677,141 @@ async function fetchFromCA(ca) {
     }
   } catch(e) { /* Silent — SOL price is optional for auto-conversion */ }
 
-  /* ── 5c. HELIUS PRIORITY FEE ESTIMATE ─ Accumulated 24H Network Fees ─────
-     Uses getPriorityFeeEstimate with the pool address as the account key.
-     Assumes 200,000 compute units per swap (typical Raydium / Pump.fun).
-     Fee formula:  avgFeeSOL = (mediumFee_µL_per_CU × 200,000 / 1e12) + 0.000005
-     Accumulated:  accFeesSOL = totalTxs × avgFeeSOL
-     60-second client-side cache keyed by pool address.                        */
-  _tecAccFeeData = null; /* clear stale result from previous fetch */
-  if (heliusKey && fetched.poolAddress && (window._tecGt24hTotal || 0) > 0) {
-    var _pfAddr   = fetched.poolAddress;
-    var _pfNow    = Date.now();
-    var _pfCached = _tecFeeCache[_pfAddr];
-    if (_pfCached && (_pfNow - _pfCached.ts) < 60000) {
-      /* Serve from cache — update tx counts to latest GT values in case they changed */
-      _pfCached.tx24hTotal = window._tecGt24hTotal || _pfCached.tx24hTotal;
-      _pfCached.tx24hBuys  = window._tecGt24hBuys  || _pfCached.tx24hBuys;
-      _pfCached.tx24hSells = window._tecGt24hSells  || _pfCached.tx24hSells;
-      var _pfSolPxC = window._tecSolPrice || 0;
-      _pfCached.accFeesSol = _pfCached.tx24hTotal * _pfCached.avgFeeSol;
-      _pfCached.accFeesUSD = _pfSolPxC > 0 ? _pfCached.accFeesSol * _pfSolPxC : 0;
-      _pfCached.fromCache  = true;
-      _tecAccFeeData = _pfCached;
+  /* ── 5c. ACCUMULATED 24H FEE ENGINE ────────────────────────────────────────
+     PRIMARY  — Sample last 100 pool txs via Helius; read actual fee fields;
+                compute avgObservedFeeSOL; multiply by GT 24h swap count.
+     FALLBACK — getPriorityFeeEstimate multiplier (emergency only).
+     Cache TTL: 20 minutes per pool address.
+     Excluded tx types: LP add/remove, pool init, migrate, admin.              */
+  _tecAccFeeData = null;
+  if (heliusKey && fetched.poolAddress) {
+    var _feeAddr  = fetched.poolAddress;
+    var _feeNow   = Date.now();
+    var _feeCacheHit = _tecFeeCache[_feeAddr];
+    if (_feeCacheHit && (_feeNow - _feeCacheHit.ts) < 1200000) {
+      /* ── Cache hit: refresh GT tx counts + recompute accFees with latest SOL price ── */
+      var _fcTx   = window._tecGt24hTotal || _feeCacheHit.tx24hTotal;
+      var _fcSolPx = window._tecSolPrice || 0;
+      _feeCacheHit.tx24hTotal  = _fcTx;
+      _feeCacheHit.tx24hBuys   = window._tecGt24hBuys  || _feeCacheHit.tx24hBuys;
+      _feeCacheHit.tx24hSells  = window._tecGt24hSells || _feeCacheHit.tx24hSells;
+      _feeCacheHit.accFeesSol  = _feeCacheHit.avgFeeSol * _fcTx;
+      _feeCacheHit.accFeesUSD  = _fcSolPx > 0 ? _feeCacheHit.accFeesSol * _fcSolPx : 0;
+      _feeCacheHit.fromCache   = true;
+      _tecAccFeeData = _feeCacheHit;
     } else {
+      var _feeEntry = null;
+      var _feeRpc   = 'https://mainnet.helius-rpc.com/?api-key=' + heliusKey;
+      var _feeRest  = 'https://api.helius.xyz/v0/transactions?api-key=' + heliusKey;
+      var _feeExclude = { ADD_LIQUIDITY:1, REMOVE_LIQUIDITY:1, INITIALIZE_POOL:1,
+                          MIGRATE:1, CREATE_POOL:1, WITHDRAW:1, DEPOSIT:1 };
+
+      /* ── PRIMARY: Observed sample ──────────────────────────────────────── */
       try {
-        var _pfRpc  = 'https://mainnet.helius-rpc.com/?api-key=' + heliusKey;
-        var _pfResp = await fetch(_pfRpc, {
-          method:  'POST',
+        /* Step 1 — get last 100 signatures for pool address */
+        var _sigResp = await fetch(_feeRpc, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
+          body: JSON.stringify({
             jsonrpc: '2.0', id: 1,
-            method:  'getPriorityFeeEstimate',
-            params:  [{ accountKeys: [_pfAddr], options: { includeAllPriorityFeeLevels: true } }]
+            method: 'getSignaturesForAddress',
+            params: [_feeAddr, { limit: 100 }]
           })
         });
-        if (_pfResp.ok) {
-          var _pfJson   = await _pfResp.json();
-          var _pfLevels = _pfJson && _pfJson.result && _pfJson.result.priorityFeeLevels;
-          if (_pfLevels) {
-            /* micro-lamports per compute unit at medium priority */
-            var _pfMed  = parseFloat(_pfLevels.medium   || _pfLevels.high || 0) || 0;
-            var _pfHigh = parseFloat(_pfLevels.high     || 0) || 0;
-            /* priority fee SOL = µL/CU × 200,000 CU / 1e12 (1 SOL = 10^12 µL) */
-            var _pfAvgSol  = (_pfMed * 200000) / 1e12 + 0.000005;
-            var _pfTxTotal = window._tecGt24hTotal || 0;
-            var _pfAccSOL  = _pfTxTotal * _pfAvgSol;
-            var _pfSolPx   = window._tecSolPrice || 0;
-            var _pfEntry   = {
-              ts:                _pfNow,
-              tx24hTotal:        _pfTxTotal,
-              tx24hBuys:         window._tecGt24hBuys  || 0,
-              tx24hSells:        window._tecGt24hSells || 0,
-              mediumFeeMicroPerCU: _pfMed,
-              highFeeMicroPerCU:   _pfHigh,
-              avgFeeSol:         _pfAvgSol,
-              accFeesSol:        _pfAccSOL,
-              accFeesUSD:        _pfSolPx > 0 ? _pfAccSOL * _pfSolPx : 0,
-              poolAddr:          _pfAddr,
-              fromCache:         false
-            };
-            _tecFeeCache[_pfAddr] = _pfEntry;
-            _tecAccFeeData        = _pfEntry;
+        if (!_sigResp.ok) throw new Error('sig fetch failed');
+        var _sigJson = await _sigResp.json();
+        var _sigList = (_sigJson && Array.isArray(_sigJson.result)) ? _sigJson.result : [];
+        /* Keep only successful txs */
+        var _cleanSigs = _sigList
+          .filter(function(s) { return !s.err; })
+          .map(function(s) { return s.signature; });
+        if (_cleanSigs.length === 0) throw new Error('no valid signatures');
+
+        /* Step 2 — parse via Helius Enhanced Transactions API */
+        var _txResp = await fetch(_feeRest, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactions: _cleanSigs })
+        });
+        if (!_txResp.ok) throw new Error('enhanced tx fetch failed');
+        var _txData = await _txResp.json();
+        if (!Array.isArray(_txData) || _txData.length === 0) throw new Error('no tx data');
+
+        /* Step 3 — sum fee fields; skip LP/admin noise */
+        var _feeSum = 0, _feeCount = 0;
+        _txData.forEach(function(tx) {
+          if (!tx) return;
+          if (tx.type && _feeExclude[tx.type]) return;
+          var _f = typeof tx.fee === 'number' ? tx.fee : parseInt(tx.fee || 0, 10);
+          if (_f > 0) { _feeSum += _f; _feeCount++; }
+        });
+        if (_feeCount === 0) throw new Error('no fee data in sample');
+
+        /* Step 4 — avg observed fee × GT 24h swap count */
+        var _avgFeeLam  = _feeSum / _feeCount;
+        var _avgFeeSol  = _avgFeeLam / 1e9;
+        var _obsTxTotal = window._tecGt24hTotal || _feeCount;
+        var _obsAccSOL  = _avgFeeSol * _obsTxTotal;
+        var _obsSolPx   = window._tecSolPrice || 0;
+        _feeEntry = {
+          ts:           _feeNow,
+          source:       'OBSERVED',
+          sampleSize:   _feeCount,
+          avgFeeSol:    _avgFeeSol,
+          tx24hTotal:   _obsTxTotal,
+          tx24hBuys:    window._tecGt24hBuys  || 0,
+          tx24hSells:   window._tecGt24hSells || 0,
+          accFeesSol:   _obsAccSOL,
+          accFeesUSD:   _obsSolPx > 0 ? _obsAccSOL * _obsSolPx : 0,
+          poolAddr:     _feeAddr,
+          fromCache:    false
+        };
+
+      } catch(_oe) {
+        /* ── FALLBACK: priority fee multiplier ───────────────────────────── */
+        try {
+          var _fbResp = await fetch(_feeRpc, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+              jsonrpc: '2.0', id: 1,
+              method:  'getPriorityFeeEstimate',
+              params:  [{ accountKeys: [_feeAddr], options: { includeAllPriorityFeeLevels: true } }]
+            })
+          });
+          if (_fbResp.ok) {
+            var _fbJson   = await _fbResp.json();
+            var _fbLevels = _fbJson && _fbJson.result && _fbJson.result.priorityFeeLevels;
+            if (_fbLevels) {
+              var _fbMed     = parseFloat(_fbLevels.medium || _fbLevels.high || 0) || 0;
+              var _fbAvgSol  = (_fbMed * 200000) / 1e12 + 0.000005;
+              var _fbTxTotal = window._tecGt24hTotal || 0;
+              var _fbSolPx   = window._tecSolPrice || 0;
+              _feeEntry = {
+                ts:          _feeNow,
+                source:      'ESTIMATED',
+                sampleSize:  0,
+                avgFeeSol:   _fbAvgSol,
+                tx24hTotal:  _fbTxTotal,
+                tx24hBuys:   window._tecGt24hBuys  || 0,
+                tx24hSells:  window._tecGt24hSells || 0,
+                accFeesSol:  _fbAvgSol * _fbTxTotal,
+                accFeesUSD:  _fbSolPx > 0 ? _fbAvgSol * _fbTxTotal * _fbSolPx : 0,
+                poolAddr:    _feeAddr,
+                fromCache:   false
+              };
+            }
           }
-        }
-      } catch(e) { /* Silent — accumulated fee estimate is supplemental data */ }
+        } catch(_fe) { /* Silent — fee data is supplemental */ }
+      }
+
+      if (_feeEntry) {
+        _tecFeeCache[_feeAddr] = _feeEntry;
+        _tecAccFeeData = _feeEntry;
+      }
     }
-    /* ── Auto-fill form fields from accumulated fee result ──────────────────
-       Only fills if the field is still empty (DexScreener / manual paste wins).
-       fetched.totalFeeSOL → fTotalFeeSOL
-       fetched.totalFeesUSD → fTotalFeeUSD                                     */
+
+    /* ── Auto-fill form fields (DexScreener / manual paste always wins) ── */
     if (_tecAccFeeData) {
       if (!fetched.totalFeeSOL && _tecAccFeeData.accFeesSol > 0)
         fetched.totalFeeSOL = parseFloat(_tecAccFeeData.accFeesSol.toFixed(4));
@@ -7421,19 +7488,27 @@ function buildEntryBriefingHTML(d, analysis) {
 
         /* ── Accumulated fees or reason why unavailable ── */
         if (!_afd) {
-          if (_t24 > 0 && !localStorage.getItem('tec_helius_key')) {
-            t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">💸 Accumulated Fees: set a Helius API key in Settings to enable this calculation.</span>';
-          } else if (_t24 > 0) {
-            t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">💸 Accumulated Fees: priority fee estimate unavailable for this pool.</span>';
+          if (!localStorage.getItem('tec_helius_key')) {
+            t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">💸 Accumulated Fees: add a Helius API key in Settings to enable.</span>';
+          } else {
+            t += '<br><span style="color:var(--text-muted);font-size:0.70rem;">💸 Accumulated Fees: fee sampling unavailable for this pool.</span>';
           }
           return t;
         }
 
-        /* ── Avg fee per tx ── */
-        t += '<br>Avg Fee / Swap: <strong style="color:var(--accent-cyan);">' + _afd.avgFeeSol.toFixed(6) + ' SOL</strong>';
-        t += ' <span style="color:var(--text-muted);font-size:0.65rem;">';
-        t += '(Medium priority: ' + Math.round(_afd.mediumFeeMicroPerCU).toLocaleString() + ' µL/CU';
-        t += ' × 200K CU + 0.000005 base)</span>';
+        /* ── Source badge + avg fee ── */
+        var _srcLabel = _afd.source === 'OBSERVED'  ? 'OBSERVED SAMPLE'
+                      : _afd.source === 'ESTIMATED' ? 'ESTIMATED'
+                      : _afd.source || 'ESTIMATED';
+        var _srcColor = _afd.source === 'OBSERVED' ? '#00e676' : '#ff9800';
+        t += '<br>Avg Fee / Swap: <strong style="color:var(--accent-cyan);">' + (_afd.avgFeeSol || 0).toFixed(6) + ' SOL</strong>';
+        t += ' <span style="padding:1px 5px;border-radius:3px;background:' + _srcColor + '22;border:1px solid ' + _srcColor + '55;'
+           + 'color:' + _srcColor + ';font-size:0.60rem;font-weight:700;letter-spacing:0.5px;">' + _srcLabel + '</span>';
+        if (_afd.source === 'OBSERVED' && _afd.sampleSize > 0) {
+          t += ' <span style="color:var(--text-muted);font-size:0.63rem;">(n=' + _afd.sampleSize + ' sampled txs)</span>';
+        } else if (_afd.source === 'ESTIMATED') {
+          t += ' <span style="color:var(--text-muted);font-size:0.63rem;">(priority fee estimate × 200K CU)</span>';
+        }
 
         /* ── Accumulated fees highlight ── */
         var _accColor = _afd.accFeesSol >= 500 ? '#00e676'
@@ -7441,12 +7516,12 @@ function buildEntryBriefingHTML(d, analysis) {
                       : _afd.accFeesSol >= 5   ? '#ff9800'
                       : 'var(--text-secondary)';
         t += '<br><strong style="color:' + _accColor + ';font-size:1.05em;">💸 Accumulated 24H Fees: '
-           + _afd.accFeesSol.toFixed(2) + ' SOL</strong>';
+           + (_afd.accFeesSol || 0).toFixed(2) + ' SOL</strong>';
         if (_afd.accFeesUSD > 0) {
           t += ' <span style="color:var(--text-muted);">≈ $' + Math.round(_afd.accFeesUSD).toLocaleString() + ' USD</span>';
         }
         if (_afd.fromCache) {
-          t += ' <span style="color:var(--text-muted);font-size:0.60rem;font-style:italic;"> [cached &lt;60s]</span>';
+          t += ' <span style="color:var(--text-muted);font-size:0.60rem;font-style:italic;"> [cached]</span>';
         }
         return t;
       })() },
