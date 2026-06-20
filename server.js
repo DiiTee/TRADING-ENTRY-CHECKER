@@ -12,6 +12,26 @@ const HTML    = path.join(__dirname, 'trading-entry-checker.html');
 const handler = require('./api/social-scan');
 
 const server = http.createServer((req, res) => {
+  /* ── /api/export-txt  POST → Content-Disposition download ── */
+  if (req.url === '/api/export-txt' && req.method === 'POST') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      const body   = Buffer.concat(chunks).toString('utf8');
+      const params = new URLSearchParams(body);
+      const raw    = (params.get('filename') || 'export.txt').trim();
+      const safe   = raw.replace(/[^\w\-$\.]/g, '_') || 'export.txt';
+      const content = params.get('content') || '';
+      res.writeHead(200, {
+        'Content-Type':        'text/plain; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="' + safe + '"',
+        'Cache-Control':       'no-store',
+      });
+      res.end(content);
+    });
+    return;
+  }
+
   const isApi = req.url === '/api/social-scan';
 
   if (isApi && req.method === 'OPTIONS') {
