@@ -7232,6 +7232,7 @@ function buildEntryBriefingHTML(d, analysis) {
     hs:          hs,
     currentMC:   currentMC
   });
+  window._tecEntryClass = _ecl;
 
   /* ── LP Floor: catastrophic collapse only — NOT used for entry calculation ── */
   var lpFloor = (d.liquidity > 0 && lmcR > 0) ? (d.liquidity / (lmcR / 100)) * 0.75 : currentMC * 0.65;
@@ -11998,7 +11999,7 @@ function buildSetupText(d, analysis) {
   var txtIsAir     = txtDistClass === 'Air Entry';
 
   /* ── Safe entry range + action signal (mirrors entry model router in buildEntryBriefingHTML) ── */
-  var _txtEntryType   = _ecl ? _ecl.entryType : 'STRUCTURE';
+  var _txtEntryType   = window._tecEntryClass ? window._tecEntryClass.entryType : 'STRUCTURE';
   var _txtLowestMcObs = txtMacroMC ||
                         (window._tecHintStructure && window._tecHintStructure.histMin > 0 ? window._tecHintStructure.histMin : null);
   var safeEntryLow, safeEntryHigh;
@@ -12339,28 +12340,18 @@ el('exportTxtBtn').addEventListener('click', function() {
   }
   L.push(sep);
 
-  /* Form POST → server responds with Content-Disposition: attachment.
-     Works in all browsers (including Lemur/Android) because it uses the
-     native HTTP download flow rather than JS blob manipulation. */
-  var _form = document.createElement('form');
-  _form.method  = 'POST';
-  _form.action  = '/api/export-txt';
-  _form.style.display = 'none';
-
-  var _fnField = document.createElement('input');
-  _fnField.type  = 'hidden';
-  _fnField.name  = 'filename';
-  _fnField.value = coinFile + '.txt';
-
-  var _ctField = document.createElement('textarea');
-  _ctField.name  = 'content';
-  _ctField.value = L.join('\n');
-
-  _form.appendChild(_fnField);
-  _form.appendChild(_ctField);
-  document.body.appendChild(_form);
-  _form.submit();
-  setTimeout(function() { try { document.body.removeChild(_form); } catch(e) {} }, 2000);
+  var _blob    = new Blob([L.join('\n')], { type: 'text/plain' });
+  var _blobUrl = URL.createObjectURL(_blob);
+  var _link    = document.createElement('a');
+  _link.href     = _blobUrl;
+  _link.download = coinFile + '.txt';
+  _link.style.display = 'none';
+  document.body.appendChild(_link);
+  _link.click();
+  setTimeout(function() {
+    try { document.body.removeChild(_link); } catch(e) {}
+    URL.revokeObjectURL(_blobUrl);
+  }, 750);
   showToast('TXT exported: ' + coinFile + '.txt', 'success');
 });
 
