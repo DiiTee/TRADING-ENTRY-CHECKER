@@ -1,0 +1,126 @@
+STRUCTURE ENGINE — OHLCV SUFFICIENCY TIER UPGRADE
+
+IMPORTANT
+
+DO NOT remove:
+
+- Floor calculations
+- Shelf detection
+- Historical Low calculations
+- Safe Entry Range calculations
+- Existing Entry Range calculations
+- Structure diagnostics
+- Confidence scoring
+
+DO NOT rebuild the Structure Engine.
+
+The goal is to improve structure reliability classification by introducing OHLCV sufficiency tiers instead of treating all low-candle situations the same.
+
+NEW OHLCV SUFFICIENCY MODEL
+
+Tier 1 — Insufficient Structure Data
+
+Condition:
+- Candle Count < 20
+
+Actions:
+- Disable Full Structure classification
+- Disable High Confidence Structure verdicts
+- Mark structure as "Insufficient Data"
+- Force Estimated Structure mode
+
+Diagnostic Message:
+"Very limited OHLCV history. Structure estimates have low confidence."
+
+--------------------------------------------------
+
+Tier 2 — Estimated Structure
+
+Condition:
+- Candle Count 20–49
+
+Actions:
+- Continue calculating:
+  - Floor
+  - Shelf
+  - Historical Low
+  - Entry Range
+  - Safe Entry Range
+
+- Allow Structure Briefing generation
+
+However:
+
+- Mark all structure outputs as Estimated
+- Apply confidence penalty
+- Prevent maximum confidence classification
+
+Diagnostic Message:
+"Structure detected but based on limited OHLCV history."
+
+--------------------------------------------------
+
+Tier 3 — Full Structure
+
+Condition:
+- Candle Count >= 50
+
+Actions:
+- Enable current Full Structure Engine behavior
+- No OHLCV sufficiency penalties
+- Allow normal confidence scoring
+- Allow normal tier grading
+
+Diagnostic Message:
+"Sufficient OHLCV history for full structural analysis."
+
+--------------------------------------------------
+
+Also: 
+
+When:
+- Candle Count >= 75
+
+- Display:
+
+"Extended OHLCV history available. Structural levels have elevated reliability."
+
+This is an informational confidence boost only.
+
+DO NOT alter:
+
+- Entry calculations
+- Floor calculations
+- Shelf calculations
+- Historical low calculations
+
+--------------------------------------------------
+
+STRUCTURE BRIEFING DISPLAY
+
+Add:
+
+OHLCV Sufficiency:
+- Insufficient
+- Estimated
+- Full
+
+Display this near:
+
+- Confidence Tier
+- Structural Verdict
+
+--------------------------------------------------
+
+GOAL
+
+The objective is NOT to reject young tokens.
+
+The objective is to distinguish between:
+
+- Very limited structure (<20 candles)
+- Developing structure (20–49 candles)
+- Reliable structure (50+ candles)
+
+while preserving all existing Structure Engine calculations.
+

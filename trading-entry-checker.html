@@ -7020,6 +7020,30 @@ function computeStructureReliability(ctx) {
                         : n <= 100 ? 'Reliable'
                         :            'Mature';
 
+  /* ── OHLCV Sufficiency Tier (3-tier model) ──────────────────────────────
+     Tier 1 (<20 candles):  Insufficient — full structure disabled
+     Tier 2 (20–49):        Estimated    — confidence penalty, no HIGH CONFIDENCE
+     Tier 3 (50+):          Full         — current behaviour; 75+ = Extended     */
+  var ohlcvSufTier, ohlcvSufLabel, ohlcvSufMsg, ohlcvSufColor;
+  if (!ohlcvAvailable || n < 20) {
+    ohlcvSufTier  = 1;
+    ohlcvSufLabel = 'Insufficient';
+    ohlcvSufMsg   = 'Very limited OHLCV history. Structure estimates have low confidence.';
+    ohlcvSufColor = '#ff4757';
+  } else if (n < 50) {
+    ohlcvSufTier  = 2;
+    ohlcvSufLabel = 'Estimated';
+    ohlcvSufMsg   = 'Structure detected but based on limited OHLCV history.';
+    ohlcvSufColor = '#ff9800';
+  } else {
+    ohlcvSufTier  = 3;
+    ohlcvSufLabel = n >= 75 ? 'Full (Extended)' : 'Full';
+    ohlcvSufMsg   = n >= 75
+      ? 'Extended OHLCV history available. Structural levels have elevated reliability.'
+      : 'Sufficient OHLCV history for full structural analysis.';
+    ohlcvSufColor = '#00e676';
+  }
+
   /* ── Retrace Count — uses higherLows (swing lows higher than prior = confirmed retrace+bounce) ── */
   var retraceCount      = sa ? (sa.higherLows || 0) : 0;
   var retraceConfidence = retraceCount >= 3 ? 'Strong' : retraceCount === 2 ? 'Moderate' : retraceCount === 1 ? 'Weak' : 'Very Weak';
@@ -7106,6 +7130,18 @@ function computeStructureReliability(ctx) {
   /* ── Reliability Classification ── */
   var reliabilityClass = score >= 81 ? 'HIGH CONFIDENCE' : score >= 61 ? 'RELIABLE' : score >= 31 ? 'ESTIMATED' : 'UNUSABLE';
   var reliabilityColor = score >= 81 ? '#00ffcc' : score >= 61 ? '#00e676' : score >= 31 ? '#ff9800' : '#ff4757';
+  /* OHLCV sufficiency caps — applied after the score-based classification */
+  if (ohlcvSufTier === 1) {
+    /* Tier 1: cap at ESTIMATED — HIGH CONFIDENCE and RELIABLE both blocked */
+    if (reliabilityClass === 'HIGH CONFIDENCE' || reliabilityClass === 'RELIABLE') {
+      reliabilityClass = 'ESTIMATED'; reliabilityColor = '#ff9800';
+    }
+  } else if (ohlcvSufTier === 2) {
+    /* Tier 2: cap at RELIABLE — HIGH CONFIDENCE blocked */
+    if (reliabilityClass === 'HIGH CONFIDENCE') {
+      reliabilityClass = 'RELIABLE'; reliabilityColor = '#00e676';
+    }
+  }
 
   /* ── Price Discovery Active ── */
   var priceDiscoveryActive = (ageMin !== null && ageMin !== undefined && ageMin < 60)
@@ -7134,6 +7170,12 @@ function computeStructureReliability(ctx) {
     entryType      = 'STRUCTURE';
     entryTypeColor = '#00e676';
     entryTypeDesc  = 'Confirmed structure with reliable candle history and shelf analysis.';
+  }
+  /* Tier 1 OHLCV (<20 candles): Full Structure classification disabled */
+  if (ohlcvSufTier === 1 && entryType === 'STRUCTURE') {
+    entryType      = 'MOMENTUM';
+    entryTypeColor = '#ffeb3b';
+    entryTypeDesc  = 'Estimated structure only. Insufficient OHLCV history (<20 candles) — Full Structure classification disabled.';
   }
 
   /* ── Floor Confidence ── */
@@ -7180,6 +7222,10 @@ function computeStructureReliability(ctx) {
     ohlcvAvailable:       ohlcvAvailable,
     candleCount:          n,
     candleSufficiency:    candleSufficiency,
+    ohlcvSufTier:         ohlcvSufTier,
+    ohlcvSufLabel:        ohlcvSufLabel,
+    ohlcvSufMsg:          ohlcvSufMsg,
+    ohlcvSufColor:        ohlcvSufColor,
     retraceCount:         retraceCount,
     retraceConfidence:    retraceConfidence,
     entryType:            entryType,
@@ -7615,9 +7661,17 @@ function buildEntryBriefingHTML(d, analysis) {
                  : _e.candleSufficiency === 'Developing' ? '#ffeb3b'
                  : _e.candleSufficiency === 'Limited'    ? '#ff9800' : '#ff4757';
         t += '<span style="font-size:0.63rem;color:var(--text-muted);">Data Sufficiency: <strong style="color:' + _sfC + ';">' + _e.candleSufficiency + '</strong></span>';
+        t += '<span style="font-size:0.63rem;color:var(--text-muted);">OHLCV Sufficiency: <strong style="color:' + _e.ohlcvSufColor + ';">Tier ' + _e.ohlcvSufTier + ' — ' + _e.ohlcvSufLabel + '</strong></span>';
         var _rcC = _e.retraceCount >= 3 ? '#00e676' : _e.retraceCount === 2 ? '#ffeb3b' : _e.retraceCount === 1 ? '#ff9800' : '#ff4757';
         t += '<span style="font-size:0.63rem;color:var(--text-muted);">Retraces Detected: <strong style="color:' + _rcC + ';">' + _e.retraceCount + '</strong> <span style="font-size:0.58rem;color:' + _rcC + ';">(' + _e.retraceConfidence + ')</span></span>';
         t += '</div>';
+        /* ── OHLCV Sufficiency message (Tier 1 and Tier 2 only) ── */
+        if (_e.ohlcvSufTier < 3) {
+          t += '<div style="margin-bottom:8px;padding:5px 10px;border-left:3px solid ' + _e.ohlcvSufColor + ';background:rgba(0,0,0,0.18);border-radius:0 4px 4px 0;">';
+          t += '<span style="font-size:0.62rem;font-weight:700;color:' + _e.ohlcvSufColor + ';">OHLCV SUFFICIENCY — ' + _e.ohlcvSufLabel.toUpperCase() + '</span>';
+          t += '<br><span style="font-size:0.61rem;color:var(--text-muted);">' + _e.ohlcvSufMsg + '</span>';
+          t += '</div>';
+        }
 
         /* ── Confidence Scores ── */
         var _fcC = _e.floorConfidence >= 60 ? '#00e676' : _e.floorConfidence >= 35 ? '#ff9800' : '#ff4757';
@@ -7750,6 +7804,13 @@ function buildEntryBriefingHTML(d, analysis) {
           if (sa.insufficientData) {
             t += '<div style="margin-bottom:6px;padding:4px 8px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.08);font-size:0.72rem;color:#ff9800;">⚠ Insufficient candle data (&lt;50 candles) — Confidence Tier reduced by one level.</div>';
           }
+
+          /* ── OHLCV Sufficiency Tier — shown beside Confidence Tier ── */
+          t += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">';
+          t += '<span style="font-size:0.60rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">OHLCV Sufficiency</span>';
+          t += '<span style="padding:2px 8px;border-radius:3px;background:' + _ecl.ohlcvSufColor + '22;border:1px solid ' + _ecl.ohlcvSufColor + '55;color:' + _ecl.ohlcvSufColor + ';font-size:0.63rem;font-weight:700;">Tier ' + _ecl.ohlcvSufTier + ' — ' + _ecl.ohlcvSufLabel + '</span>';
+          t += '<span style="font-size:0.61rem;color:var(--text-muted);font-style:italic;">' + _ecl.ohlcvSufMsg + '</span>';
+          t += '</div>';
 
           /* ── Confidence Tier + Shelf Quality (prominent) ── */
           t += '<div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;">';
