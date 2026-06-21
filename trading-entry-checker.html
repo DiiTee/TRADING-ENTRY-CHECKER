@@ -4712,6 +4712,12 @@ async function fetchHeliusTopHolders(ca) {
       if (filteredTopHolder !== null) currentAnalysis.data.topHolder = filteredTopHolder;
       currentAnalysis.data.top10 = top10Pct;
       renderChecklist();
+      /* Sync watchlist so the grade shown in the watchlist matches the
+         just-updated Analysis Results (holder data changes the security tier) */
+      (function() {
+        var _wlE = ca ? watchlist.find(function(e) { return e.ca === ca; }) : null;
+        if (_wlE) { wlSyncEntry(_wlE.id); wlSave(); wlRender(); }
+      })();
     }
 
     updateHybridRiskDisplay();
@@ -12847,7 +12853,15 @@ function qecRunAudit() {
                         fees:fees, vfRatio:vfRatio };
 
   /* If a coin has already been analysed, refresh the checklist to show QEC results */
-  if (typeof renderChecklist === 'function' && currentAnalysis) renderChecklist();
+  if (typeof renderChecklist === 'function' && currentAnalysis) {
+    renderChecklist();
+    /* Keep watchlist grade in sync — QEC re-render can change the overall tier */
+    (function() {
+      var _qca = currentAnalysis.data && currentAnalysis.data.ca;
+      var _wlE = _qca ? watchlist.find(function(e) { return e.ca === _qca; }) : null;
+      if (_wlE) { wlSyncEntry(_wlE.id); wlSave(); wlRender(); }
+    })();
+  }
 }
 
 /* ── Build QEC result HTML block (for RESULTS section + Filter Checklist) ── */
