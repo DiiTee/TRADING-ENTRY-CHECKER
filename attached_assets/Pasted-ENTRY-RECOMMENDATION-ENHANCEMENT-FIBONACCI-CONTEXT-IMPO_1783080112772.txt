@@ -1,0 +1,152 @@
+ENTRY RECOMMENDATION ENHANCEMENT — FIBONACCI CONTEXT
+
+IMPORTANT
+
+DO NOT rebuild the Structure Engine.
+
+DO NOT modify:
+
+- Structure Score
+- Structure Grade
+- Structure Verdict
+- Confidence Tier
+- Action Signal
+- R:R Ratio
+- Entry Classification
+- Entry Range
+- Safe Entry Range
+- Existing Floor, Shelf or Historical Low calculations
+
+The goal is NOT to introduce Fibonacci as a scoring metric.
+
+The goal is to provide additional technical context for the existing Safe Entry Range.
+
+──────────────────────────────
+
+NEW FEATURE
+
+Add a compact "Fibonacci Context" section directly beneath the existing Safe Entry Range card.
+
+This section is informational only.
+
+It must NOT influence:
+
+- Structure Score
+- Structure Grade
+- Confidence Tier
+- Structure Verdict
+- Entry Recommendation
+- Safe Entry Range calculations
+
+──────────────────────────────
+
+WHEN TO DISPLAY
+
+Only calculate and display Fibonacci when ALL of the following are true:
+
+• A clear directional trend exists.
+• A completed swing high and swing low can be identified.
+• The current structure is suitable for Fibonacci analysis.
+
+Do NOT display Fibonacci during:
+
+• Sideways markets
+• Choppy/range-bound structure
+• Immature price discovery
+• Incomplete swings
+• Low-confidence structure where Fibonacci would be unreliable
+
+If Fibonacci is not applicable, display:
+
+Fibonacci Context
+
+Not Applicable
+
+Reason:
+Sideways market / No completed swing / Structure still developing.
+
+──────────────────────────────
+
+WHEN APPLICABLE
+
+Calculate:
+
+• 0.500
+• 0.618
+• 0.786
+
+Treat 0.500–0.786 as the Golden Entry Zone, with particular emphasis on 0.618.
+
+Determine whether the current price is:
+
+• Above the Golden Zone
+• Inside the Golden Zone
+• Near 0.618
+• Below the Golden Zone
+
+Also determine whether the existing Safe Entry Range overlaps the Golden Zone.
+
+Examples:
+
+✓ Safe Entry overlaps Fibonacci Golden Zone
+
+✓ Current price inside Golden Zone
+
+⚠ Current price above Golden Zone
+
+⚠ Safe Entry does not overlap Golden Zone
+
+──────────────────────────────
+
+PURPOSE
+
+This feature is intended only as an additional technical reference for users familiar with Fibonacci retracements.
+
+The proprietary Structure Engine remains the primary source of structural analysis and entry recommendations.
+
+Fibonacci must never override or replace the existing Entry Range or Safe Entry Range.
+
+It should simply provide additional context alongside the current Entry Recommendation.
+
+
+──────────────────────────────
+
+FIBONACCI CALCULATION (MARKET CAP)
+
+When Fibonacci analysis is applicable, use Market Cap (MC) instead of token price.
+
+1. Identify a valid completed bullish swing.
+
+• Swing Low MC = Lowest Market Cap of the completed swing.
+• Swing High MC = Highest Market Cap of the completed swing.
+
+2. Calculate the swing range:
+
+Range = Swing High MC − Swing Low MC
+
+3. Calculate the Fibonacci retracement levels:
+
+0.500 = Swing High MC − (Range × 0.500)
+
+0.618 = Swing High MC − (Range × 0.618)
+
+0.786 = Swing High MC − (Range × 0.786)
+
+4. Define the Golden Entry Zone:
+
+Upper Boundary = 0.500 level
+Preferred Level = 0.618 level
+Lower Boundary = 0.786 level
+
+5. Compare the Current Market Cap (MC) against the Golden Entry Zone and determine whether it is:
+
+• Above the Golden Zone
+• Inside the Golden Zone
+• Near the 0.618 retracement
+• Below the Golden Zone
+
+6. Compare the existing Safe Entry Range (MC) with the Golden Entry Zone and determine whether they overlap.
+
+This calculation is for informational context only and must NOT modify the existing Entry Range, Safe Entry Range, Structure Score, Structure Grade, Confidence Tier, or Structure Verdict.
+
+
