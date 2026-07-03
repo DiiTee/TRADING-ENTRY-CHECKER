@@ -12304,6 +12304,61 @@ function buildSetupText(d, analysis) {
   lines.push('05. Safe Entry: ' + formatUSD(safeEntryLow) + ' – ' + formatUSD(safeEntryHigh) + '  |  Signal: ' + txtActionSig
     + '  |  Sizing: ' + txtSizingLabel
     + (_txtEntryType === 'STRUCTURE' ? '  |  Position: ' + txtDistClass + ' (' + txtDistShelf.toFixed(1) + '% from shelf)' : ''));
+  /* ── 05b. Fibonacci Context ── */
+  (function() {
+    var _fibEM = window._tecEngineMode || 'FLOW';
+    if (_fibEM !== 'STRUCTURE' || !txtSA) {
+      lines.push('05b. Fibonacci Context: Not Applicable — OHLCV candle data unavailable (Structure Mode required).');
+      return;
+    }
+    var _fbTrend = txtSA.trendState || 'Sideways';
+    var _fbHL    = txtSA.higherLows || 0;
+    if (_fbTrend === 'Sideways') {
+      lines.push('05b. Fibonacci Context: Not Applicable — Sideways market, no directional swing to measure.');
+      return;
+    }
+    if (_fbTrend === 'Downtrend') {
+      lines.push('05b. Fibonacci Context: Not Applicable — Downtrend in progress, retracement context not applicable for entry.');
+      return;
+    }
+    if (_fbHL < 1) {
+      lines.push('05b. Fibonacci Context: Not Applicable — No completed swing (at least one confirmed Higher Low required).');
+      return;
+    }
+    var _fbSwingLow  = txtMacroMC;
+    var _fbSwingHigh = txtCeil1hMC;
+    if (!_fbSwingLow || _fbSwingLow <= 0 || !_fbSwingHigh || _fbSwingHigh <= 0 || _fbSwingHigh <= _fbSwingLow) {
+      lines.push('05b. Fibonacci Context: Not Applicable — Insufficient candle data for swing identification.');
+      return;
+    }
+    var _fbRangePct = (_fbSwingHigh - _fbSwingLow) / _fbSwingLow * 100;
+    if (_fbRangePct < 15) {
+      lines.push('05b. Fibonacci Context: Not Applicable — Swing range too small (' + _fbRangePct.toFixed(0) + '%), minimum 15% required.');
+      return;
+    }
+    var _fbRange = _fbSwingHigh - _fbSwingLow;
+    var _fb500   = _fbSwingHigh - (_fbRange * 0.500);
+    var _fb618   = _fbSwingHigh - (_fbRange * 0.618);
+    var _fb786   = _fbSwingHigh - (_fbRange * 0.786);
+    var _fbNear618 = (_fb618 > 0) && (Math.abs(txtCurrentMC - _fb618) / _fb618 < 0.05);
+    var _fbPos;
+    if      (txtCurrentMC > _fb500) _fbPos = 'Above Golden Zone';
+    else if (txtCurrentMC < _fb786) _fbPos = 'Below Golden Zone';
+    else if (_fbNear618)            _fbPos = 'Near 0.618 (Preferred Level)';
+    else                            _fbPos = 'Inside Golden Zone';
+    var _fbOvlp  = (safeEntryHigh >= _fb786 && safeEntryLow <= _fb500);
+    lines.push('05b. Fibonacci Context (informational only — does not affect Entry Range or Score)');
+    lines.push('     Swing Low  (Macro Floor): ' + formatUSD(_fbSwingLow));
+    lines.push('     0.786 (Lower boundary): ' + formatUSD(_fb786));
+    lines.push('     0.618 (Preferred ★):    ' + formatUSD(_fb618));
+    lines.push('     0.500 (Upper boundary): ' + formatUSD(_fb500));
+    lines.push('     Swing High (1h Ceiling): ' + formatUSD(_fbSwingHigh));
+    lines.push('     Golden Zone: ' + formatUSD(_fb786) + ' – ' + formatUSD(_fb500));
+    lines.push('     Current MC (' + formatUSD(txtCurrentMC) + '): ' + _fbPos);
+    lines.push('     Safe Entry vs Golden Zone: ' + (_fbOvlp ? '✓ Overlaps Golden Zone' : '⚠ Does not overlap Golden Zone'));
+    lines.push('     Swing basis: ' + _fbTrend + ' · ' + _fbHL + ' Higher Low' + (_fbHL !== 1 ? 's' : '') + ' · Range: ' + _fbRangePct.toFixed(0) + '%');
+  })();
+
   /* ── 06. Structural Analysis Scores ── */
   if (txtSA) {
     var txtTps = computeTransactionPressureScore(d);
