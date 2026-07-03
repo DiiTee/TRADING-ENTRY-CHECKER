@@ -8362,6 +8362,33 @@ function buildEntryBriefingHTML(d, analysis) {
     t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">SAFE ENTRY RANGE</div>';
     t += '<div style="font-size:0.98rem;font-weight:700;color:'+sizingColor+';">'+safeEntryStr+'</div>';
     t += '<div style="font-size:0.60rem;color:var(--text-muted);">'+safeEntryModel+' Model · '+actionSignal+' · full detail in item 05</div>';
+    t += (function() {
+      /* ── Compact Fibonacci note — informational only ── */
+      var _fem = window._tecEngineMode || 'FLOW';
+      if (_fem !== 'STRUCTURE' || !sa) return '';
+      var _ftr = sa.trendState || 'Sideways';
+      var _fhl = sa.higherLows || 0;
+      if (_ftr !== 'Uptrend' || _fhl < 1 || !macroFloorMC || !ceiling1hMC || ceiling1hMC <= macroFloorMC) return '';
+      var _frPct = (ceiling1hMC - macroFloorMC) / macroFloorMC * 100;
+      if (_frPct < 15) return '';
+      var _fr  = ceiling1hMC - macroFloorMC;
+      var _f50 = ceiling1hMC - (_fr * 0.500);
+      var _f62 = ceiling1hMC - (_fr * 0.618);
+      var _f79 = ceiling1hMC - (_fr * 0.786);
+      var _near62 = Math.abs(currentMC - _f62) / _f62 < 0.05;
+      var _fibPosLabel, _fibPosColor;
+      if      (currentMC > _f50)  { _fibPosLabel = 'Above Golden Zone';     _fibPosColor = '#ff9800'; }
+      else if (currentMC < _f79)  { _fibPosLabel = 'Below Golden Zone';     _fibPosColor = '#ff4757'; }
+      else if (_near62)           { _fibPosLabel = 'Near 0.618';            _fibPosColor = '#00ffcc'; }
+      else                        { _fibPosLabel = 'Inside Golden Zone';    _fibPosColor = '#00e676'; }
+      var _fibOvlp = (safeEntryHigh >= _f79 && safeEntryLow <= _f50);
+      return '<div style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.06);font-size:0.58rem;color:var(--text-muted);">' +
+             '<span style="color:var(--text-muted);font-weight:700;letter-spacing:0.5px;">◆ FIB GOLDEN ZONE</span>' +
+             ' <span style="color:var(--text-secondary);">' + formatUSD(_f79) + ' – ' + formatUSD(_f50) + '</span>' +
+             ' &nbsp;·&nbsp; <span style="color:' + _fibPosColor + ';font-weight:600;">' + _fibPosLabel + '</span>' +
+             ' &nbsp;·&nbsp; <span style="color:' + (_fibOvlp ? '#00e676' : '#ff9800') + ';">' + (_fibOvlp ? '✓ Entry overlaps' : '⚠ No overlap') + '</span>' +
+             '</div>';
+    })();
     t += '</div>';
     t += '</div>';
     return t;
