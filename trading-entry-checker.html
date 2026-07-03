@@ -7733,6 +7733,130 @@ function buildEntryBriefingHTML(d, analysis) {
         t += ' <span style="color:var(--text-muted);font-size:0.72rem;">' + sizingNote + '</span>';
         return t;
       })() },
+    { num: '◆', label: 'Fibonacci Context', text: (function() {
+        /* ── Fibonacci Context — informational only, does NOT affect any scores ── */
+        var t = '';
+        var _fibEM = window._tecEngineMode || 'FLOW';
+
+        /* ── Not-Applicable helper ── */
+        function _fibNA(reason) {
+          return '<span style="color:var(--text-muted);font-size:0.72rem;font-style:italic;">Not Applicable</span>' +
+                 '<br><span style="color:var(--text-muted);font-size:0.62rem;">Reason: ' + reason + '</span>';
+        }
+
+        /* ── Applicability gate ── */
+        if (_fibEM !== 'STRUCTURE' || !sa) {
+          t += _fibNA('OHLCV candle data unavailable — Fibonacci requires Structure Mode.');
+          return t;
+        }
+
+        var _trend = sa.trendState  || 'Sideways';
+        var _hl    = sa.higherLows  || 0;
+
+        if (_trend === 'Sideways') {
+          t += _fibNA('Sideways market — no directional swing to measure.');
+          return t;
+        }
+        if (_trend === 'Downtrend') {
+          t += _fibNA('Downtrend in progress — retracement context not applicable for entry.');
+          return t;
+        }
+        if (_hl < 1) {
+          t += _fibNA('No completed swing — at least one confirmed Higher Low required.');
+          return t;
+        }
+
+        var _swingLow  = macroFloorMC;
+        var _swingHigh = ceiling1hMC;
+
+        if (!_swingLow || _swingLow <= 0 || !_swingHigh || _swingHigh <= 0) {
+          t += _fibNA('Insufficient candle data for swing identification (macro floor or 1h ceiling missing).');
+          return t;
+        }
+        if (_swingHigh <= _swingLow) {
+          t += _fibNA('Swing High is not above Swing Low — structure still developing.');
+          return t;
+        }
+
+        var _rangePct = (_swingHigh - _swingLow) / _swingLow * 100;
+        if (_rangePct < 15) {
+          t += _fibNA('Swing range too small (' + _rangePct.toFixed(0) + '%) — minimum 15% required for meaningful Fibonacci levels.');
+          return t;
+        }
+
+        /* ── Fibonacci calculation ── */
+        var _range = _swingHigh - _swingLow;
+        var _f500  = _swingHigh - (_range * 0.500);
+        var _f618  = _swingHigh - (_range * 0.618);
+        var _f786  = _swingHigh - (_range * 0.786);
+
+        /* ── Current MC position vs Golden Zone ── */
+        var _posLabel, _posColor;
+        var _near618 = (_f618 > 0) && (Math.abs(currentMC - _f618) / _f618 < 0.05);
+        if (currentMC > _f500) {
+          _posLabel = '⚠ Above Golden Zone'; _posColor = '#ff9800';
+        } else if (currentMC < _f786) {
+          _posLabel = '⚠ Below Golden Zone'; _posColor = '#ff4757';
+        } else if (_near618) {
+          _posLabel = '✓ Near 0.618 — Preferred Level'; _posColor = '#00ffcc';
+        } else {
+          _posLabel = '✓ Inside Golden Zone';           _posColor = '#00e676';
+        }
+
+        /* ── Safe Entry Range overlap with Golden Zone ── */
+        var _overlap      = (safeEntryHigh >= _f786 && safeEntryLow <= _f500);
+        var _overlapLabel = _overlap ? '✓ Safe Entry overlaps Fibonacci Golden Zone'
+                                     : '⚠ Safe Entry does not overlap Golden Zone';
+        var _overlapColor = _overlap ? '#00e676' : '#ff9800';
+
+        /* ── Levels grid ── */
+        t += '<div style="display:grid;grid-template-columns:auto auto 1fr;gap:2px 12px;margin-bottom:7px;font-size:0.67rem;align-items:baseline;">';
+
+        /* Column headers */
+        t += '<span style="color:var(--text-muted);font-weight:700;font-size:0.60rem;text-transform:uppercase;letter-spacing:0.5px;">Level</span>';
+        t += '<span style="color:var(--text-muted);font-weight:700;font-size:0.60rem;text-transform:uppercase;letter-spacing:0.5px;">Market Cap</span>';
+        t += '<span style="color:var(--text-muted);font-weight:700;font-size:0.60rem;text-transform:uppercase;letter-spacing:0.5px;">Note</span>';
+
+        /* Swing High */
+        t += '<span style="color:var(--text-muted);">Swing High</span>';
+        t += '<span style="color:var(--text-secondary);">' + formatUSD(_swingHigh) + '</span>';
+        t += '<span style="color:var(--text-muted);font-size:0.60rem;">1h candle ceiling</span>';
+
+        /* 0.500 */
+        t += '<span style="color:#ffeb3b;font-weight:700;">0.500</span>';
+        t += '<span style="color:#ffeb3b;">' + formatUSD(_f500) + '</span>';
+        t += '<span style="color:var(--text-muted);font-size:0.60rem;">Upper boundary of Golden Zone</span>';
+
+        /* 0.618 */
+        t += '<span style="color:#00ffcc;font-weight:700;">0.618 ★</span>';
+        t += '<span style="color:#00ffcc;">' + formatUSD(_f618) + '</span>';
+        t += '<span style="color:var(--text-muted);font-size:0.60rem;">Preferred entry level</span>';
+
+        /* 0.786 */
+        t += '<span style="color:#ff9800;font-weight:700;">0.786</span>';
+        t += '<span style="color:#ff9800;">' + formatUSD(_f786) + '</span>';
+        t += '<span style="color:var(--text-muted);font-size:0.60rem;">Lower boundary of Golden Zone</span>';
+
+        /* Swing Low */
+        t += '<span style="color:var(--text-muted);">Swing Low</span>';
+        t += '<span style="color:var(--text-secondary);">' + formatUSD(_swingLow) + '</span>';
+        t += '<span style="color:var(--text-muted);font-size:0.60rem;">Macro floor</span>';
+
+        t += '</div>';
+
+        /* ── Status lines ── */
+        t += '<div style="font-size:0.68rem;color:' + _posColor + ';margin-bottom:3px;font-weight:600;">' + _posLabel + ' &nbsp;<span style="font-weight:400;color:var(--text-muted);">(Current MC: ' + formatUSD(currentMC) + ')</span></div>';
+        t += '<div style="font-size:0.68rem;color:' + _overlapColor + ';margin-bottom:5px;font-weight:600;">' + _overlapLabel + '</div>';
+
+        /* ── Swing basis footnote ── */
+        t += '<div style="font-size:0.60rem;color:var(--text-muted);border-top:1px solid rgba(255,255,255,0.05);padding-top:4px;">';
+        t += 'Swing basis: Macro Floor → 1h High &nbsp;·&nbsp; Range: ' + _rangePct.toFixed(0) + '% &nbsp;·&nbsp; ';
+        t += _trend + ' &nbsp;·&nbsp; ' + _hl + ' Higher Low' + (_hl !== 1 ? 's' : '');
+        t += ' &nbsp;·&nbsp; <span style="font-style:italic;">Informational only — does not affect Entry Range, Score, or Verdict</span>';
+        t += '</div>';
+
+        return t;
+      })() },
     { num: '06', label: 'Structural Analysis Scores', text: (function() {
         var engineMode = window._tecEngineMode  || 'FLOW';
         var ohlcvSrc   = window._tecOhlcvSource || null;
