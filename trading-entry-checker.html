@@ -1706,6 +1706,7 @@ p, span, td, th {
         <span style="font-size:0.62rem;color:var(--text-muted);">Retail wallets auto-collected from QEC scans &amp; Cabal Briefings. Deduped by address + token.</span>
         <button class="btn btn-secondary btn-sm" onclick="wlibExport()"><i class="fa-solid fa-file-export"></i> Export JSON</button>
         <button class="btn btn-secondary btn-sm" onclick="wlibExportTxt()"><i class="fa-solid fa-file-lines"></i> Export TXT</button>
+        <button class="btn btn-secondary btn-sm" onclick="wlibExportAddresses()"><i class="fa-solid fa-list"></i> Addresses Only</button>
         <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;" title="Import wallets from JSON file">
           <i class="fa-solid fa-file-import"></i> Import
           <input type="file" id="wlibImportInput" accept=".json" style="display:none;" onchange="wlibImportProcess(this)">
@@ -14498,7 +14499,8 @@ function wlibUpdateCount() {
   var ce = el('wlibCount'); if (ce) ce.textContent = _walletLibrary.length || '0';
 }
 
-/* ── Add a single wallet (dedup by address + ca) ── */
+/* ── Add a single wallet to memory only — caller must call wlibSave() ──
+   Returns true if new, false if duplicate (address + ca key). ── */
 function wlibAdd(address, coin, ca, holdingPct, source) {
   if (!address || typeof address !== 'string' || address.length < 30) return false;
   var key = address.toLowerCase() + '|' + (ca || '').toLowerCase();
@@ -14515,59 +14517,56 @@ function wlibAdd(address, coin, ca, holdingPct, source) {
     source:     source || 'Unknown',
     dateAdded:  new Date().toISOString()
   });
-  wlibSave();
-  wlibUpdateCount();
   return true;
 }
 
-/* ── Render the table ── */
+/* ── Render the table from in-memory _walletLibrary (no reload from storage) ── */
 function wlibRender() {
-  wlibLoad();
+  wlibUpdateCount();
   var emptyEl = el('wlibEmpty');
   var wrapEl  = el('wlibTableWrap');
   var tbodyEl = el('wlibTableBody');
   if (!emptyEl || !wrapEl || !tbodyEl) return;
-  wlibUpdateCount();
   if (_walletLibrary.length === 0) {
     emptyEl.style.display = ''; wrapEl.style.display = 'none';
-    var bodyEl0 = el('walletLibBody');
-    if (bodyEl0 && !bodyEl0.classList.contains('collapsed')) bodyEl0.style.maxHeight = bodyEl0.scrollHeight + 'px';
-    return;
+  } else {
+    emptyEl.style.display = 'none'; wrapEl.style.display = '';
+    tbodyEl.innerHTML = _walletLibrary.map(function(w, i) {
+      var short = w.address.length >= 10 ? w.address.slice(0,6) + '\u2026' + w.address.slice(-4) : w.address;
+      var srcClass = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : 'wlib-src wlib-src-cabal';
+      var dateStr = '';
+      try { dateStr = new Date(w.dateAdded).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(e) {}
+      var href = 'https://solscan.io/account/' + encodeURIComponent(w.address);
+      return '<tr id="wlibRow_' + w.id + '">' +
+        '<td style="color:var(--text-muted);font-size:0.60rem;">' + (i + 1) + '</td>' +
+        '<td><a class="wlib-addr" href="' + href + '" target="_blank" title="' + w.address + ' — click to open Solscan">' + short + '</a></td>' +
+        '<td><span class="wlib-coin" title="' + (w.coin || '') + ' · ' + (w.ca || '') + '">' + (w.coin || '—') + '</span></td>' +
+        '<td><span class="' + srcClass + '">' + w.source + '</span></td>' +
+        '<td class="wlib-pct">' + (w.holdingPct > 0 ? w.holdingPct.toFixed(2) + '%' : '—') + '</td>' +
+        '<td style="color:var(--text-muted);font-size:0.60rem;white-space:nowrap;">' + dateStr + '</td>' +
+        '<td><button class="wlib-del" onclick="wlibDelete(\'' + w.id + '\')" title="Remove from library"><i class="fa-solid fa-xmark"></i></button></td>' +
+      '</tr>';
+    }).join('');
   }
-  emptyEl.style.display = 'none'; wrapEl.style.display = '';
-  tbodyEl.innerHTML = _walletLibrary.map(function(w, i) {
-    var short = w.address.length >= 10 ? w.address.slice(0,6) + '\u2026' + w.address.slice(-4) : w.address;
-    var srcClass = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : 'wlib-src wlib-src-cabal';
-    var dateStr = '';
-    try { dateStr = new Date(w.dateAdded).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(e) {}
-    var href = 'https://solscan.io/account/' + encodeURIComponent(w.address);
-    return '<tr id="wlibRow_' + w.id + '">' +
-      '<td style="color:var(--text-muted);font-size:0.60rem;">' + (i + 1) + '</td>' +
-      '<td><a class="wlib-addr" href="' + href + '" target="_blank" title="' + w.address + ' — click to open Solscan">' + short + '</a></td>' +
-      '<td><span class="wlib-coin" title="' + (w.coin || '') + ' · ' + (w.ca || '') + '">' + (w.coin || '—') + '</span></td>' +
-      '<td><span class="' + srcClass + '">' + w.source + '</span></td>' +
-      '<td class="wlib-pct">' + (w.holdingPct > 0 ? w.holdingPct.toFixed(2) + '%' : '—') + '</td>' +
-      '<td style="color:var(--text-muted);font-size:0.60rem;white-space:nowrap;">' + dateStr + '</td>' +
-      '<td><button class="wlib-del" onclick="wlibDelete(\'' + w.id + '\')" title="Remove from library"><i class="fa-solid fa-xmark"></i></button></td>' +
-    '</tr>';
-  }).join('');
-  /* Expand panel to fit new content if it is currently open */
+  /* If the panel is open, let it grow to fit content */
   var bodyEl = el('walletLibBody');
-  if (bodyEl && !bodyEl.classList.contains('collapsed')) {
-    bodyEl.style.maxHeight = 'none';
-  }
+  if (bodyEl && !bodyEl.classList.contains('collapsed')) bodyEl.style.maxHeight = 'none';
 }
 
 /* ── CRUD ── */
 function wlibDelete(id) {
   wlibLoad();
   _walletLibrary = _walletLibrary.filter(function(w) { return w.id !== id; });
-  wlibSave(); wlibRender();
+  wlibSave();
+  wlibRender();
 }
 function wlibClearAll() {
-  if (_walletLibrary.length === 0) return;
+  wlibLoad();
+  if (_walletLibrary.length === 0) { alert('Wallet Library is already empty.'); return; }
   if (!confirm('Remove all ' + _walletLibrary.length + ' wallet(s) from the Wallet Library?')) return;
-  _walletLibrary = []; wlibSave(); wlibRender();
+  _walletLibrary = [];
+  wlibSave();
+  wlibRender();
 }
 
 /* ── Export / Import ── */
@@ -14600,8 +14599,9 @@ function wlibExportTxt() {
     lines.push('COIN: ' + coinKey);
     lines.push('-'.repeat(72));
     entries.forEach(function(w, i) {
-      var pct = (w.pct !== undefined && w.pct !== null) ? Number(w.pct).toFixed(2) + '%' : 'N/A';
-      lines.push((i + 1) + '. ' + w.address + '  (' + pct + ')  [' + (w.source || '?') + ']  ' + (w.addedAt ? w.addedAt.slice(0, 10) : ''));
+      var pct = (w.holdingPct !== undefined && w.holdingPct !== null) ? Number(w.holdingPct).toFixed(2) + '%' : 'N/A';
+      var dt = w.dateAdded ? w.dateAdded.slice(0, 10) : '';
+      lines.push((i + 1) + '. ' + w.address + '  (' + pct + ')  [' + (w.source || '?') + ']  ' + dt);
     });
   });
   lines.push('');
@@ -14611,6 +14611,21 @@ function wlibExportTxt() {
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'tec-wallet-library-' + new Date().toISOString().slice(0, 10) + '.txt';
+  a.click();
+}
+function wlibExportAddresses() {
+  wlibLoad();
+  if (_walletLibrary.length === 0) { alert('Wallet Library is empty — nothing to export.'); return; }
+  var seen = {};
+  var unique = [];
+  _walletLibrary.forEach(function(w) {
+    var k = w.address.toLowerCase();
+    if (!seen[k]) { seen[k] = true; unique.push(w.address); }
+  });
+  var blob = new Blob([unique.join('\n')], { type: 'text/plain' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tec-wallets-' + new Date().toISOString().slice(0, 10) + '.txt';
   a.click();
 }
 function wlibImportProcess(input) {
@@ -14646,25 +14661,28 @@ function wlibImportProcess(input) {
 }
 
 /* ── Auto-collect helpers (called from QEC and Helius hooks) ──
-   Deduped by address + CA — same wallet is never added twice for the
-   same coin, but all unique wallets accumulate across scans. ── */
+   Pattern: load fresh from storage → add all to memory → bulk save → render.
+   wlibAdd only touches memory; wlibSave persists once after all adds.
+   wlibRender reads _walletLibrary in memory, no extra reload. ── */
 function wlibCollectFromQEC(retail10, ca, coin) {
-  if (!retail10 || retail10.length === 0 || !ca) return;
+  if (!retail10 || retail10.length === 0) return;
   wlibLoad();
   var added = 0;
   retail10.forEach(function(h) {
-    if (h.address && wlibAdd(h.address, coin, ca, h.pct, 'QEC')) added++;
+    if (h.address && wlibAdd(h.address, coin || (ca ? ca.slice(0, 8) : 'Unknown'), ca || '', h.pct, 'QEC')) added++;
   });
-  if (added > 0) wlibRender();
+  if (added > 0) wlibSave();
+  wlibRender();
 }
 function wlibCollectFromHelius(holders, ca, coin) {
-  if (!holders || holders.length === 0 || !ca) return;
+  if (!holders || holders.length === 0) return;
   wlibLoad();
   var added = 0;
-  holders.filter(function(h) { return h.address; }).forEach(function(h) {
-    if (wlibAdd(h.address, coin, ca, h.pct, 'Cabal Briefing')) added++;
+  holders.forEach(function(h) {
+    if (h.address && wlibAdd(h.address, coin || (ca ? ca.slice(0, 8) : 'Unknown'), ca || '', h.pct, 'Cabal Briefing')) added++;
   });
-  if (added > 0) wlibRender();
+  if (added > 0) wlibSave();
+  wlibRender();
 }
 
 /* ── Storage ── */
