@@ -14589,32 +14589,23 @@ function wlibImportProcess(input) {
 }
 
 /* ── Auto-collect helpers (called from QEC and Helius hooks) ──
-   On each scan of a CA all previously stored wallets for that CA
-   and source are replaced — no duplicates on re-scan / refresh. ── */
-function wlibPurgeByCAAndSource(ca, source) {
-  if (!ca) return;
-  var lca = ca.toLowerCase();
-  _walletLibrary = _walletLibrary.filter(function(w) {
-    return !(w.ca.toLowerCase() === lca && w.source === source);
-  });
-}
+   Deduped by address + CA — same wallet is never added twice for the
+   same coin, but all unique wallets accumulate across scans. ── */
 function wlibCollectFromQEC(retail10, ca, coin) {
   if (!retail10 || retail10.length === 0 || !ca) return;
-  wlibLoad();
-  wlibPurgeByCAAndSource(ca, 'QEC');
+  var added = 0;
   retail10.forEach(function(h) {
-    if (h.address && !h.isSystem) wlibAdd(h.address, coin, ca, h.pct, 'QEC');
+    if (h.address && !h.isSystem && wlibAdd(h.address, coin, ca, h.pct, 'QEC')) added++;
   });
-  wlibRender();
+  if (added > 0) wlibRender();
 }
 function wlibCollectFromHelius(holders, ca, coin) {
   if (!holders || holders.length === 0 || !ca) return;
-  wlibLoad();
-  wlibPurgeByCAAndSource(ca, 'Cabal Briefing');
+  var added = 0;
   holders.filter(function(h) { return !h.isAmm && h.address; }).forEach(function(h) {
-    wlibAdd(h.address, coin, ca, h.pct, 'Cabal Briefing');
+    if (wlibAdd(h.address, coin, ca, h.pct, 'Cabal Briefing')) added++;
   });
-  wlibRender();
+  if (added > 0) wlibRender();
 }
 
 /* ── Storage ── */
