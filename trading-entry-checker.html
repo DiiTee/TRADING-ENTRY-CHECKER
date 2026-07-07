@@ -543,6 +543,23 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .qec-holder-row.smart { background:rgba(0,255,136,0.06); border-left:3px solid rgba(0,255,136,0.55); padding-left:4px; }
 .qec-holder-row.smart .qec-holder-addr { color:var(--safe); font-weight:700; }
 .qec-smart-signal { background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.3); border-radius:8px; padding:8px 12px; font-size:0.73rem; color:var(--safe); margin-bottom:8px; font-weight:700; display:flex; align-items:center; gap:7px; }
+/* ── Wallet Library ── */
+.wlib-table { width:100%; border-collapse:collapse; font-size:0.68rem; }
+.wlib-table th { font-size:0.58rem; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted); padding:5px 8px; border-bottom:1px solid rgba(255,255,255,0.08); text-align:left; white-space:nowrap; }
+.wlib-table td { padding:5px 8px; border-bottom:1px solid rgba(255,255,255,0.04); vertical-align:middle; }
+.wlib-table tr:last-child td { border-bottom:none; }
+.wlib-table tr:hover td { background:rgba(255,255,255,0.02); }
+.wlib-addr { font-family:monospace; color:var(--text-secondary); font-size:0.64rem; text-decoration:none; white-space:nowrap; }
+.wlib-addr:hover { color:var(--accent-cyan); text-decoration:underline; }
+.wlib-coin { color:var(--accent-cyan); font-weight:700; font-size:0.67rem; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+.wlib-pct { font-weight:700; color:var(--text-primary); text-align:right; white-space:nowrap; }
+.wlib-src { font-size:0.57rem; padding:1px 6px; border-radius:3px; font-weight:700; white-space:nowrap; }
+.wlib-src-qec   { background:rgba(0,212,255,0.12);   color:var(--accent-cyan); }
+.wlib-src-cabal { background:rgba(140,80,255,0.15);  color:#aa66ff; }
+.wlib-del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.72rem; padding:2px 6px; border-radius:3px; line-height:1; }
+.wlib-del:hover { color:var(--skip); background:rgba(255,61,113,0.12); }
+@keyframes wlib-flash { 0%{background:rgba(0,212,255,0.18);} 100%{background:transparent;} }
+.wlib-new td { animation:wlib-flash 1.4s ease-out; }
 /* ── Quick-Add Modal ── */
 .qa-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:9998; display:flex; align-items:center; justify-content:center; padding:20px; }
 .qa-modal   { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px 22px; width:100%; max-width:420px; box-shadow:0 24px 64px rgba(0,0,0,0.7); }
@@ -1674,6 +1691,46 @@ p, span, td, th {
         No social scans logged yet.<br>Use <strong>Scan Social</strong> or <strong>Deep Scan</strong> to start.
       </div>
       <div id="socialScanHistGrid" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <!-- ── Wallet Library Card ── -->
+  <div class="card" id="walletLibCard">
+    <div class="card-title collapsed" id="walletLibToggle">
+      <i class="fa-solid fa-address-book"></i> Wallet Library
+      <span class="wl-count" id="wlibCount">0</span>
+      <i class="fa-solid fa-chevron-down toggle-icon"></i>
+    </div>
+    <div class="card-body collapsible collapsed" id="walletLibBody" style="max-height:0;">
+      <div class="wl-controls">
+        <span style="font-size:0.62rem;color:var(--text-muted);">Retail wallets auto-collected from QEC scans &amp; Cabal Briefings. Deduped by address + token.</span>
+        <button class="btn btn-secondary btn-sm" onclick="wlibExport()"><i class="fa-solid fa-file-export"></i> Export</button>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;" title="Import wallets from JSON file">
+          <i class="fa-solid fa-file-import"></i> Import
+          <input type="file" id="wlibImportInput" accept=".json" style="display:none;" onchange="wlibImportProcess(this)">
+        </label>
+        <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="wlibClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
+      </div>
+      <div id="wlibEmpty" class="wl-empty">
+        <i class="fa-solid fa-address-book"></i>
+        No wallets collected yet.<br>Run a <strong>QEC Smart Filter</strong> scan or fetch <strong>Cabal Briefing</strong> data to auto-populate.
+      </div>
+      <div id="wlibTableWrap" style="display:none;overflow-x:auto;">
+        <table class="wlib-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Wallet</th>
+              <th>Coin</th>
+              <th>Source</th>
+              <th style="text-align:right;">Holding %</th>
+              <th>Added</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="wlibTableBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -4694,6 +4751,9 @@ async function fetchHeliusTopHolders(ca) {
       magicNode: maxShared >= 3,
       funderCounts: funderCounts
     };
+    /* ── Wallet Library: auto-collect retail holders ── */
+    var _wlibHelCoin = (el('fCoin') && el('fCoin').value.trim()) || ca.slice(0, 8);
+    wlibCollectFromHelius(traderHolders, ca, _wlibHelCoin);
 
     /* Update input fields with AMM-filtered values so pool accounts
        (Pumpswap, Raydium, etc.) are excluded from Top Holder% and Top 10% */
@@ -13262,6 +13322,9 @@ async function qecFetchTopHolders() {
       /* Capture dev address from RugCheck response */
       if (data.creator) qecSetDevAddress(data.creator);
       qecRenderHolderBreakdown(all.filter(function(h){ return h.isSystem; }), retail10);
+      /* ── Wallet Library: auto-collect retail holders ── */
+      var _wlibQecCoin = (el('fCoin') && el('fCoin').value.trim()) || ca.slice(0, 8);
+      wlibCollectFromQEC(retail10, ca, _wlibQecCoin);
       statusEl.textContent='🟢 CONNECTED'; statusEl.className='qec-api-status qec-st-on';
     } else {
       statusEl.textContent='🟡 NO HOLDER DATA'; statusEl.className='qec-api-status qec-st-warn';
@@ -14401,6 +14464,148 @@ var SOC_FIELDS = [
   'fSocRdM1h','fSocRdM24h','fSocRdUp1h','fSocRdUp24h'
 ];
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   WALLET LIBRARY — auto-collects retail (non-AMM / non-LP) wallets
+   Sources: QEC Smart Filter (RugCheck) and Cabal Briefing (Helius)
+   Persisted in localStorage key 'tec_wallet_library'
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _walletLibrary = [];
+var WLIB_KEY = 'tec_wallet_library';
+
+function wlibLoad() {
+  try { _walletLibrary = JSON.parse(localStorage.getItem(WLIB_KEY) || '[]'); } catch(e) { _walletLibrary = []; }
+}
+function wlibSave() {
+  try { localStorage.setItem(WLIB_KEY, JSON.stringify(_walletLibrary)); } catch(e) {}
+}
+function wlibUpdateCount() {
+  var ce = el('wlibCount'); if (ce) ce.textContent = _walletLibrary.length || '0';
+}
+
+/* ── Add a single wallet (dedup by address + ca) ── */
+function wlibAdd(address, coin, ca, holdingPct, source) {
+  if (!address || typeof address !== 'string' || address.length < 30) return false;
+  var key = address.toLowerCase() + '|' + (ca || '').toLowerCase();
+  var exists = _walletLibrary.some(function(w) {
+    return (w.address.toLowerCase() + '|' + (w.ca || '').toLowerCase()) === key;
+  });
+  if (exists) return false;
+  _walletLibrary.unshift({
+    id:         'wlib_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    address:    address,
+    coin:       (coin || '').slice(0, 40) || 'Unknown',
+    ca:         ca   || '',
+    holdingPct: typeof holdingPct === 'number' ? Math.round(holdingPct * 100) / 100 : 0,
+    source:     source || 'Unknown',
+    dateAdded:  new Date().toISOString()
+  });
+  wlibSave();
+  wlibUpdateCount();
+  return true;
+}
+
+/* ── Render the table ── */
+function wlibRender() {
+  wlibLoad();
+  var emptyEl = el('wlibEmpty');
+  var wrapEl  = el('wlibTableWrap');
+  var tbodyEl = el('wlibTableBody');
+  if (!emptyEl || !wrapEl || !tbodyEl) return;
+  wlibUpdateCount();
+  if (_walletLibrary.length === 0) {
+    emptyEl.style.display = ''; wrapEl.style.display = 'none'; return;
+  }
+  emptyEl.style.display = 'none'; wrapEl.style.display = '';
+  tbodyEl.innerHTML = _walletLibrary.map(function(w, i) {
+    var short = w.address.length >= 10 ? w.address.slice(0,6) + '\u2026' + w.address.slice(-4) : w.address;
+    var srcClass = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : 'wlib-src wlib-src-cabal';
+    var dateStr = '';
+    try { dateStr = new Date(w.dateAdded).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(e) {}
+    var href = 'https://solscan.io/account/' + encodeURIComponent(w.address);
+    return '<tr id="wlibRow_' + w.id + '">' +
+      '<td style="color:var(--text-muted);font-size:0.60rem;">' + (i + 1) + '</td>' +
+      '<td><a class="wlib-addr" href="' + href + '" target="_blank" title="' + w.address + ' — click to open Solscan">' + short + '</a></td>' +
+      '<td><span class="wlib-coin" title="' + (w.coin || '') + ' · ' + (w.ca || '') + '">' + (w.coin || '—') + '</span></td>' +
+      '<td><span class="' + srcClass + '">' + w.source + '</span></td>' +
+      '<td class="wlib-pct">' + (w.holdingPct > 0 ? w.holdingPct.toFixed(2) + '%' : '—') + '</td>' +
+      '<td style="color:var(--text-muted);font-size:0.60rem;white-space:nowrap;">' + dateStr + '</td>' +
+      '<td><button class="wlib-del" onclick="wlibDelete(\'' + w.id + '\')" title="Remove from library"><i class="fa-solid fa-xmark"></i></button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ── CRUD ── */
+function wlibDelete(id) {
+  wlibLoad();
+  _walletLibrary = _walletLibrary.filter(function(w) { return w.id !== id; });
+  wlibSave(); wlibRender();
+}
+function wlibClearAll() {
+  if (_walletLibrary.length === 0) return;
+  if (!confirm('Remove all ' + _walletLibrary.length + ' wallet(s) from the Wallet Library?')) return;
+  _walletLibrary = []; wlibSave(); wlibRender();
+}
+
+/* ── Export / Import ── */
+function wlibExport() {
+  wlibLoad();
+  if (_walletLibrary.length === 0) { alert('Wallet Library is empty — nothing to export.'); return; }
+  var blob = new Blob([JSON.stringify(_walletLibrary, null, 2)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tec-wallet-library-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+}
+function wlibImportProcess(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) throw new Error('Expected an array');
+      wlibLoad();
+      var added = 0;
+      imported.forEach(function(w) {
+        if (!w.address || w.address.length < 30) return;
+        var key = w.address.toLowerCase() + '|' + (w.ca || '').toLowerCase();
+        var exists = _walletLibrary.some(function(ex) {
+          return (ex.address.toLowerCase() + '|' + (ex.ca || '').toLowerCase()) === key;
+        });
+        if (!exists) {
+          if (!w.id) w.id = 'wlib_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+          _walletLibrary.push(w);
+          added++;
+        }
+      });
+      wlibSave(); wlibRender();
+      alert('Imported ' + added + ' wallet(s). ' + (imported.length - added) + ' duplicate(s) skipped.');
+    } catch(err) {
+      alert('Import failed — make sure the file is a valid TEC Wallet Library JSON export.');
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+/* ── Auto-collect helpers (called from QEC and Helius hooks) ── */
+function wlibCollectFromQEC(retail10, ca, coin) {
+  if (!retail10 || retail10.length === 0) return;
+  var added = 0;
+  retail10.forEach(function(h) {
+    if (h.address && !h.isSystem && wlibAdd(h.address, coin, ca, h.pct, 'QEC')) added++;
+  });
+  if (added > 0) wlibRender();
+}
+function wlibCollectFromHelius(holders, ca, coin) {
+  if (!holders || holders.length === 0) return;
+  var added = 0;
+  holders.filter(function(h) { return !h.isAmm && h.address; }).forEach(function(h) {
+    if (wlibAdd(h.address, coin, ca, h.pct, 'Cabal Briefing')) added++;
+  });
+  if (added > 0) wlibRender();
+}
+
 /* ── Storage ── */
 function wlLoad() {
   try { watchlist = JSON.parse(localStorage.getItem(WL_KEY) || '[]'); } catch(e) { watchlist = []; }
@@ -15246,6 +15451,7 @@ wlLoad();
 attHistLoad();
 attHistRender();
 socialScanHistLoad();
+wlibLoad();
 socialScanHistRender();
 
 /* ── Sync QEC vol/fees fields whenever main form values change ──────────────
