@@ -1704,7 +1704,8 @@ p, span, td, th {
     <div class="card-body collapsible collapsed" id="walletLibBody" style="max-height:0;">
       <div class="wl-controls">
         <span style="font-size:0.62rem;color:var(--text-muted);">Retail wallets auto-collected from QEC scans &amp; Cabal Briefings. Deduped by address + token.</span>
-        <button class="btn btn-secondary btn-sm" onclick="wlibExport()"><i class="fa-solid fa-file-export"></i> Export</button>
+        <button class="btn btn-secondary btn-sm" onclick="wlibExport()"><i class="fa-solid fa-file-export"></i> Export JSON</button>
+        <button class="btn btn-secondary btn-sm" onclick="wlibExportTxt()"><i class="fa-solid fa-file-lines"></i> Export TXT</button>
         <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;" title="Import wallets from JSON file">
           <i class="fa-solid fa-file-import"></i> Import
           <input type="file" id="wlibImportInput" accept=".json" style="display:none;" onchange="wlibImportProcess(this)">
@@ -12150,6 +12151,21 @@ el('socialScanHistToggle').addEventListener('click', function() {
   }
 });
 
+el('walletLibToggle').addEventListener('click', function() {
+  var body = el('walletLibBody');
+  var toggle = el('walletLibToggle');
+  var isCollapsed = body.classList.contains('collapsed');
+  if (isCollapsed) {
+    body.classList.remove('collapsed');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    toggle.classList.remove('collapsed');
+  } else {
+    body.classList.add('collapsed');
+    body.style.maxHeight = '0';
+    toggle.classList.add('collapsed');
+  }
+});
+
 el('saveSettingsBtn').addEventListener('click', saveSettings);
 
 el('resetSettingsBtn').addEventListener('click', function() {
@@ -14554,6 +14570,39 @@ function wlibExport() {
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'tec-wallet-library-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+}
+function wlibExportTxt() {
+  wlibLoad();
+  if (_walletLibrary.length === 0) { alert('Wallet Library is empty — nothing to export.'); return; }
+  var coins = {};
+  _walletLibrary.forEach(function(w) {
+    var key = (w.coin || 'Unknown') + ' | ' + (w.ca || 'N/A');
+    if (!coins[key]) coins[key] = [];
+    coins[key].push(w);
+  });
+  var lines = [];
+  lines.push('TEC WALLET LIBRARY');
+  lines.push('Exported: ' + new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC');
+  lines.push('Total wallets: ' + _walletLibrary.length);
+  lines.push('='.repeat(72));
+  Object.keys(coins).forEach(function(coinKey) {
+    var entries = coins[coinKey];
+    lines.push('');
+    lines.push('COIN: ' + coinKey);
+    lines.push('-'.repeat(72));
+    entries.forEach(function(w, i) {
+      var pct = (w.pct !== undefined && w.pct !== null) ? Number(w.pct).toFixed(2) + '%' : 'N/A';
+      lines.push((i + 1) + '. ' + w.address + '  (' + pct + ')  [' + (w.source || '?') + ']  ' + (w.addedAt ? w.addedAt.slice(0, 10) : ''));
+    });
+  });
+  lines.push('');
+  lines.push('='.repeat(72));
+  lines.push('END OF WALLET LIBRARY');
+  var blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tec-wallet-library-' + new Date().toISOString().slice(0, 10) + '.txt';
   a.click();
 }
 function wlibImportProcess(input) {
