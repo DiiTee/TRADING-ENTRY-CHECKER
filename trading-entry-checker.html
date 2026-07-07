@@ -14588,22 +14588,33 @@ function wlibImportProcess(input) {
   reader.readAsText(file);
 }
 
-/* ── Auto-collect helpers (called from QEC and Helius hooks) ── */
-function wlibCollectFromQEC(retail10, ca, coin) {
-  if (!retail10 || retail10.length === 0) return;
-  var added = 0;
-  retail10.forEach(function(h) {
-    if (h.address && !h.isSystem && wlibAdd(h.address, coin, ca, h.pct, 'QEC')) added++;
+/* ── Auto-collect helpers (called from QEC and Helius hooks) ──
+   On each scan of a CA all previously stored wallets for that CA
+   and source are replaced — no duplicates on re-scan / refresh. ── */
+function wlibPurgeByCAAndSource(ca, source) {
+  if (!ca) return;
+  var lca = ca.toLowerCase();
+  _walletLibrary = _walletLibrary.filter(function(w) {
+    return !(w.ca.toLowerCase() === lca && w.source === source);
   });
-  if (added > 0) wlibRender();
+}
+function wlibCollectFromQEC(retail10, ca, coin) {
+  if (!retail10 || retail10.length === 0 || !ca) return;
+  wlibLoad();
+  wlibPurgeByCAAndSource(ca, 'QEC');
+  retail10.forEach(function(h) {
+    if (h.address && !h.isSystem) wlibAdd(h.address, coin, ca, h.pct, 'QEC');
+  });
+  wlibRender();
 }
 function wlibCollectFromHelius(holders, ca, coin) {
-  if (!holders || holders.length === 0) return;
-  var added = 0;
+  if (!holders || holders.length === 0 || !ca) return;
+  wlibLoad();
+  wlibPurgeByCAAndSource(ca, 'Cabal Briefing');
   holders.filter(function(h) { return !h.isAmm && h.address; }).forEach(function(h) {
-    if (wlibAdd(h.address, coin, ca, h.pct, 'Cabal Briefing')) added++;
+    wlibAdd(h.address, coin, ca, h.pct, 'Cabal Briefing');
   });
-  if (added > 0) wlibRender();
+  wlibRender();
 }
 
 /* ── Storage ── */
