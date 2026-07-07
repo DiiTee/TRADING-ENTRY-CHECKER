@@ -1,0 +1,192 @@
+ORDER BLOCK DETECTION UPGRADE
+
+IMPORTANT
+
+DO NOT rebuild the existing Structure Engine.
+
+DO NOT remove or modify:
+- Floor calculations
+- Shelf calculations
+- Historical Low calculations
+- Entry Range calculations
+- Safe Entry Range calculations
+- Structure diagnostics
+- Structure scoring
+- Parse & Fill system
+- Existing UI layout
+
+The goal is to extend the existing Structure Engine by adding institutional Order Block analysis as an additional structural confirmation layer.
+
+---
+
+OBJECTIVE
+
+Implement automatic Bullish and Bearish Order Block detection using OHLCV data.
+
+The system should identify high-probability institutional buying and selling zones and use them to improve entry quality without replacing the existing Structure Engine.
+
+---
+
+BULLISH ORDER BLOCK DETECTION
+
+Identify the last bearish candle immediately before a strong bullish displacement.
+
+A valid bullish Order Block should satisfy multiple conditions where possible:
+
+- Strong displacement away from the candle
+- Break of previous swing high / market structure
+- Multiple consecutive bullish candles following the Order Block
+- Above-average relative volume
+- Little immediate retracement after the breakout
+
+Store:
+
+- Open
+- High
+- Low
+- Close
+- Timestamp
+- Timeframe
+
+The Bullish Order Block Zone should extend from the candle's Low to High.
+
+---
+
+BEARISH ORDER BLOCK DETECTION
+
+Identify the last bullish candle immediately before a strong bearish displacement.
+
+A valid bearish Order Block should satisfy multiple conditions where possible:
+
+- Strong bearish displacement
+- Break of previous swing low / market structure
+- Multiple consecutive bearish candles
+- Above-average relative volume
+- Little immediate retracement after the breakdown
+
+Store:
+
+- Open
+- High
+- Low
+- Close
+- Timestamp
+- Timeframe
+
+The Bearish Order Block Zone should extend from the candle's Low to High.
+
+---
+
+ORDER BLOCK FRESHNESS
+
+Every detected Order Block must be classified as:
+
+- Fresh
+- Partially Mitigated
+- Fully Mitigated
+- Invalidated
+
+Only Fresh and Partially Mitigated Order Blocks should contribute positively to entry analysis.
+
+---
+
+DISTANCE ANALYSIS
+
+Calculate:
+
+- Current Price
+- Distance to nearest Bullish Order Block (%)
+- Distance to nearest Bearish Order Block (%)
+
+Determine whether price is:
+
+- Inside Bullish Order Block
+- Above Bullish Order Block
+- Below Bullish Order Block
+- Inside Bearish Order Block
+- Above Bearish Order Block
+- Below Bearish Order Block
+
+---
+
+CONFIDENCE RATING
+
+Assign an Order Block Confidence rating based on factors such as:
+
+- Strength of displacement
+- Volume confirmation
+- Market structure break
+- Freshness
+- Timeframe quality
+
+Display:
+
+- High
+- Medium
+- Low
+
+---
+
+STRUCTURE BRIEFING
+
+Add a new section named:
+
+ORDER BLOCK ANALYSIS
+
+Display:
+
+Nearest Bullish Order Block
+
+- Zone
+- Freshness
+- Confidence
+- Distance from Current Price
+- Current Status
+
+Nearest Bearish Order Block
+
+- Zone
+- Freshness
+- Confidence
+- Distance from Current Price
+- Current Status
+
+---
+
+ENTRY ANALYSIS
+
+If price is inside a Fresh Bullish Order Block:
+
+Display:
+
+"Current price is trading inside a Fresh Bullish Order Block. This is considered a favorable institutional accumulation zone."
+
+If price is approaching a Fresh Bullish Order Block:
+
+Display:
+
+"Price is approaching a Fresh Bullish Order Block. Waiting for a retracement into this zone may improve entry quality."
+
+If price is significantly above the nearest Bullish Order Block:
+
+Display:
+
+"Current price is extended above the nearest Bullish Order Block. Buying here carries increased pullback risk."
+
+---
+
+SCORING
+
+DO NOT replace the existing Structure Score.
+
+Order Block analysis should act only as a structural confirmation layer.
+
+Suggested logic:
+
+- Fresh Bullish Order Block → Positive adjustment
+- Price inside Fresh Bullish Order Block → Stronger positive adjustment
+- Partially Mitigated Order Block → Small positive adjustment
+- Fully Mitigated or Invalidated Order Block → No positive adjustment
+- Significantly extended above nearest Bullish Order Block → Optional small penalty
+
+Order Block analysis must never override the existing Structure Engine. It should strengthen the overall assessment by identifying institutional buying and selling zones that complement the current Floor, Shelf, Historical Low, Entry Range and Safe Entry Range calculations.

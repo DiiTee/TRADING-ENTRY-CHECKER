@@ -6996,8 +6996,152 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
     runnerColor:             runnerColor,
     runnerScore:             runnerAvg,
     /* Data Integrity */
-    insufficientData:        insufficientData
+    insufficientData:        insufficientData,
+    /* Order Blocks — institutional confirmation layer */
+    orderBlocks:             computeOrderBlocks(candles15m)
   };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ORDER BLOCK DETECTION ENGINE
+   Institutional Order Block analysis — confirmation layer only.
+   Does NOT replace or modify any existing Structure Engine scores.
+   Input:  candles15m — [timestamp, open, high, low, close, volume]
+   Output: { bullishOBs, bearishOBs, bestBullish, bestBearish, entryNote }
+   ═══════════════════════════════════════════════════════════════════════════ */
+function computeOrderBlocks(candles15m) {
+  if (!candles15m || candles15m.length < 15) return null;
+  var n = candles15m.length;
+  var opens   = candles15m.map(function(c){ return c[1]; });
+  var highs   = candles15m.map(function(c){ return c[2]; });
+  var lows    = candles15m.map(function(c){ return c[3]; });
+  var closes  = candles15m.map(function(c){ return c[4]; });
+  var volumes = candles15m.map(function(c){ return c[5] || 0; });
+  var times   = candles15m.map(function(c){ return c[0]; });
+  var currentPrice = closes[n - 1];
+  var avgVol = volumes.reduce(function(a,b){ return a+b; }, 0) / (n || 1);
+
+  /* ── Bullish OB scan: bearish candle → strong bullish displacement ── */
+  var bullishOBs = [], bearishOBs = [];
+  for (var i = 5; i < n - 4; i++) {
+    if (closes[i] >= opens[i]) continue; /* must be a bearish candle */
+    var bullCount = 0;
+    for (var j = i + 1; j < Math.min(i + 7, n); j++) {
+      if (closes[j] > opens[j]) bullCount++; else break;
+    }
+    if (bullCount < 2) continue;
+    var dispEnd = Math.min(i + bullCount, n - 1);
+    var dispHigh = highs[i + 1];
+    for (var di = i + 2; di <= dispEnd; di++) { if (highs[di] > dispHigh) dispHigh = highs[di]; }
+    var obRange = highs[i] - lows[i];
+    if (obRange <= 0 || (dispHigh - highs[i]) < obRange * 1.5) continue;
+    /* Market structure break */
+    var localSwHigh = 0;
+    for (var mi = Math.max(0, i - 15); mi < i; mi++) { if (highs[mi] > localSwHigh) localSwHigh = highs[mi]; }
+    var msBroken = localSwHigh > 0 && dispHigh > localSwHigh;
+    /* Volume */
+    var dVol = 0;
+    for (var vi = i + 1; vi <= dispEnd; vi++) dVol += volumes[vi];
+    var volConf = (dVol / (bullCount || 1)) > avgVol * 1.1;
+    /* No quick retrace */
+    var noRetrace = true;
+    for (var ri = dispEnd + 1; ri < Math.min(dispEnd + 4, n); ri++) { if (lows[ri] < highs[i]) { noRetrace = false; break; } }
+    /* Freshness */
+    var obLow = lows[i], obHigh = highs[i], obMid = (obLow + obHigh) / 2;
+    var minSubLow = lows[i + 1];
+    for (var fi = i + 1; fi < n; fi++) { if (lows[fi] < minSubLow) minSubLow = lows[fi]; }
+    var freshness = minSubLow < obLow ? 'Invalidated' : minSubLow < obMid ? 'Fully Mitigated' : minSubLow <= obHigh ? 'Partially Mitigated' : 'Fresh';
+    if (freshness === 'Invalidated' || freshness === 'Fully Mitigated') continue;
+    /* Confidence */
+    var cs = 0;
+    cs += (bullCount >= 4 ? 3 : bullCount >= 3 ? 2 : 1);
+    if (msBroken) cs += 3;
+    if (volConf) cs += 2;
+    cs += (freshness === 'Fresh' ? 2 : 1);
+    if (noRetrace) cs += 1;
+    if ((dispHigh - highs[i]) > obRange * 3) cs += 1;
+    var confidence = cs >= 9 ? 'High' : cs >= 6 ? 'Medium' : 'Low';
+    /* Price status */
+    var inOB = currentPrice >= obLow && currentPrice <= obHigh;
+    var distPct = inOB ? 0 : currentPrice > obHigh ? ((currentPrice - obHigh) / currentPrice * 100) : ((obLow - currentPrice) / currentPrice * 100);
+    var priceStatus = inOB ? 'Inside OB' : currentPrice > obHigh ? 'Above OB' : 'Below OB';
+    bullishOBs.push({ open:opens[i], high:obHigh, low:obLow, close:closes[i], time:times[i],
+      freshness:freshness, confidence:confidence, confScore:cs, bullCount:bullCount,
+      msBroken:msBroken, volConf:volConf, distPct:distPct, priceStatus:priceStatus, index:i });
+  }
+
+  /* ── Bearish OB scan: bullish candle → strong bearish displacement ── */
+  for (var bi = 5; bi < n - 4; bi++) {
+    if (closes[bi] <= opens[bi]) continue; /* must be a bullish candle */
+    var bearCount = 0;
+    for (var bj = bi + 1; bj < Math.min(bi + 7, n); bj++) {
+      if (closes[bj] < opens[bj]) bearCount++; else break;
+    }
+    if (bearCount < 2) continue;
+    var bdEnd = Math.min(bi + bearCount, n - 1);
+    var dispLow = lows[bi + 1];
+    for (var bdi = bi + 2; bdi <= bdEnd; bdi++) { if (lows[bdi] < dispLow) dispLow = lows[bdi]; }
+    var bObRange = highs[bi] - lows[bi];
+    if (bObRange <= 0 || (lows[bi] - dispLow) < bObRange * 1.5) continue;
+    var bLocalSwLow = Infinity;
+    for (var bmi = Math.max(0, bi - 15); bmi < bi; bmi++) { if (lows[bmi] < bLocalSwLow) bLocalSwLow = lows[bmi]; }
+    var bMsBroken = bLocalSwLow < Infinity && dispLow < bLocalSwLow;
+    var bdVol = 0;
+    for (var bvi = bi + 1; bvi <= bdEnd; bvi++) bdVol += volumes[bvi];
+    var bVolConf = (bdVol / (bearCount || 1)) > avgVol * 1.1;
+    var bNoRetrace = true;
+    for (var bri = bdEnd + 1; bri < Math.min(bdEnd + 4, n); bri++) { if (highs[bri] > lows[bi]) { bNoRetrace = false; break; } }
+    var bObLow = lows[bi], bObHigh = highs[bi], bObMid = (bObLow + bObHigh) / 2;
+    var maxSubHigh = highs[bi + 1];
+    for (var bfi = bi + 1; bfi < n; bfi++) { if (highs[bfi] > maxSubHigh) maxSubHigh = highs[bfi]; }
+    var bFreshness = maxSubHigh > bObHigh ? 'Invalidated' : maxSubHigh > bObMid ? 'Fully Mitigated' : maxSubHigh >= bObLow ? 'Partially Mitigated' : 'Fresh';
+    if (bFreshness === 'Invalidated' || bFreshness === 'Fully Mitigated') continue;
+    var bCs = 0;
+    bCs += (bearCount >= 4 ? 3 : bearCount >= 3 ? 2 : 1);
+    if (bMsBroken) bCs += 3;
+    if (bVolConf) bCs += 2;
+    bCs += (bFreshness === 'Fresh' ? 2 : 1);
+    if (bNoRetrace) bCs += 1;
+    if ((lows[bi] - dispLow) > bObRange * 3) bCs += 1;
+    var bConf = bCs >= 9 ? 'High' : bCs >= 6 ? 'Medium' : 'Low';
+    var bInOB = currentPrice >= bObLow && currentPrice <= bObHigh;
+    var bDistPct = bInOB ? 0 : currentPrice < bObLow ? ((bObLow - currentPrice) / currentPrice * 100) : ((currentPrice - bObHigh) / currentPrice * 100);
+    var bPriceStatus = bInOB ? 'Inside OB' : currentPrice > bObHigh ? 'Above OB' : 'Below OB';
+    bearishOBs.push({ open:opens[bi], high:bObHigh, low:bObLow, close:closes[bi], time:times[bi],
+      freshness:bFreshness, confidence:bConf, confScore:bCs, bearCount:bearCount,
+      msBroken:bMsBroken, volConf:bVolConf, distPct:bDistPct, priceStatus:bPriceStatus, index:bi });
+  }
+
+  /* ── Sort: Fresh first, then confScore desc, then most recent ── */
+  function _obSort(a, b) {
+    var fr = { 'Fresh': 2, 'Partially Mitigated': 1 };
+    if ((fr[b.freshness]||0) !== (fr[a.freshness]||0)) return (fr[b.freshness]||0) - (fr[a.freshness]||0);
+    if (b.confScore !== a.confScore) return b.confScore - a.confScore;
+    return b.index - a.index;
+  }
+  bullishOBs.sort(_obSort);
+  bearishOBs.sort(_obSort);
+
+  var bestBullish = bullishOBs.length > 0 ? bullishOBs[0] : null;
+  var bestBearish = bearishOBs.length > 0 ? bearishOBs[0] : null;
+
+  /* ── Entry analysis note ── */
+  var entryNote = null;
+  if (bestBullish) {
+    if (bestBullish.priceStatus === 'Inside OB' && bestBullish.freshness === 'Fresh') {
+      entryNote = { type: 'strong_positive', text: 'Current price is trading inside a Fresh Bullish Order Block. This is considered a favorable institutional accumulation zone.' };
+    } else if (bestBullish.priceStatus === 'Above OB' && bestBullish.distPct <= 8) {
+      entryNote = { type: 'positive', text: 'Price is approaching a Fresh Bullish Order Block. Waiting for a retracement into this zone may improve entry quality.' };
+    } else if (bestBullish.priceStatus === 'Below OB') {
+      entryNote = { type: 'positive', text: 'Price is approaching a Fresh Bullish Order Block from below. Waiting for a retracement into this zone may improve entry quality.' };
+    } else if (bestBullish.priceStatus === 'Above OB' && bestBullish.distPct > 20) {
+      entryNote = { type: 'caution', text: 'Current price is extended above the nearest Bullish Order Block. Buying here carries increased pullback risk.' };
+    }
+  }
+
+  return { bullishOBs:bullishOBs, bearishOBs:bearishOBs,
+           bestBullish:bestBullish, bestBearish:bestBearish,
+           currentPrice:currentPrice, entryNote:entryNote };
 }
 
 /* ── Transaction Pressure Score ──────────────────────────────────────────────
@@ -7914,6 +8058,88 @@ function buildEntryBriefingHTML(d, analysis) {
         t += ' &nbsp;·&nbsp; <span style="font-style:italic;">Informational only — does not affect Entry Range, Score, or Verdict</span>';
         t += '</div>';
 
+        return t;
+      })() },
+    { num: '◈', label: 'Order Block Analysis', text: (function() {
+        var t = '';
+        var engineMode = window._tecEngineMode || 'FLOW';
+        if (engineMode !== 'STRUCTURE' || !sa) {
+          t += '<div style="color:var(--text-muted);font-size:0.72rem;padding:6px 0;">';
+          t += engineMode === 'FLOW' ? '⚡ Flow Mode active — Order Block detection requires OHLCV candle data.' : 'Requires OHLCV candle data to detect Order Blocks.';
+          t += '</div>';
+          return t;
+        }
+        var ob = sa.orderBlocks;
+        if (!ob) {
+          t += '<div style="color:var(--text-muted);font-size:0.72rem;padding:6px 0;">Insufficient candle data for Order Block detection (minimum 15 candles required).</div>';
+          return t;
+        }
+
+        /* helper: format OB price → MC */
+        var _defCur = d.defCurrent || 0;
+        function obToMC(price) {
+          if (_defCur <= 0 || currentMC <= 0) return '—';
+          return formatUSD(currentMC * (price / _defCur));
+        }
+        function obFreshnessColor(f) {
+          return f === 'Fresh' ? '#00e676' : f === 'Partially Mitigated' ? '#ffeb3b' : '#aaa';
+        }
+        function obConfColor(c) {
+          return c === 'High' ? '#00e676' : c === 'Medium' ? '#ffeb3b' : '#ff9800';
+        }
+        function obStatusColor(s) {
+          return s === 'Inside OB' ? '#00e676' : s === 'Above OB' ? '#ffeb3b' : '#aaa';
+        }
+
+        /* ── Section header ── */
+        t += '<div style="font-size:0.62rem;font-weight:700;color:var(--accent-cyan);letter-spacing:0.6px;text-transform:uppercase;margin-bottom:8px;">Institutional Order Block Zones &nbsp;<span style="font-weight:400;color:var(--text-muted);text-transform:none;letter-spacing:0;">(15m timeframe · confirmation layer only)</span></div>';
+
+        /* ── Build each OB card ── */
+        function obCard(ob, type) {
+          var typeColor = type === 'Bullish' ? '#00e676' : '#ff4757';
+          var typeIcon  = type === 'Bullish' ? '▲' : '▼';
+          var t2 = '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-left:3px solid ' + typeColor + ';border-radius:6px;padding:8px 10px;margin-bottom:8px;">';
+          t2 += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
+          t2 += '<span style="color:' + typeColor + ';font-size:0.65rem;font-weight:700;">' + typeIcon + ' Nearest ' + type + ' Order Block</span>';
+          t2 += '<span style="background:' + obFreshnessColor(ob.freshness) + '22;color:' + obFreshnessColor(ob.freshness) + ';font-size:0.58rem;font-weight:700;padding:1px 6px;border-radius:3px;border:1px solid ' + obFreshnessColor(ob.freshness) + '44;">' + ob.freshness + '</span>';
+          t2 += '<span style="background:' + obConfColor(ob.confidence) + '22;color:' + obConfColor(ob.confidence) + ';font-size:0.58rem;padding:1px 6px;border-radius:3px;border:1px solid ' + obConfColor(ob.confidence) + '44;">' + ob.confidence + ' Confidence</span>';
+          t2 += '</div>';
+          t2 += '<div style="display:grid;grid-template-columns:auto 1fr auto 1fr;gap:3px 12px;font-size:0.65rem;">';
+          t2 += '<span style="color:var(--text-muted);">Zone</span><span style="color:var(--text-secondary);">' + obToMC(ob.low) + ' – ' + obToMC(ob.high) + '</span>';
+          t2 += '<span style="color:var(--text-muted);">Distance</span><span style="color:var(--text-secondary);">' + (ob.priceStatus === 'Inside OB' ? '<span style="color:#00e676;font-weight:700;">Inside Zone</span>' : ob.distPct.toFixed(1) + '%') + '</span>';
+          t2 += '<span style="color:var(--text-muted);">Status</span><span style="color:' + obStatusColor(ob.priceStatus) + ';font-weight:600;">' + ob.priceStatus + '</span>';
+          t2 += '<span style="color:var(--text-muted);">MS Break</span><span style="color:' + (ob.msBroken ? '#00e676' : '#aaa') + ';">' + (ob.msBroken ? '✓ Yes' : '— No') + '</span>';
+          t2 += '<span style="color:var(--text-muted);">Vol Conf</span><span style="color:' + (ob.volConf ? '#00e676' : '#aaa') + ';">' + (ob.volConf ? '✓ Yes' : '— No') + '</span>';
+          t2 += '</div>';
+          t2 += '</div>';
+          return t2;
+        }
+
+        var hasBull = ob.bestBullish !== null;
+        var hasBear = ob.bestBearish !== null;
+
+        if (!hasBull && !hasBear) {
+          t += '<div style="color:var(--text-muted);font-size:0.72rem;padding:4px 0;">No valid Order Blocks detected in current candle data. Additional price history may reveal institutional zones.</div>';
+          return t;
+        }
+        if (hasBull) t += obCard(ob.bestBullish, 'Bullish');
+        if (hasBear) t += obCard(ob.bestBearish, 'Bearish');
+
+        /* ── Entry analysis note ── */
+        if (ob.entryNote) {
+          var noteColor = ob.entryNote.type === 'strong_positive' ? '#00e676' : ob.entryNote.type === 'positive' ? '#00bcd4' : '#ff9800';
+          var noteIcon  = ob.entryNote.type === 'strong_positive' ? '✦' : ob.entryNote.type === 'positive' ? '◈' : '⚠';
+          t += '<div style="background:' + noteColor + '11;border:1px solid ' + noteColor + '33;border-radius:5px;padding:7px 10px;font-size:0.68rem;color:' + noteColor + ';line-height:1.5;">';
+          t += noteIcon + '&nbsp; ' + ob.entryNote.text;
+          t += '</div>';
+        }
+
+        /* ── OB count summary ── */
+        t += '<div style="font-size:0.60rem;color:var(--text-muted);border-top:1px solid rgba(255,255,255,0.05);padding-top:5px;margin-top:6px;">';
+        t += 'Detected: ' + ob.bullishOBs.length + ' Bullish OB' + (ob.bullishOBs.length !== 1 ? 's' : '') + ' &nbsp;·&nbsp; ';
+        t += ob.bearishOBs.length + ' Bearish OB' + (ob.bearishOBs.length !== 1 ? 's' : '') + ' &nbsp;·&nbsp; ';
+        t += '<span style="font-style:italic;">Informational only — does not affect Entry Range, Score, or Verdict</span>';
+        t += '</div>';
         return t;
       })() },
     { num: '06', label: 'Structural Analysis Scores', text: (function() {
@@ -12431,6 +12657,54 @@ function buildSetupText(d, analysis) {
     lines.push('     Current MC (' + formatUSD(txtCurrentMC) + '): ' + _fbPos);
     lines.push('     Safe Entry vs Golden Zone: ' + (_fbOvlp ? '✓ Overlaps Golden Zone' : '⚠ Does not overlap Golden Zone'));
     lines.push('     Swing basis: ' + _fbTrend + ' · ' + _fbHL + ' Higher Low' + (_fbHL !== 1 ? 's' : '') + ' · Range: ' + _fbRangePct.toFixed(0) + '%');
+  })();
+
+  /* ── 05c. Order Block Analysis ── */
+  (function() {
+    lines.push('');
+    if (!txtSA || !txtSA.orderBlocks) {
+      lines.push('05c. Order Block Analysis: Not Applicable — ' + (!txtSA ? 'OHLCV candle data unavailable (Structure Mode required).' : 'Insufficient candle data for detection.'));
+      return;
+    }
+    var ob = txtSA.orderBlocks;
+    lines.push('05c. Order Block Analysis (informational only — does not affect Entry Range or Score)');
+
+    function txtObMC(price) {
+      if (!txtCurrentMC || !d.defCurrent) return '—';
+      return formatUSD(txtCurrentMC * (price / d.defCurrent));
+    }
+
+    /* Bullish OB */
+    if (ob.bestBullish) {
+      var bull = ob.bestBullish;
+      lines.push('     Nearest Bullish Order Block:');
+      lines.push('       Zone       : ' + txtObMC(bull.low) + ' – ' + txtObMC(bull.high));
+      lines.push('       Freshness  : ' + bull.freshness);
+      lines.push('       Confidence : ' + bull.confidence);
+      lines.push('       Status     : ' + bull.priceStatus + (bull.priceStatus === 'Inside OB' ? '' : ' (' + bull.distPct.toFixed(1) + '% away)'));
+      lines.push('       MS Break   : ' + (bull.msBroken ? 'Yes' : 'No') + '  |  Vol Confirmed: ' + (bull.volConf ? 'Yes' : 'No'));
+    } else {
+      lines.push('     Nearest Bullish Order Block: None detected');
+    }
+
+    /* Bearish OB */
+    if (ob.bestBearish) {
+      var bear = ob.bestBearish;
+      lines.push('     Nearest Bearish Order Block:');
+      lines.push('       Zone       : ' + txtObMC(bear.low) + ' – ' + txtObMC(bear.high));
+      lines.push('       Freshness  : ' + bear.freshness);
+      lines.push('       Confidence : ' + bear.confidence);
+      lines.push('       Status     : ' + bear.priceStatus + (bear.priceStatus === 'Inside OB' ? '' : ' (' + bear.distPct.toFixed(1) + '% away)'));
+      lines.push('       MS Break   : ' + (bear.msBroken ? 'Yes' : 'No') + '  |  Vol Confirmed: ' + (bear.volConf ? 'Yes' : 'No'));
+    } else {
+      lines.push('     Nearest Bearish Order Block: None detected');
+    }
+
+    /* Entry note */
+    if (ob.entryNote) {
+      lines.push('     Entry Note : ' + ob.entryNote.text);
+    }
+    lines.push('     Totals: ' + ob.bullishOBs.length + ' bullish OB(s) · ' + ob.bearishOBs.length + ' bearish OB(s) detected in candle history');
   })();
 
   /* ── 06. Structural Analysis Scores ── */
