@@ -1,0 +1,150 @@
+MARKET CAP VS VOLUME RATIO UPGRADE
+
+IMPORTANT
+
+DO NOT rebuild the Security Engine.
+
+DO NOT remove or modify any existing Security Checks, Rug Checks, Holder Analysis, Bundle Detection, Developer Analysis or Security Scoring.
+
+The goal is to add an additional validation metric based on the relationship between Market Cap and 24H Trading Volume.
+
+---
+
+OBJECTIVE
+
+Calculate the Volume-to-Market Cap Ratio to identify coins with suspiciously low trading activity relative to their Market Cap.
+
+This metric should act as an early warning indicator for potential bundled, manipulated or unhealthy trading conditions.
+
+---
+
+FORMULA
+
+Calculate:
+
+Volume to Market Cap Ratio (%) = (24H Volume USD ÷ Market Cap USD) × 100
+
+Example:
+
+Market Cap = $500,000
+
+24H Volume = $600,000
+
+Volume Ratio
+
+= (600,000 ÷ 500,000) × 100
+
+= 120%
+
+---
+
+CLASSIFICATION
+
+Display both the calculated percentage and a qualitative rating.
+
+Suggested thresholds:
+
+≥ 150%
+Excellent
+
+120% – 149%
+Very Healthy
+
+100% – 119%
+Healthy
+
+80% – 99%
+Borderline
+
+Below 80%
+High Risk
+
+Below 50%
+Critical Risk
+
+---
+
+SECURITY BRIEFING SUMMARY
+
+Add a new metric to the Security Briefing Summary displayed at the top.
+
+Example:
+
+Volume / Market Cap Ratio
+
+128%
+
+Status
+
+✅ Healthy
+
+or
+
+Volume / Market Cap Ratio
+
+62%
+
+Status
+
+⚠ High Risk
+
+Reason
+
+24H trading volume is significantly lower than Market Cap, which may indicate bundled holdings, weak liquidity, or artificial valuation.
+
+---
+
+SECURITY ANALYSIS
+
+Provide a brief interpretation based on the ratio.
+
+Examples:
+
+If Ratio ≥ 100%
+
+"Trading volume exceeds Market Cap, indicating healthy market participation and liquidity."
+
+If Ratio is between 80% and 99%
+
+"Trading volume is approaching the minimum acceptable threshold. Exercise additional caution."
+
+If Ratio < 80%
+
+"Trading volume is below the recommended minimum relative to Market Cap. This may indicate bundled wallets, weak liquidity, artificial valuation, or reduced market participation. Treat this as a significant security warning."
+
+---
+
+SCORING
+
+Use this metric as an additional Security Engine factor.
+
+Suggested weighting:
+
+Excellent / Very Healthy
+Positive adjustment
+
+Healthy
+Neutral
+
+Borderline
+Small negative adjustment
+
+Below 80%
+Moderate negative adjustment
+
+Below 50%
+Strong negative adjustment
+
+This metric should complement the existing Security Engine and must not replace any current security, bundle, liquidity, or holder analysis.
+
+---
+
+DATA SOURCE
+
+Use the existing Market Cap and 24H Volume values already retrieved by the application.
+
+Do NOT introduce additional API calls.
+
+Do NOT increase API usage.
+
+Calculate the ratio locally after Market Cap and Volume have been retrieved.

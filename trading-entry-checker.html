@@ -5152,6 +5152,41 @@ function buildSecurityBriefingHTML(d) {
   var launchCoord  = computeLaunchCoordinationRisk(d);
   var secConf      = computeSecurityConfidence(d);
 
+  /* ── Volume / Market Cap Ratio ── */
+  var _volMcRaw   = d.vol24h || d.volume || 0;
+  var _volMcMCap  = d.marketCap || 0;
+  var _volMcRatio = (_volMcMCap > 0 && _volMcRaw > 0) ? (_volMcRaw / _volMcMCap) * 100 : null;
+  var _vmLabel, _vmColor, _vmStatus, _vmPts, _vmNote, _vmInterp;
+  if (_volMcRatio === null) {
+    _vmLabel = 'No Data';      _vmColor = 'var(--text-muted)'; _vmStatus = 'CAUTION'; _vmPts = 1;
+    _vmNote  = 'Volume or Market Cap data unavailable.';
+    _vmInterp = 'Unable to assess Volume / Market Cap ratio — data unavailable.';
+  } else if (_volMcRatio >= 150) {
+    _vmLabel = 'Excellent';    _vmColor = '#00ffcc'; _vmStatus = 'PASS'; _vmPts = 2;
+    _vmNote  = 'Trading volume far exceeds Market Cap — strong market participation and liquidity.';
+    _vmInterp = 'Trading volume exceeds Market Cap, indicating excellent market participation and healthy liquidity.';
+  } else if (_volMcRatio >= 120) {
+    _vmLabel = 'Very Healthy'; _vmColor = '#00e676'; _vmStatus = 'PASS'; _vmPts = 2;
+    _vmNote  = 'Trading volume well above Market Cap — very healthy participation.';
+    _vmInterp = 'Trading volume exceeds Market Cap, indicating healthy market participation and liquidity.';
+  } else if (_volMcRatio >= 100) {
+    _vmLabel = 'Healthy';      _vmColor = '#00e676'; _vmStatus = 'PASS'; _vmPts = 2;
+    _vmNote  = 'Trading volume at or above Market Cap — acceptable participation level.';
+    _vmInterp = 'Trading volume at or above Market Cap — participation is at an acceptable level.';
+  } else if (_volMcRatio >= 80) {
+    _vmLabel = 'Borderline';   _vmColor = '#ffeb3b'; _vmStatus = 'CAUTION'; _vmPts = 1;
+    _vmNote  = 'Trading volume approaching minimum threshold — exercise additional caution.';
+    _vmInterp = 'Trading volume is approaching the minimum acceptable threshold. Exercise additional caution.';
+  } else if (_volMcRatio >= 50) {
+    _vmLabel = 'High Risk';    _vmColor = '#ff9800'; _vmStatus = 'FAIL'; _vmPts = 0;
+    _vmNote  = '24H volume below recommended minimum vs Market Cap — may indicate bundled wallets, weak liquidity, or artificial valuation.';
+    _vmInterp = 'Trading volume is below the recommended minimum relative to Market Cap. This may indicate bundled wallets, weak liquidity, artificial valuation, or reduced market participation. Treat this as a significant security warning.';
+  } else {
+    _vmLabel = 'Critical Risk'; _vmColor = '#ff4757'; _vmStatus = 'FAIL'; _vmPts = 0;
+    _vmNote  = '24H volume critically low relative to Market Cap — strong signal of bundled holdings, artificial valuation, or near-zero organic activity.';
+    _vmInterp = 'Trading volume is critically low relative to Market Cap. This is a strong warning signal for bundled holdings, artificial valuation, or near-zero organic market participation. Treat this as a significant security warning.';
+  }
+
   /* ── Cabal Score (0–10 concentration/clustering rating) ── */
   var cabalScore = 10;
   if (bundleClust > 25) cabalScore -= 3;    else if (bundleClust > 12) cabalScore -= 1.5;
@@ -5301,6 +5336,13 @@ function buildSecurityBriefingHTML(d) {
   SEC.push({ label:'Self-Snipe Evidence', val: selfSnipe.verdict,
     pts: ssS==='PASS'?2:ssS==='CAUTION'?1:0, status:ssS,
     note: selfSnipe.count>0?selfSnipe.evidence[0].type+': '+selfSnipe.evidence[0].note:'No independent self-snipe signals detected' });
+
+  /* 15 — Volume / Market Cap Ratio */
+  SEC.push({ label: 'Vol/MC Ratio',
+    val:    _volMcRatio !== null ? _volMcRatio.toFixed(1) + '% — ' + _vmLabel : 'No Data',
+    pts:    _vmPts,
+    status: _vmStatus,
+    note:   _vmNote });
 
   /* ── Security Tier scoring ── */
   var totalPts = SEC.reduce(function(s,i){ return s+i.pts; }, 0);
@@ -5490,6 +5532,23 @@ function buildSecurityBriefingHTML(d) {
   nt += '</div>';
   nt += '<div style="font-size:0.60rem;color:var(--text-muted);">9–10 Excellent · 7–8 Healthy · 5–6 Moderate · 3–4 Concerning · 0–2 Extreme</div>';
   nt += '</div>';
+  nt += '</div>';
+
+  /* ── Volume / Market Cap Ratio card ── */
+  nt += '<div style="margin-bottom:10px;padding:8px 10px;background:rgba(0,0,0,0.22);border-radius:4px;border-left:3px solid '+_vmColor+';">';
+  nt += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px;">';
+  nt += '<div style="color:var(--text-muted);font-size:0.59rem;font-weight:700;letter-spacing:1px;">VOLUME / MARKET CAP RATIO</div>';
+  nt += '<div style="display:flex;align-items:center;gap:8px;">';
+  nt += '<span style="font-size:1.20rem;font-weight:900;color:'+_vmColor+';">' + (_volMcRatio !== null ? _volMcRatio.toFixed(1) + '%' : '—') + '</span>';
+  nt += '<span style="padding:2px 8px;border-radius:3px;font-size:0.65rem;font-weight:700;background:'+_vmColor+'22;border:1px solid '+_vmColor+'55;color:'+_vmColor+';">';
+  nt += (_vmStatus === 'PASS' ? '✅' : _vmStatus === 'CAUTION' ? '⚠' : '⚠') + ' ' + _vmLabel;
+  nt += '</span>';
+  nt += '</div>';
+  nt += '</div>';
+  nt += '<div style="font-size:0.64rem;color:var(--text-secondary);line-height:1.45;">' + _vmInterp + '</div>';
+  if (_volMcRatio !== null) {
+    nt += '<div style="margin-top:4px;font-size:0.60rem;color:var(--text-muted);">24H Vol: <strong style="color:var(--text-secondary);">' + formatUSD(_volMcRaw) + '</strong> &nbsp;·&nbsp; MCap: <strong style="color:var(--text-secondary);">' + formatUSD(_volMcMCap) + '</strong> &nbsp;·&nbsp; Thresholds: ≥150% Excellent · 100–149% Healthy · 80–99% Borderline · &lt;80% High Risk · &lt;50% Critical</div>';
+  }
   nt += '</div>';
 
   /* ── Security Checklist ── */
@@ -12093,6 +12152,21 @@ function buildSetupText(d, analysis) {
   txtSEC.push({ label:'Early Buyer Health',        status: txtEbHealth.score >= 65 ? 'PASS' : txtEbHealth.score >= 45 ? 'CAUTION' : 'FAIL', note: txtEbHealth.label + ' (' + txtEbHealth.score + '/100)' });
   var _ssS = txtSelfSnipe.verdict === 'No Evidence' ? 'PASS' : txtSelfSnipe.verdict === 'Weak Evidence' ? 'CAUTION' : 'FAIL';
   txtSEC.push({ label:'Self-Snipe Evidence',       status: _ssS,  note: txtSelfSnipe.verdict });
+  /* Vol/MC Ratio */
+  var _txtVolMcRaw   = d.vol24h || d.volume || 0;
+  var _txtVolMcMCap  = d.marketCap || 0;
+  var _txtVolMcRatio = (_txtVolMcMCap > 0 && _txtVolMcRaw > 0) ? (_txtVolMcRaw / _txtVolMcMCap) * 100 : null;
+  var _txtVmLabel, _txtVmStatus;
+  if (_txtVolMcRatio === null)       { _txtVmLabel = 'No Data';      _txtVmStatus = 'CAUTION'; }
+  else if (_txtVolMcRatio >= 150)    { _txtVmLabel = 'Excellent';    _txtVmStatus = 'PASS'; }
+  else if (_txtVolMcRatio >= 120)    { _txtVmLabel = 'Very Healthy'; _txtVmStatus = 'PASS'; }
+  else if (_txtVolMcRatio >= 100)    { _txtVmLabel = 'Healthy';      _txtVmStatus = 'PASS'; }
+  else if (_txtVolMcRatio >= 80)     { _txtVmLabel = 'Borderline';   _txtVmStatus = 'CAUTION'; }
+  else if (_txtVolMcRatio >= 50)     { _txtVmLabel = 'High Risk';    _txtVmStatus = 'FAIL'; }
+  else                               { _txtVmLabel = 'Critical Risk'; _txtVmStatus = 'FAIL'; }
+  txtSEC.push({ label:'Vol/MC Ratio', status: _txtVmStatus,
+    note: _txtVolMcRatio !== null ? _txtVolMcRatio.toFixed(1) + '% — ' + _txtVmLabel : 'No Data' });
+
   var txtSecPts = txtSEC.reduce(function(s,i){ return s + (i.status==='PASS'?2:i.status==='CAUTION'?1:0); }, 0);
   var txtSecMax = txtSEC.length * 2;
   var txtSecPct = Math.round((txtSecPts / txtSecMax) * 100);
