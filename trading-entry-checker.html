@@ -14529,7 +14529,10 @@ function wlibRender() {
   if (!emptyEl || !wrapEl || !tbodyEl) return;
   wlibUpdateCount();
   if (_walletLibrary.length === 0) {
-    emptyEl.style.display = ''; wrapEl.style.display = 'none'; return;
+    emptyEl.style.display = ''; wrapEl.style.display = 'none';
+    var bodyEl0 = el('walletLibBody');
+    if (bodyEl0 && !bodyEl0.classList.contains('collapsed')) bodyEl0.style.maxHeight = bodyEl0.scrollHeight + 'px';
+    return;
   }
   emptyEl.style.display = 'none'; wrapEl.style.display = '';
   tbodyEl.innerHTML = _walletLibrary.map(function(w, i) {
@@ -14548,6 +14551,11 @@ function wlibRender() {
       '<td><button class="wlib-del" onclick="wlibDelete(\'' + w.id + '\')" title="Remove from library"><i class="fa-solid fa-xmark"></i></button></td>' +
     '</tr>';
   }).join('');
+  /* Expand panel to fit new content if it is currently open */
+  var bodyEl = el('walletLibBody');
+  if (bodyEl && !bodyEl.classList.contains('collapsed')) {
+    bodyEl.style.maxHeight = 'none';
+  }
 }
 
 /* ── CRUD ── */
@@ -14642,16 +14650,18 @@ function wlibImportProcess(input) {
    same coin, but all unique wallets accumulate across scans. ── */
 function wlibCollectFromQEC(retail10, ca, coin) {
   if (!retail10 || retail10.length === 0 || !ca) return;
+  wlibLoad();
   var added = 0;
   retail10.forEach(function(h) {
-    if (h.address && !h.isSystem && wlibAdd(h.address, coin, ca, h.pct, 'QEC')) added++;
+    if (h.address && wlibAdd(h.address, coin, ca, h.pct, 'QEC')) added++;
   });
   if (added > 0) wlibRender();
 }
 function wlibCollectFromHelius(holders, ca, coin) {
   if (!holders || holders.length === 0 || !ca) return;
+  wlibLoad();
   var added = 0;
-  holders.filter(function(h) { return !h.isAmm && h.address; }).forEach(function(h) {
+  holders.filter(function(h) { return h.address; }).forEach(function(h) {
     if (wlibAdd(h.address, coin, ca, h.pct, 'Cabal Briefing')) added++;
   });
   if (added > 0) wlibRender();
