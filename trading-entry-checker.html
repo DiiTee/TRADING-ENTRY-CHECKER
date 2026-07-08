@@ -14049,11 +14049,10 @@ function qecSetDevAddress(address, devDeployed, devBonded) {
   if (devDeployed !== undefined) window._devDeployed = devDeployed;
   if (devBonded   !== undefined) window._devBonded   = devBonded;
   /* ── rlDevInput is the primary source for Wallet Library dev collection ──
-     Always overwrite with the API-sourced address — it is authoritative.
-     This prevents stale dev addresses from a previous token being collected
-     against a new CA when the user starts a fresh scan without clearing the field. */
+     The user pastes the dev address themselves. Only fill the field when
+     it is empty so an auto-discovered address never overwrites their input. */
   var rlDev = el('rlDevInput');
-  if (rlDev) {
+  if (rlDev && !rlDev.value.trim()) {
     rlDev.value = address;
     if (typeof updateRickbotLinks === 'function') updateRickbotLinks();
   }
