@@ -556,6 +556,7 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .wlib-src { font-size:0.57rem; padding:1px 6px; border-radius:3px; font-weight:700; white-space:nowrap; }
 .wlib-src-qec   { background:rgba(0,212,255,0.12);   color:var(--accent-cyan); }
 .wlib-src-cabal { background:rgba(140,80,255,0.15);  color:#aa66ff; }
+.wlib-src-dev   { background:rgba(255,165,0,0.15);   color:#ffaa33; }
 .wlib-del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.72rem; padding:2px 6px; border-radius:3px; line-height:1; }
 .wlib-del:hover { color:var(--skip); background:rgba(255,61,113,0.12); }
 @keyframes wlib-flash { 0%{background:rgba(0,212,255,0.18);} 100%{background:transparent;} }
@@ -3087,6 +3088,9 @@ async function fetchFromCA(ca) {
       if (rugData.creator) {
         fetched.devAddress = rugData.creator;
         if (typeof qecSetDevAddress === 'function') qecSetDevAddress(rugData.creator);
+        /* ── Wallet Library: collect dev wallet ── */
+        var _wlibDevCoin = (el('fCoin') && el('fCoin').value.trim()) || ca.slice(0, 8);
+        wlibCollectDev(rugData.creator, ca, _wlibDevCoin);
         var creatorH = topHolders.find(function(h) { return h.address === rugData.creator; });
         if (creatorH) {
           var cpct = creatorH.pct || (creatorH.percent / 100) || 0;
@@ -13337,7 +13341,12 @@ async function qecFetchTopHolders() {
       /* Also update main app Top10 field */
       if (el('fT10') && !el('fT10').value) el('fT10').value = retail10Pct.toFixed(2);
       /* Capture dev address from RugCheck response */
-      if (data.creator) qecSetDevAddress(data.creator);
+      if (data.creator) {
+        qecSetDevAddress(data.creator);
+        /* ── Wallet Library: collect dev wallet ── */
+        var _wlibQecDevCoin = (el('fCoin') && el('fCoin').value.trim()) || ca.slice(0, 8);
+        wlibCollectDev(data.creator, ca, _wlibQecDevCoin);
+      }
       qecRenderHolderBreakdown(all.filter(function(h){ return h.isSystem; }), retail10);
       /* ── Wallet Library: auto-collect retail holders ── */
       var _wlibQecCoin = (el('fCoin') && el('fCoin').value.trim()) || ca.slice(0, 8);
@@ -14533,7 +14542,7 @@ function wlibRender() {
     emptyEl.style.display = 'none'; wrapEl.style.display = '';
     tbodyEl.innerHTML = _walletLibrary.map(function(w, i) {
       var short = w.address.length >= 10 ? w.address.slice(0,6) + '\u2026' + w.address.slice(-4) : w.address;
-      var srcClass = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : 'wlib-src wlib-src-cabal';
+      var srcClass = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : w.source === 'Dev' ? 'wlib-src wlib-src-dev' : 'wlib-src wlib-src-cabal';
       var dateStr = '';
       try { dateStr = new Date(w.dateAdded).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(e) {}
       var href = 'https://solscan.io/account/' + encodeURIComponent(w.address);
@@ -14682,6 +14691,13 @@ function wlibCollectFromHelius(holders, ca, coin) {
     if (h.address && wlibAdd(h.address, coin || (ca ? ca.slice(0, 8) : 'Unknown'), ca || '', h.pct, 'Cabal Briefing')) added++;
   });
   if (added > 0) wlibSave();
+  wlibRender();
+}
+function wlibCollectDev(devAddress, ca, coin) {
+  if (!devAddress || devAddress.length < 30) return;
+  wlibLoad();
+  var added = wlibAdd(devAddress, coin || (ca ? ca.slice(0, 8) : 'Unknown'), ca || '', null, 'Dev');
+  if (added) wlibSave();
   wlibRender();
 }
 
