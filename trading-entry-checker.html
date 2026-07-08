@@ -3209,9 +3209,6 @@ async function fetchFromCA(ca) {
       if (rugData.creator) {
         fetched.devAddress = rugData.creator;
         if (typeof qecSetDevAddress === 'function') qecSetDevAddress(rugData.creator);
-        /* ── Wallet Library: collect dev wallet ── */
-        var _wlibDevCoin = (el('fCoin') && el('fCoin').value.trim()) || ca.slice(0, 8);
-        wlibCollectDev(rugData.creator, ca, _wlibDevCoin);
         var creatorH = topHolders.find(function(h) { return h.address === rugData.creator; });
         if (creatorH) {
           var cpct = creatorH.pct || (creatorH.percent / 100) || 0;
@@ -11620,6 +11617,13 @@ function fillFormFromData(data, mergeOnly) {
 function updateRickbotLinks() {
   var ca       = (el('fCA').value || '').trim();
   var devAddr  = (el('rlDevInput') ? el('rlDevInput').value.trim() : '');
+  /* ── Wallet Library: rlDevInput is the single authoritative source for dev
+     wallet collection. Collect whenever the field holds a valid-looking
+     Solana address and a CA is present (handles both auto-fill and manual paste). */
+  if (devAddr.length >= 32 && ca.length >= 32) {
+    var _wlibRLCoin = (el('fCoin') ? el('fCoin').value.trim() : '') || ca.slice(0, 8);
+    wlibCollectDev(devAddr, ca, _wlibRLCoin);
+  }
   var twitterU = (el('rlTwitter')  ? el('rlTwitter').value.trim()  : '');
   var moniU    = (el('rlMoni')     ? el('rlMoni').value.trim()     : '');
   var base = 'https://t.me/RickBurpBot?start=';
@@ -13461,12 +13465,9 @@ async function qecFetchTopHolders() {
       el('qec_top10').value = retail10Pct.toFixed(2);
       /* Also update main app Top10 field */
       if (el('fT10') && !el('fT10').value) el('fT10').value = retail10Pct.toFixed(2);
-      /* Capture dev address from RugCheck response */
+      /* Capture dev address from RugCheck response — funnels through rlDevInput */
       if (data.creator) {
         qecSetDevAddress(data.creator);
-        /* ── Wallet Library: collect dev wallet ── */
-        var _wlibQecDevCoin = (el('fCoin') && el('fCoin').value.trim()) || ca.slice(0, 8);
-        wlibCollectDev(data.creator, ca, _wlibQecDevCoin);
       }
       qecRenderHolderBreakdown(all.filter(function(h){ return h.isSystem; }), retail10);
       /* ── Wallet Library: auto-collect retail holders ── */
@@ -14047,6 +14048,15 @@ function qecSetDevAddress(address, devDeployed, devBonded) {
   window._devAddress  = address;
   if (devDeployed !== undefined) window._devDeployed = devDeployed;
   if (devBonded   !== undefined) window._devBonded   = devBonded;
+  /* ── rlDevInput is the primary source for Wallet Library dev collection ──
+     Always overwrite with the API-sourced address — it is authoritative.
+     This prevents stale dev addresses from a previous token being collected
+     against a new CA when the user starts a fresh scan without clearing the field. */
+  var rlDev = el('rlDevInput');
+  if (rlDev) {
+    rlDev.value = address;
+    if (typeof updateRickbotLinks === 'function') updateRickbotLinks();
+  }
   var panel = el('devRepPanel');
   if (!panel) return;
   panel.classList.add('visible');
@@ -15130,15 +15140,23 @@ async function wliHeliusEnrich(profile) {
 
   try {
     var endpoint = 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(heliusKey);
-    var resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 'wli-enrich', method: 'getSignaturesForAddress',
-        params: [ profile.address, { limit: 10 } ]
-      }),
-      signal: AbortSignal.timeout(8000)
-    });
+    /* AbortController timeout — compatible with all modern browsers */
+    var controller = new AbortController();
+    var _wliTimeout = setTimeout(function(){ controller.abort(); }, 8000);
+    var resp;
+    try {
+      resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 'wli-enrich', method: 'getSignaturesForAddress',
+          params: [ profile.address, { limit: 10 } ]
+        }),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(_wliTimeout);
+    }
     if (!resp.ok) return profile;
     var data = await resp.json();
     var sigs = Array.isArray(data.result) ? data.result : [];

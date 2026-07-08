@@ -9,6 +9,9 @@ description: Quick Scan reputation engine added to Wallet Library — scoring, t
 - All JS functions prefixed `wli*`; filter/sort helpers update `_wllib*` state vars and call `wlibRender()`
 - `wlibRender()` now calls `wlibGetFiltered()` instead of rendering `_walletLibrary` directly — do NOT bypass this
 
+## Dev wallet collection — single source of truth: rlDevInput
+`wlibCollectDev` is called only from `updateRickbotLinks()`. Every dev address path (RugCheck creator, QEC creator, bot parse, manual paste) routes through `qecSetDevAddress()` which always overwrites `rlDevInput.value` then calls `updateRickbotLinks()`. This prevents stale dev addresses from a previous token being associated with a new CA.
+
 ## CRITICAL: Source labels are neutral — do NOT use as risk signals
 - `QEC` = top holders via RugCheck (neutral observation)
 - `Top Holders` = top holders via Helius (neutral observation — previously mislabeled "Cabal Briefing")
