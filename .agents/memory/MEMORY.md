@@ -4,3 +4,4 @@
 - [Structure Diagnostics State](structure-diagnostics-state.md) — Extended globals (_tecGtCandleCount, _tecGtTimeRange, _tecGtResolution, _tecGtTokenAddr, _tecGtPoolAddr, _tecGtPairAddr, _tecGtError, _tecEngineReason) stored during fetchData; read in _strucDiag IIFE inside buildEntryBriefingHTML.
 - [Social Provider Control System](social-provider-control.md) — Three scan modes, 5 Apify actors, per-provider toggles, monthly budget tracking, cost estimation, all persisted in localStorage.
 - [Entry Classification Layer](entry-classification-layer.md) — computeStructureReliability() sits above the Structure Engine; scores 0-100; OHLCV status uses candleCount>0 not engineMode; retraces use sa.higherLows.
+- [Wallet Intelligence Engine](wallet-intelligence-engine.md) — Quick Scan reputation engine on Wallet Library; scoring/tags/filter/sort; escH()/escA() for XSS safety; Deep Investigation not yet built.

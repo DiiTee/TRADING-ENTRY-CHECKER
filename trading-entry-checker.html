@@ -561,6 +561,70 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .wlib-del:hover { color:var(--skip); background:rgba(255,61,113,0.12); }
 @keyframes wlib-flash { 0%{background:rgba(0,212,255,0.18);} 100%{background:transparent;} }
 .wlib-new td { animation:wlib-flash 1.4s ease-out; }
+/* ── Wallet Intelligence Engine ── */
+.wlib-intel-bar { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:7px 0 5px; border-top:1px solid rgba(255,255,255,0.05); margin-top:6px; }
+.wlib-intel-bar label { font-size:0.58rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; }
+.wlib-intel-bar select { background:var(--bg-input); border:1px solid var(--border); border-radius:5px; color:var(--text-secondary); font-size:0.62rem; padding:3px 7px; outline:none; cursor:pointer; }
+.wlib-intel-bar select:focus { border-color:var(--accent-cyan); }
+.wlib-intel-sep { flex:1; min-width:8px; }
+.wlib-analyze-btn { font-size:0.61rem; padding:4px 10px; border-radius:5px; border:1px solid rgba(0,212,255,0.35); background:rgba(0,212,255,0.08); color:var(--accent-cyan); cursor:pointer; font-weight:700; letter-spacing:0.3px; transition:all 0.15s; white-space:nowrap; line-height:1.4; }
+.wlib-analyze-btn:hover:not(:disabled) { background:rgba(0,212,255,0.18); border-color:var(--accent-cyan); }
+.wlib-analyze-btn:disabled { opacity:0.38; cursor:not-allowed; }
+.wlib-analyze-btn.token-btn { border-color:rgba(0,255,136,0.35); background:rgba(0,255,136,0.07); color:var(--safe); }
+.wlib-analyze-btn.token-btn:hover:not(:disabled) { background:rgba(0,255,136,0.17); border-color:var(--safe); }
+/* Score badges */
+.wlib-score { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:18px; border-radius:4px; font-size:0.60rem; font-weight:800; padding:0 5px; white-space:nowrap; }
+.wlib-score.s-elite  { background:rgba(0,255,136,0.14); color:#00ff88; border:1px solid rgba(0,255,136,0.28); }
+.wlib-score.s-strong { background:rgba(0,212,255,0.12); color:var(--accent-cyan); border:1px solid rgba(0,212,255,0.28); }
+.wlib-score.s-good   { background:rgba(80,200,120,0.12); color:#55cc88; border:1px solid rgba(80,200,120,0.28); }
+.wlib-score.s-neutral{ background:rgba(150,155,185,0.10); color:#8a9bb8; border:1px solid rgba(150,155,185,0.18); }
+.wlib-score.s-risky  { background:rgba(255,214,0,0.10); color:var(--caution); border:1px solid rgba(255,214,0,0.28); }
+.wlib-score.s-avoid  { background:rgba(255,61,113,0.11); color:var(--skip); border:1px solid rgba(255,61,113,0.28); }
+.wlib-score.s-none   { background:rgba(255,255,255,0.04); color:var(--text-muted); border:1px solid rgba(255,255,255,0.07); font-size:0.55rem; }
+/* Tag chips */
+.wlib-tag { display:inline-block; font-size:0.50rem; padding:1px 5px; border-radius:3px; font-weight:700; margin:1px 1px 0 0; white-space:nowrap; letter-spacing:0.2px; line-height:1.6; }
+.wlib-tag.tp { background:rgba(0,255,136,0.11); color:#00cc66; }
+.wlib-tag.tn { background:rgba(140,145,175,0.12); color:#8890b5; }
+.wlib-tag.tr { background:rgba(255,61,113,0.11); color:#ff6688; }
+.wlib-tag.tc { background:rgba(255,165,0,0.10); color:#cc8800; }
+/* Times-seen cell */
+.wlib-seen { font-size:0.62rem; color:var(--text-secondary); font-weight:700; text-align:center; }
+/* Checkbox column */
+.wlib-cb-col { width:20px; text-align:center; padding-left:4px!important; padding-right:2px!important; }
+.wlib-cb { accent-color:var(--accent-cyan); cursor:pointer; width:12px; height:12px; }
+/* Progress */
+.wlib-progress-wrap { padding:7px 0 3px; }
+.wlib-progress-label { font-size:0.60rem; color:var(--text-muted); margin-bottom:4px; }
+.wlib-progress-track { height:3px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
+.wlib-progress-fill { height:100%; background:var(--gradient); border-radius:2px; transition:width 0.25s ease; }
+/* Intelligence results panel */
+.wlib-results-panel { margin-top:10px; border-top:1px solid rgba(255,255,255,0.06); padding-top:10px; }
+.wlib-results-hdr { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:0.60rem; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted); }
+.wlib-results-hdr span { color:var(--accent-cyan); }
+.wlib-results-hdr button { margin-left:auto; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.68rem; padding:2px 4px; border-radius:3px; }
+.wlib-results-hdr button:hover { color:var(--skip); }
+.wlib-rank-list { display:flex; flex-direction:column; gap:5px; }
+.wlib-rank-card { background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:8px 10px; display:flex; align-items:flex-start; gap:9px; border-left:3px solid transparent; }
+.wlib-rank-card.re  { border-left-color:rgba(0,255,136,0.5); }
+.wlib-rank-card.rs  { border-left-color:rgba(0,212,255,0.45); }
+.wlib-rank-card.rg  { border-left-color:rgba(80,200,120,0.4); }
+.wlib-rank-card.rr  { border-left-color:rgba(255,214,0,0.5); }
+.wlib-rank-card.rav { border-left-color:rgba(255,61,113,0.5); }
+.wlib-rank-num { font-size:0.56rem; color:var(--text-muted); font-weight:700; min-width:16px; padding-top:3px; }
+.wlib-rank-score-blk { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:36px; }
+.wlib-rank-score-val { font-size:0.90rem; font-weight:800; line-height:1; }
+.wlib-rank-score-lbl { font-size:0.48rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); }
+.wlib-rank-body { flex:1; min-width:0; }
+.wlib-rank-addr { font-family:monospace; font-size:0.60rem; color:var(--text-secondary); text-decoration:none; display:block; margin-bottom:3px; }
+.wlib-rank-addr:hover { color:var(--accent-cyan); text-decoration:underline; }
+.wlib-rank-tags { display:flex; flex-wrap:wrap; gap:2px; margin-bottom:3px; }
+.wlib-rank-sigs { font-size:0.57rem; line-height:1.55; }
+.wlib-rank-sigs .pos { color:rgba(0,220,110,0.85); }
+.wlib-rank-sigs .neg { color:rgba(255,100,110,0.85); }
+.wlib-rank-meta { font-size:0.54rem; color:var(--text-muted); margin-top:3px; }
+.wlib-rank-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0; padding-top:2px; }
+.wlib-ext-link { font-size:0.55rem; padding:2px 7px; border-radius:4px; border:1px solid rgba(255,255,255,0.09); background:none; color:var(--text-muted); text-decoration:none; white-space:nowrap; transition:all 0.12s; }
+.wlib-ext-link:hover { color:var(--accent-cyan); border-color:rgba(0,212,255,0.35); }
 /* ── Quick-Add Modal ── */
 .qa-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:9998; display:flex; align-items:center; justify-content:center; padding:20px; }
 .qa-modal   { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px 22px; width:100%; max-width:420px; box-shadow:0 24px 64px rgba(0,0,0,0.7); }
@@ -1714,6 +1778,56 @@ p, span, td, th {
         </label>
         <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="wlibClearAll()"><i class="fa-solid fa-trash"></i> Clear All</button>
       </div>
+      <!-- Intelligence Bar -->
+      <div class="wlib-intel-bar">
+        <label>Sort:</label>
+        <select onchange="wlibSetSort(this.value)" id="wlibSortSel">
+          <option value="dateAdded">Date Added</option>
+          <option value="score">Reputation Score</option>
+          <option value="timesSeen">Times Seen</option>
+          <option value="holdingPct">Holding %</option>
+        </select>
+        <label style="margin-left:4px;">Filter:</label>
+        <select onchange="wlibSetFilterScore(this.value)" id="wlibFilterScoreSel">
+          <option value="">All Tiers</option>
+          <option value="elite">Elite (90+)</option>
+          <option value="strong">Strong (75–89)</option>
+          <option value="good">Good (60–74)</option>
+          <option value="neutral">Neutral (40–59)</option>
+          <option value="risky">Risky (20–39)</option>
+          <option value="avoid">Avoid (0–19)</option>
+        </select>
+        <select onchange="wlibSetFilterTag(this.value)" id="wlibFilterTagSel">
+          <option value="">All Tags</option>
+          <optgroup label="Positive">
+            <option value="Smart Money">Smart Money</option>
+            <option value="Early Mover">Early Mover</option>
+            <option value="High Conviction Holder">High Conviction Holder</option>
+            <option value="Profitable Trader">Profitable Trader</option>
+            <option value="Consistent Winner">Consistent Winner</option>
+          </optgroup>
+          <optgroup label="Risk">
+            <option value="Probable Insider">Probable Insider</option>
+            <option value="Suspected Cabal">Suspected Cabal</option>
+            <option value="Rug Risk">Rug Risk</option>
+            <option value="Serial Dumper">Serial Dumper</option>
+          </optgroup>
+          <optgroup label="Neutral">
+            <option value="Neutral">Neutral</option>
+            <option value="Limited History">Limited History</option>
+            <option value="Developer Association">Developer Association</option>
+          </optgroup>
+        </select>
+        <div class="wlib-intel-sep"></div>
+        <button class="wlib-analyze-btn token-btn" onclick="wliAnalyzeTokenUI()" title="Analyze wallets from the currently loaded token"><i class="fa-solid fa-crosshairs"></i> Analyze Token Wallets</button>
+        <button class="wlib-analyze-btn" onclick="wliAnalyzeSelected()" title="Analyze checked wallets"><i class="fa-solid fa-check-square"></i> Analyze Selected</button>
+        <button class="wlib-analyze-btn" onclick="wliAnalyzeAll()" title="Analyze every unique address in the library"><i class="fa-solid fa-brain"></i> Analyze All</button>
+      </div>
+      <!-- Progress indicator -->
+      <div id="wlibProgress" class="wlib-progress-wrap" style="display:none;">
+        <div class="wlib-progress-label" id="wlibProgressLabel">Analyzing…</div>
+        <div class="wlib-progress-track"><div class="wlib-progress-fill" id="wlibProgressFill" style="width:0%"></div></div>
+      </div>
       <div id="wlibEmpty" class="wl-empty">
         <i class="fa-solid fa-address-book"></i>
         No wallets collected yet.<br>Run a <strong>QEC Smart Filter</strong> scan or fetch <strong>Cabal Briefing</strong> data to auto-populate.
@@ -1722,11 +1836,15 @@ p, span, td, th {
         <table class="wlib-table">
           <thead>
             <tr>
+              <th class="wlib-cb-col"><input type="checkbox" class="wlib-cb" title="Select all" onchange="wlibSelectAll(this.checked)"></th>
               <th>#</th>
               <th>Wallet</th>
               <th>Coin</th>
               <th>Source</th>
               <th style="text-align:right;">Holding %</th>
+              <th style="text-align:center;">Score</th>
+              <th>Tags</th>
+              <th style="text-align:center;" title="Times this wallet appeared across different tokens">Seen</th>
               <th>Added</th>
               <th></th>
             </tr>
@@ -1734,6 +1852,8 @@ p, span, td, th {
           <tbody id="wlibTableBody"></tbody>
         </table>
       </div>
+      <!-- Intelligence Results Panel -->
+      <div id="wlibResultsPanel" class="wlib-results-panel" style="display:none;"></div>
     </div>
   </div>
 
@@ -14529,7 +14649,7 @@ function wlibAdd(address, coin, ca, holdingPct, source) {
   return true;
 }
 
-/* ── Render the table from in-memory _walletLibrary (no reload from storage) ── */
+/* ── Render the table from in-memory _walletLibrary (uses filter/sort state) ── */
 function wlibRender() {
   wlibUpdateCount();
   var emptyEl = el('wlibEmpty');
@@ -14539,23 +14659,54 @@ function wlibRender() {
   if (_walletLibrary.length === 0) {
     emptyEl.style.display = ''; wrapEl.style.display = 'none';
   } else {
-    emptyEl.style.display = 'none'; wrapEl.style.display = '';
-    tbodyEl.innerHTML = _walletLibrary.map(function(w, i) {
-      var short = w.address.length >= 10 ? w.address.slice(0,6) + '\u2026' + w.address.slice(-4) : w.address;
-      var srcClass = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : w.source === 'Dev' ? 'wlib-src wlib-src-dev' : 'wlib-src wlib-src-cabal';
-      var dateStr = '';
-      try { dateStr = new Date(w.dateAdded).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(e) {}
-      var href = 'https://solscan.io/account/' + encodeURIComponent(w.address);
-      return '<tr id="wlibRow_' + w.id + '">' +
-        '<td style="color:var(--text-muted);font-size:0.60rem;">' + (i + 1) + '</td>' +
-        '<td><a class="wlib-addr" href="' + href + '" target="_blank" title="' + w.address + ' — click to open Solscan">' + short + '</a></td>' +
-        '<td><span class="wlib-coin" title="' + (w.coin || '') + ' · ' + (w.ca || '') + '">' + (w.coin || '—') + '</span></td>' +
-        '<td><span class="' + srcClass + '">' + w.source + '</span></td>' +
-        '<td class="wlib-pct">' + (w.holdingPct > 0 ? w.holdingPct.toFixed(2) + '%' : '—') + '</td>' +
-        '<td style="color:var(--text-muted);font-size:0.60rem;white-space:nowrap;">' + dateStr + '</td>' +
-        '<td><button class="wlib-del" onclick="wlibDelete(\'' + w.id + '\')" title="Remove from library"><i class="fa-solid fa-xmark"></i></button></td>' +
-      '</tr>';
-    }).join('');
+    var list = wlibGetFiltered();
+    if (list.length === 0) {
+      /* Library has wallets but active filters exclude all — show distinct message */
+      emptyEl.innerHTML = '<i class="fa-solid fa-filter"></i><br>No wallets match the active filter.<br><span style="font-size:0.62rem;">Change the filter or sort options above to see results.</span>';
+      emptyEl.style.display = ''; wrapEl.style.display = 'none';
+    } else {
+      /* Reset empty state text in case it was set to the filter-message above */
+      emptyEl.innerHTML = '<i class="fa-solid fa-address-book"></i><br>No wallets collected yet.<br>Run a <strong>QEC Smart Filter</strong> scan or fetch <strong>Cabal Briefing</strong> data to auto-populate.';
+      emptyEl.style.display = 'none'; wrapEl.style.display = '';
+      tbodyEl.innerHTML = list.map(function(w, i) {
+        var addrSafe  = escA(w.address);
+        var coinSafe  = escH(w.coin || '—');
+        var coinTitle = escA((w.coin || '') + ' · ' + (w.ca || ''));
+        var srcCls    = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : w.source === 'Dev' ? 'wlib-src wlib-src-dev' : 'wlib-src wlib-src-cabal';
+        var srcSafe   = escH(w.source);
+        var short     = w.address.length >= 10 ? escH(w.address.slice(0,6)) + '\u2026' + escH(w.address.slice(-4)) : escH(w.address);
+        var dateStr   = '';
+        try { dateStr = new Date(w.dateAdded).toLocaleDateString(undefined, { month:'short', day:'numeric' }); } catch(e) {}
+        var href      = 'https://solscan.io/account/' + encodeURIComponent(w.address);
+        /* Intelligence columns */
+        var intel = wliGet(w.address);
+        var scoreHtml, tagsHtml, seenHtml;
+        if (intel) {
+          var t = wliScoreTier(intel.reputationScore);
+          var confSafe = escA(intel.confidence);
+          scoreHtml = '<td style="text-align:center;"><span class="wlib-score s-' + t.cls + '" title="' + escA(t.label) + ' — Confidence: ' + confSafe + '">' + Number(intel.reputationScore) + '</span></td>';
+          tagsHtml  = '<td>' + (intel.tags || []).map(function(tag){
+            return '<span class="wlib-tag ' + wliTagCls(tag) + '">' + escH(tag) + '</span>';
+          }).join('') + '</td>';
+          seenHtml  = '<td class="wlib-seen">' + Number(intel.timesSeen) + '</td>';
+        } else {
+          scoreHtml = '<td style="text-align:center;"><span class="wlib-score s-none" title="Not yet analyzed">—</span></td>';
+          tagsHtml  = '<td></td>';
+          seenHtml  = '<td class="wlib-seen" style="color:var(--text-muted);">—</td>';
+        }
+        return '<tr id="wlibRow_' + escA(w.id) + '">' +
+          '<td class="wlib-cb-col"><input type="checkbox" class="wlib-cb wlib-row-cb" data-address="' + addrSafe + '"></td>' +
+          '<td style="color:var(--text-muted);font-size:0.60rem;">' + (i + 1) + '</td>' +
+          '<td><a class="wlib-addr" href="' + href + '" target="_blank" title="' + addrSafe + ' — click to open Solscan">' + short + '</a></td>' +
+          '<td><span class="wlib-coin" title="' + coinTitle + '">' + coinSafe + '</span></td>' +
+          '<td><span class="' + srcCls + '">' + srcSafe + '</span></td>' +
+          '<td class="wlib-pct">' + (w.holdingPct > 0 ? w.holdingPct.toFixed(2) + '%' : '—') + '</td>' +
+          scoreHtml + tagsHtml + seenHtml +
+          '<td style="color:var(--text-muted);font-size:0.60rem;white-space:nowrap;">' + escH(dateStr) + '</td>' +
+          '<td><button class="wlib-del" onclick="wlibDelete(\'' + escA(w.id) + '\')" title="Remove from library"><i class="fa-solid fa-xmark"></i></button></td>' +
+        '</tr>';
+      }).join('');
+    }
   }
   /* If the panel is open, let it grow to fit content */
   var bodyEl = el('walletLibBody');
@@ -14700,6 +14851,451 @@ function wlibCollectDev(devAddress, ca, coin) {
   if (added) wlibSave();
   wlibRender();
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   WALLET INTELLIGENCE ENGINE
+   Reputation profiles stored in localStorage key 'tec_wallet_intel'.
+   Quick Scan operates entirely on existing Wallet Library data —
+   no external API calls required. Deep Investigation reserved for
+   future on-demand use with explicit user consent.
+
+   Profile schema per address (keyed by address.toLowerCase()):
+   { address, reputationScore, confidence, tags, positiveSignals,
+     riskSignals, timesSeen, uniqueTokens[], devCount, cabCount,
+     qecCount, avgHoldingPct, firstSeen, lastSeen, lastAnalyzed,
+     analysisMode }
+   ═══════════════════════════════════════════════════════════════ */
+var WLIB_INTEL_KEY   = 'tec_wallet_intel';
+var _wlibIntel       = {};     /* address.toLowerCase() → profile */
+var _wlibSortBy      = 'dateAdded';
+var _wlibFilterScore = '';
+var _wlibFilterTag   = '';
+var _wlibAnalyzing   = false;
+
+/* ── HTML escape helpers (prevent stored XSS from imported/external data) ── */
+function escH(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+/* Escape for use inside an HTML attribute value (double-quoted) */
+function escA(s) { return escH(s); }
+
+/* ── Persistence ── */
+function wliLoad() {
+  try { _wlibIntel = JSON.parse(localStorage.getItem(WLIB_INTEL_KEY) || '{}'); } catch(e) { _wlibIntel = {}; }
+}
+function wliSave() {
+  try { localStorage.setItem(WLIB_INTEL_KEY, JSON.stringify(_wlibIntel)); } catch(e) {}
+}
+function wliGet(address) {
+  if (!address) return null;
+  return _wlibIntel[(address).toLowerCase()] || null;
+}
+
+/* ── Score tier ── */
+function wliScoreTier(score) {
+  if (score === null || score === undefined) return { tier:'none', label:'—', cls:'none', color:'#8a9bb0' };
+  if (score >= 90) return { tier:'elite',   label:'Elite',   cls:'elite',   color:'#00ff88' };
+  if (score >= 75) return { tier:'strong',  label:'Strong',  cls:'strong',  color:'#00d4ff' };
+  if (score >= 60) return { tier:'good',    label:'Good',    cls:'good',    color:'#55cc88' };
+  if (score >= 40) return { tier:'neutral', label:'Neutral', cls:'neutral', color:'#8a9bb8' };
+  if (score >= 20) return { tier:'risky',   label:'Risky',   cls:'risky',   color:'#ffd600' };
+  return                  { tier:'avoid',   label:'Avoid',   cls:'avoid',   color:'#ff3d71' };
+}
+
+/* ── Tag CSS class helper ── */
+function wliTagCls(tag) {
+  var pos = ['Smart Money','Early Mover','Profitable Trader','High Conviction Holder','Quality Accumulator','Consistent Winner'];
+  var risk = ['Probable Insider','Suspected Cabal','Rug Risk','Serial Dumper','Pump-and-Dump Participant','Coordinated Trading','Wash Trading Suspected'];
+  var caut = ['Developer Association'];
+  if (pos.indexOf(tag)  >= 0) return 'tp';
+  if (risk.indexOf(tag) >= 0) return 'tr';
+  if (caut.indexOf(tag) >= 0) return 'tc';
+  return 'tn';
+}
+
+/* ── Rank card CSS class helper ── */
+function wliRankCls(tier) {
+  var map = { elite:'re', strong:'rs', good:'rg', risky:'rr', avoid:'rav' };
+  return map[tier] || '';
+}
+
+/* ── Core analysis — Quick Scan (no external API calls) ──
+   Computes a reputation profile purely from Wallet Library observations.
+   Never fabricates data — unknown fields remain null.                    ── */
+function wliAnalyzeAddress(address) {
+  var addrLow = address.toLowerCase();
+  var entries = _walletLibrary.filter(function(w){ return w.address.toLowerCase() === addrLow; });
+  if (entries.length === 0) return null;
+
+  /* Aggregate observations */
+  var caSet = {}, uniqueCAs = [];
+  var devCount = 0, cabCount = 0, qecCount = 0;
+  var totalPct = 0, pctCount = 0;
+  var firstSeen = null, lastSeen = null;
+
+  entries.forEach(function(e) {
+    var ca = (e.ca || '').toLowerCase();
+    if (ca && !caSet[ca]) { caSet[ca] = true; uniqueCAs.push(e.ca || ca); }
+    var src = (e.source || '').toLowerCase();
+    if (src === 'dev') devCount++;
+    else if (src.indexOf('cabal') >= 0) cabCount++;
+    else qecCount++;
+    if (typeof e.holdingPct === 'number' && e.holdingPct > 0) { totalPct += e.holdingPct; pctCount++; }
+    var d = e.dateAdded ? new Date(e.dateAdded) : null;
+    if (d && !isNaN(d.getTime())) {
+      if (!firstSeen || d < firstSeen) firstSeen = d;
+      if (!lastSeen  || d > lastSeen)  lastSeen  = d;
+    }
+  });
+
+  var timesSeen   = uniqueCAs.length;
+  var avgPct      = pctCount > 0 ? totalPct / pctCount : 0;
+
+  /* ── Scoring ── */
+  var score = 50;
+
+  /* Appearance bonus: more cross-token data → higher confidence in any pattern */
+  score += Math.min(timesSeen * 3, 18);
+
+  /* Cabal appearances are a strong risk signal */
+  score -= cabCount * 13;
+  score  = Math.max(score, 3);
+
+  /* Conviction bonus for meaningful holding positions */
+  if      (avgPct >= 3.0) score += 7;
+  else if (avgPct >= 1.5) score += 3;
+
+  /* Pure dev wallet (no retail history) — slight risk due to limited signal */
+  if (devCount > 0 && qecCount === 0 && cabCount === 0) score -= 5;
+
+  /* Developer active in cabal-flagged tokens — elevated risk */
+  if (devCount > 0 && cabCount > 0) score -= 12;
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  /* ── Confidence ── */
+  var confidence;
+  if      (timesSeen >= 5) confidence = 'High';
+  else if (timesSeen >= 2) confidence = 'Medium';
+  else                     confidence = 'Low';
+  /* Downgrade when mixed signals with few observations */
+  if (timesSeen < 3 && (devCount > 0 || cabCount > 0)) confidence = 'Low';
+
+  /* ── Tags & signals ── */
+  var tags = [], posSignals = [], riskSignals = [];
+
+  if (timesSeen === 1) {
+    /* Single observation — cannot establish a behavioral pattern */
+    tags.push('Limited History');
+  } else {
+    /* Cabal flags — strongest risk signal */
+    if (cabCount >= 3) {
+      tags.push('Suspected Cabal');
+      riskSignals.push('Flagged by Cabal Briefing across ' + cabCount + ' separate tokens');
+    } else if (cabCount >= 1) {
+      tags.push('Rug Risk');
+      riskSignals.push('Appeared in Cabal Briefing on ' + cabCount + ' token' + (cabCount > 1 ? 's' : ''));
+    }
+
+    /* Developer associations */
+    if (devCount >= 2 && qecCount >= 2) {
+      tags.push('Probable Insider');
+      riskSignals.push('Developer on ' + devCount + ' projects AND appears as retail holder in others');
+    } else if (devCount >= 1) {
+      tags.push('Developer Association');
+      riskSignals.push('Associated with development on ' + devCount + ' project' + (devCount > 1 ? 's' : ''));
+    }
+
+    /* Positive retail holder patterns */
+    if (qecCount >= 4 && cabCount === 0 && devCount === 0) {
+      if (avgPct >= 2.0) {
+        tags.push('High Conviction Holder');
+        posSignals.push('Consistently holds significant positions (avg ' + avgPct.toFixed(1) + '%)');
+      }
+      tags.push('Early Mover');
+      posSignals.push('Active retail participant across ' + qecCount + ' scanned token launches');
+    } else if (qecCount >= 2 && cabCount === 0 && devCount === 0) {
+      if (avgPct >= 1.5) {
+        tags.push('High Conviction Holder');
+        posSignals.push('Meaningful positions across multiple tokens (avg ' + avgPct.toFixed(1) + '%)');
+      } else {
+        tags.push('Neutral');
+      }
+    } else if (qecCount >= 1 && cabCount === 0 && devCount === 0) {
+      tags.push('Neutral');
+    }
+  }
+
+  if (tags.length === 0) tags.push('Inconclusive');
+
+  /* Cross-token intelligence signals */
+  if (timesSeen >= 3) {
+    posSignals.push('Identified across ' + timesSeen + ' scanned tokens — cross-token pattern detectable');
+  }
+  if (avgPct >= 1.5 && pctCount >= 2) {
+    posSignals.push('Average holding of ' + avgPct.toFixed(2) + '% across ' + pctCount + ' observation' + (pctCount > 1 ? 's' : ''));
+  }
+
+  return {
+    address:         address,
+    reputationScore: score,
+    confidence:      confidence,
+    tags:            tags,
+    positiveSignals: posSignals,
+    riskSignals:     riskSignals,
+    timesSeen:       timesSeen,
+    uniqueTokens:    uniqueCAs,
+    devCount:        devCount,
+    cabCount:        cabCount,
+    qecCount:        qecCount,
+    avgHoldingPct:   Math.round(avgPct * 100) / 100,
+    firstSeen:       firstSeen ? firstSeen.toISOString() : null,
+    lastSeen:        lastSeen  ? lastSeen.toISOString()  : null,
+    lastAnalyzed:    new Date().toISOString(),
+    analysisMode:    'quick'
+  };
+}
+
+/* ── Internal scan loop (async so UI stays responsive) ── */
+async function wliRunScan(addresses, onProgress) {
+  var results = [];
+  for (var i = 0; i < addresses.length; i++) {
+    var profile = wliAnalyzeAddress(addresses[i]);
+    if (profile) {
+      _wlibIntel[addresses[i].toLowerCase()] = profile;
+      results.push(profile);
+    }
+    if (onProgress) onProgress(i + 1, addresses.length);
+    await new Promise(function(r){ setTimeout(r, 0); }); /* yield to browser */
+  }
+  wliSave();
+  return results;
+}
+
+/* ── Filter / sort helpers used by wlibRender ── */
+function wlibGetFiltered() {
+  var list = _walletLibrary.slice();
+
+  /* Sort */
+  list.sort(function(a, b) {
+    if (_wlibSortBy === 'score') {
+      var pa = wliGet(a.address), pb = wliGet(b.address);
+      var sa = pa ? pa.reputationScore : -1, sb = pb ? pb.reputationScore : -1;
+      return sb - sa;
+    }
+    if (_wlibSortBy === 'timesSeen') {
+      var pa = wliGet(a.address), pb = wliGet(b.address);
+      var sa = pa ? pa.timesSeen : 0, sb = pb ? pb.timesSeen : 0;
+      return sb - sa;
+    }
+    if (_wlibSortBy === 'holdingPct') {
+      return (b.holdingPct || 0) - (a.holdingPct || 0);
+    }
+    /* default: newest first */
+    return new Date(b.dateAdded) - new Date(a.dateAdded);
+  });
+
+  /* Score tier filter */
+  if (_wlibFilterScore) {
+    list = list.filter(function(w) {
+      var p = wliGet(w.address);
+      if (!p) return false;
+      return wliScoreTier(p.reputationScore).tier === _wlibFilterScore;
+    });
+  }
+
+  /* Tag filter */
+  if (_wlibFilterTag) {
+    list = list.filter(function(w) {
+      var p = wliGet(w.address);
+      if (!p) return false;
+      return p.tags && p.tags.indexOf(_wlibFilterTag) >= 0;
+    });
+  }
+
+  return list;
+}
+
+/* ── Deduplicate addresses from a wallet array ── */
+function wlibUniqueAddresses(wallets) {
+  var seen = {}, out = [];
+  (wallets || _walletLibrary).forEach(function(w) {
+    var k = w.address.toLowerCase();
+    if (!seen[k]) { seen[k] = true; out.push(w.address); }
+  });
+  return out;
+}
+
+/* ── Sort / filter change handlers (bound to dropdown <select> elements) ── */
+function wlibSetSort(val)        { _wlibSortBy      = val; wlibRender(); }
+function wlibSetFilterScore(val) { _wlibFilterScore  = val; wlibRender(); }
+function wlibSetFilterTag(val)   { _wlibFilterTag    = val; wlibRender(); }
+function wlibSelectAll(checked) {
+  document.querySelectorAll('.wlib-row-cb').forEach(function(cb){ cb.checked = checked; });
+}
+
+/* ── Action: Analyze Selected (checked rows) ── */
+async function wliAnalyzeSelected() {
+  var checks = document.querySelectorAll('.wlib-row-cb:checked');
+  if (checks.length === 0) { showToast('Check at least one wallet row first', 'error'); return; }
+  var seen = {}, addresses = [];
+  checks.forEach(function(cb) {
+    var addr = cb.dataset.address;
+    if (addr && !seen[addr.toLowerCase()]) { seen[addr.toLowerCase()] = true; addresses.push(addr); }
+  });
+  await wliRunBatch(addresses, 'Analyzing ' + addresses.length + ' selected wallet' + (addresses.length > 1 ? 's' : ''));
+}
+
+/* ── Action: Analyze current token's wallets ── */
+async function wliAnalyzeTokenUI() {
+  var caInput = el('fCA');
+  var ca = caInput ? (caInput.value || '').trim() : '';
+  if (!ca) { showToast('Load a token first (enter CA and click Fetch Data)', 'error'); return; }
+  wlibLoad();
+  var tokenWallets = _walletLibrary.filter(function(w){ return (w.ca || '').toLowerCase() === ca.toLowerCase(); });
+  var addresses = wlibUniqueAddresses(tokenWallets);
+  if (addresses.length === 0) { showToast('No wallets collected for this token yet', 'error'); return; }
+  await wliRunBatch(addresses, 'Analyzing ' + addresses.length + ' wallet' + (addresses.length > 1 ? 's' : '') + ' from token');
+}
+
+/* ── Action: Analyze all wallets in library ── */
+async function wliAnalyzeAll() {
+  wlibLoad();
+  var addresses = wlibUniqueAddresses();
+  if (addresses.length === 0) { showToast('Wallet Library is empty', 'error'); return; }
+  await wliRunBatch(addresses, 'Analyzing all ' + addresses.length + ' unique wallet' + (addresses.length > 1 ? 's' : ''));
+}
+
+/* ── Core batch runner with progress UI ── */
+async function wliRunBatch(addresses, label) {
+  if (_wlibAnalyzing) { showToast('Analysis already running — please wait', 'error'); return; }
+  _wlibAnalyzing = true;
+  wliLoad(); /* refresh intel cache */
+
+  var progWrap  = el('wlibProgress');
+  var progFill  = el('wlibProgressFill');
+  var progLabel = el('wlibProgressLabel');
+  if (progWrap)  progWrap.style.display  = '';
+  if (progLabel) progLabel.textContent   = label + '…';
+  if (progFill)  progFill.style.width    = '0%';
+
+  document.querySelectorAll('.wlib-analyze-btn').forEach(function(b){ b.disabled = true; });
+
+  try {
+    var results = await wliRunScan(addresses, function(done, total) {
+      var pct = Math.round((done / total) * 100);
+      if (progFill)  progFill.style.width    = pct + '%';
+      if (progLabel) progLabel.textContent   = label + ' — ' + done + '/' + total;
+    });
+
+    if (progWrap) progWrap.style.display = 'none';
+    wlibRender();                     /* refresh table with new scores    */
+    wliShowResults(results);          /* render ranked intelligence panel */
+    showToast('Analysis complete — ' + results.length + ' wallet' + (results.length !== 1 ? 's' : '') + ' scored', 'success');
+
+    /* Auto-open the Wallet Library panel if it's closed */
+    var body = el('walletLibBody');
+    var tog  = el('walletLibToggle');
+    if (body && body.classList.contains('collapsed')) {
+      body.classList.remove('collapsed');
+      body.style.maxHeight = 'none';
+      if (tog) tog.classList.remove('collapsed');
+    }
+  } catch(err) {
+    if (progWrap) progWrap.style.display = 'none';
+    showToast('Analysis error: ' + (err.message || 'Unknown error'), 'error');
+  } finally {
+    _wlibAnalyzing = false;
+    document.querySelectorAll('.wlib-analyze-btn').forEach(function(b){ b.disabled = false; });
+  }
+}
+
+/* ── Render ranked results panel ── */
+function wliShowResults(profiles) {
+  var panel = el('wlibResultsPanel');
+  if (!panel) return;
+  if (!profiles || profiles.length === 0) { panel.style.display = 'none'; return; }
+
+  /* Sort: score desc, then confidence desc */
+  var sorted = profiles.slice().sort(function(a, b){
+    if (b.reputationScore !== a.reputationScore) return b.reputationScore - a.reputationScore;
+    var cMap = { High:2, Medium:1, Low:0 };
+    return (cMap[b.confidence] || 0) - (cMap[a.confidence] || 0);
+  });
+
+  var html = '<div class="wlib-results-hdr">' +
+    '<i class="fa-solid fa-ranking-star"></i>&nbsp; Intelligence Report &nbsp;<span>' +
+    sorted.length + ' wallet' + (sorted.length !== 1 ? 's' : '') + ' ranked</span>' +
+    '<button onclick="wliDismissResults()" title="Dismiss results"><i class="fa-solid fa-xmark"></i></button>' +
+    '</div><div class="wlib-rank-list">';
+
+  sorted.forEach(function(p, idx) {
+    var t        = wliScoreTier(p.reputationScore);
+    var addrSafe = escA(p.address);
+    var short    = escH(p.address.slice(0,6)) + '…' + escH(p.address.slice(-4));
+
+    var tagsHtml = (p.tags || []).map(function(tag){
+      return '<span class="wlib-tag ' + wliTagCls(tag) + '">' + escH(tag) + '</span>';
+    }).join('');
+
+    var sigsHtml = '';
+    (p.positiveSignals || []).forEach(function(s){ sigsHtml += '<div class="pos">✓ ' + escH(s) + '</div>'; });
+    (p.riskSignals     || []).forEach(function(s){ sigsHtml += '<div class="neg">⚠ ' + escH(s) + '</div>'; });
+
+    /* metaHtml: only numeric/controlled values — safe without escaping */
+    var metaHtml = 'Seen in ' + Number(p.timesSeen) + ' token' + (p.timesSeen !== 1 ? 's' : '') +
+      (p.avgHoldingPct > 0 ? ' · Avg ' + Number(p.avgHoldingPct).toFixed(2) + '% holding' : '') +
+      ' · Confidence: ' + escH(p.confidence) +
+      (p.devCount > 0 ? ' · Dev×' + Number(p.devCount) : '') +
+      (p.cabCount > 0 ? ' · Cabal×' + Number(p.cabCount) : '');
+
+    var solscan = 'https://solscan.io/account/' + encodeURIComponent(p.address);
+    var gmgn    = 'https://gmgn.ai/sol/address/'       + encodeURIComponent(p.address);
+    var bbl     = 'https://app.bubblemaps.io/sol/wallet/' + encodeURIComponent(p.address);
+
+    html += '<div class="wlib-rank-card ' + wliRankCls(t.tier) + '">' +
+      '<div class="wlib-rank-num">' + (idx + 1) + '</div>' +
+      '<div class="wlib-rank-score-blk">' +
+        '<div class="wlib-rank-score-val" style="color:' + t.color + '">' + Number(p.reputationScore) + '</div>' +
+        '<div class="wlib-rank-score-lbl">' + escH(t.label) + '</div>' +
+      '</div>' +
+      '<div class="wlib-rank-body">' +
+        '<a class="wlib-rank-addr" href="' + solscan + '" target="_blank" title="' + addrSafe + '">' + short + '</a>' +
+        '<div class="wlib-rank-tags">' + tagsHtml + '</div>' +
+        (sigsHtml ? '<div class="wlib-rank-sigs">' + sigsHtml + '</div>' : '') +
+        '<div class="wlib-rank-meta">' + metaHtml + '</div>' +
+      '</div>' +
+      '<div class="wlib-rank-actions">' +
+        '<a class="wlib-ext-link" href="' + gmgn    + '" target="_blank">GMGN ↗</a>' +
+        '<a class="wlib-ext-link" href="' + solscan + '" target="_blank">Solscan ↗</a>' +
+        '<a class="wlib-ext-link" href="' + bbl     + '" target="_blank">Bubblemap ↗</a>' +
+      '</div>' +
+    '</div>';
+  });
+
+  html += '</div>';
+  panel.innerHTML = html;
+  panel.style.display = '';
+
+  /* Scroll the panel into view */
+  try { panel.scrollIntoView({ behavior:'smooth', block:'nearest' }); } catch(e) {}
+}
+
+function wliDismissResults() {
+  var panel = el('wlibResultsPanel');
+  if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+
+/* ── Init: load intel cache on page load (called alongside wlibLoad) ── */
+(function wliInit() {
+  wliLoad();
+})();
 
 /* ── Storage ── */
 function wlLoad() {

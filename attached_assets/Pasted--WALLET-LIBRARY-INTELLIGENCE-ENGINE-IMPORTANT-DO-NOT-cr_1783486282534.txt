@@ -1,0 +1,765 @@
+
+WALLET LIBRARY INTELLIGENCE ENGINE
+
+IMPORTANT
+
+DO NOT create a new Briefing.
+
+DO NOT modify or rebuild:
+
+- Security Briefing
+- Structure Briefing
+- Attention Briefing
+- Existing scoring engine
+- Parse & Fill system
+- Fetch Data system
+- Wallet Library UI (except where required to display new intelligence)
+
+This is an upgrade to the existing Wallet Library only.
+
+---
+
+OBJECTIVE
+
+Transform the Wallet Library into a Wallet Intelligence Database that improves incrementally whenever the user requests analysis or when new observations are recorded.
+
+The objective is NOT to replace GMGN, Nansen, Arkham or other wallet analytics platforms.
+
+The objective is to automatically identify wallets within the Wallet Library that deserve further investigation.
+
+The engine should surface:
+
+- Smart Money
+- Early Movers
+- Profitable Traders
+- High Conviction Holders
+- Probable Insiders
+- Suspected Cabals
+- Rug Risk Wallets
+- Serial Dumpers
+- Neutral Wallets
+- Unknown Wallets
+
+This engine should prioritize ranking and reputation over exhaustive blockchain analysis.
+
+---
+
+IMPLEMENTATION PHASES
+
+Phase 1 — Wallet Intelligence Data Collection
+
+Build the data collection pipeline.
+
+Phase 2 — Wallet Reputation Engine
+
+Build the reputation scoring and classification engine using the collected data.
+
+---
+
+DATA SOURCING
+
+Reuse existing APIs and infrastructure wherever possible.
+
+DATA SOURCING PRIORITY
+
+1. Existing Wallet Library 
+2. Cached Wallet Intelligence profiles
+3. Previously scanned token history
+4. Existing application database
+5. Existing DEX APIs
+6. Blockchain RPC provider (e.g. Helius) only when necessary 
+Do NOT introduce unnecessary paid APIs.
+
+Minimize API usage through caching and incremental updates.
+
+---
+
+ON SCANNING NEW BLOCKCHAIN ACTIVITY: 
+
+If new blockchain activity can be determined from existing application data or cached blockchain metadata, reuse the cached profile. Only query the blockchain when there is insufficient information to determine whether the wallet has changed.
+
+---
+
+
+WALLET DATABASE
+
+Every wallet should maintain a persistent reputation profile that is updated only during on-demand analysis or when new observations are explicitly processed.
+
+Example fields:
+
+- Wallet Address
+- First Seen
+- Last Seen
+- Wallet Age
+- Times Seen
+- Tokens Participated
+- Top Holder Frequency
+- Developer Associations
+- Successful Launches
+- Rug Launches
+- Average Holder Rank
+- Activity Level
+- Reputation Score
+- Confidence Level
+- Reputation Tags
+
+Incrementally improve this profile whenever new observations become available.
+
+---
+
+METRICS
+
+Estimate whenever sufficient data exists:
+
+- Number of observed projects
+- Number of successful launches
+- Number of rug launches
+- Estimated profitability (Deep Investigation only)
+- Estimated win rate (Deep Investigation only)
+- Average holding duration (Quick estimate in Quick Scan; refine only in Deep Investigation)
+- Average entry timing
+- Average exit timing
+- Trading frequency
+- Wallet age
+- Activity level
+- Recent activity
+- Repeat appearances
+- Developer associations
+
+Never fabricate unavailable metrics.
+
+Unknown values must remain Unknown.
+
+---
+
+BEHAVIOR ANALYSIS
+
+Identify observable patterns such as:
+
+Positive:
+
+- Frequently enters before public attention.
+- Consistently participates in successful launches.
+- Holds through volatility.
+- Accumulates quality projects.
+- Demonstrates disciplined exits.
+- Appears repeatedly in high-quality projects.
+
+Risk:
+
+- Repeated rug participation.
+- Frequently dumps shortly after launch.
+- Very short holding durations.
+- Appears with the same wallet cluster repeatedly.
+- Suspicious funding relationships (Deep Investigation only)
+- Coordinated trading patterns.(Deep Investigation only)
+- Wash trading indicators. (Deep Investigation only)
+- High sell-pressure behavior.
+
+Behavior should always be based on repeated historical patterns.
+
+Never classify using a single observation.
+
+---
+
+REPUTATION TAGS
+
+Assign one or more tags.
+
+Positive:
+
+- Smart Money
+- Early Mover
+- Profitable Trader
+- High Conviction Holder
+- Quality Accumulator
+- Consistent Winner
+
+Neutral:
+
+- Neutral
+- New Wallet
+- Limited History
+- Inconclusive
+
+Risk:
+
+- Probable Insider
+- Suspected Cabal
+- Rug Risk
+- Serial Dumper
+- Pump-and-Dump Participant
+- Coordinated Trading
+- Wash Trading Suspected
+
+Never state with certainty that a wallet IS an insider.
+
+Only identify probabilistic behavior.
+
+---
+
+REPUTATION SCORE
+
+Generate a Wallet Reputation Score (0–100).
+
+Suggested interpretation:
+
+90–100 Elite
+
+75–89 Strong
+
+60–74 Good
+
+40–59 Neutral
+
+20–39 Risky
+
+0–19 Avoid
+
+
+Every completed analysis becomes part of the Wallet Library's permanent historical knowledge and should be reused in future analyses whenever possible.
+---
+
+SCORING PRINCIPLES
+
+Reward:
+
+- Long-term consistency
+- Participation in successful launches
+- Healthy holding behavior
+- Strong historical performance
+- Repeated appearance in quality projects
+- Disciplined trading behavior
+
+Penalize:
+
+- Frequent rug participation
+- Rapid post-launch dumping
+- Repeated suspicious coordination
+- Extremely short holding behavior
+- Consistent participation in poor-quality launches
+
+Scores should reflect long-term behavior rather than isolated events.
+
+---
+
+CROSS-TOKEN INTELLIGENCE
+
+One of the primary strengths of this engine should be identifying repeated patterns across every token scanned by the app.
+
+Examples:
+
+- Wallet has appeared in 48 scanned tokens.
+- Top Holder in 15 projects.
+- Participated in 11 successful launches.
+- Participated in 9 rugs.
+- Frequently appears alongside Wallet X and Wallet Y.
+- Frequently associated with Developer Z.
+
+These historical relationships should strengthen confidence in future classifications.
+
+Cross-token intelligence should primarily use historical observations already stored in the Wallet Library before requesting additional blockchain data.
+
+---
+
+PERFORMANCE
+
+When analysis is requested, analyze only the selected wallets. If a selected wallet already has a cached profile, update it only if new blockchain activity or new Wallet Library observations exist.
+
+Never repeatedly scan unchanged wallets.
+
+Cache all analysis.
+
+Update incrementally.
+
+Reuse historical reputation whenever possible.
+
+Optimize for low API usage.
+
+---
+
+WALLET LIBRARY FEATURES
+
+Allow filtering by:
+
+- Reputation Score
+- Smart Money
+- Early Movers
+- Profitable Traders
+- High Conviction Holders
+- Probable Insiders
+- Suspected Cabals
+- Rug Risk
+- Confidence Level
+- Activity Level
+
+Allow sorting by:
+
+- Reputation Score
+- Estimated Profitability
+- Recent Activity
+- Successful Launches
+- Rug Participation
+- Wallet Age
+- Times Seen
+
+---
+
+DESIGN GOAL
+
+The Wallet Library should evolve into an intelligent watchlist.
+
+Instead of manually reviewing thousands of wallets, the engine should prioritize the analyzed small percentage of wallets most worthy of investigation.
+
+The purpose is to quickly identify:
+
+- Wallets to follow.
+- Wallets to avoid.
+- Wallets likely to be early movers.
+- Wallets exhibiting probable insider behavior.
+- Wallets associated with repeated rug activity.
+
+The user can then perform deeper manual research on those shortlisted wallets using external analytics platforms such as GMGN, Nansen, Arkham, Bubblemaps or Cielo.
+
+The Wallet Intelligence Engine should complement those platforms by acting as an intelligent filtering and ranking system rather than attempting to replace them.
+
+
+************************************************************************
+
+EXECUTION MODE
+
+The Wallet Intelligence Engine MUST operate only on explicit user request.
+
+It must NOT automatically analyze every wallet added to the Wallet Library.
+
+Instead, provide an action such as:
+
+- Analyze Selected Wallet
+- Analyze Selected Wallets
+- Analyze Filtered Wallets
+- Analyze Entire Wallet Library
+
+The user decides when analysis is performed.
+
+---
+
+ANALYSIS WORKFLOW
+
+When analysis is requested:
+
+1. Read the selected wallet(s) from the Wallet Library.
+2. Check whether a cached reputation profile already exists.
+3. If no new on-chain activity has occurred since the last analysis, reuse the cached result.
+4. If new activity exists, update only the affected portions of the reputation profile.
+5. Save the updated profile back to the Wallet Library.
+
+Never repeatedly perform full historical rescans.
+
+---
+
+CACHE POLICY
+
+Store:
+
+- Last Analysis Timestamp
+- Last Blockchain Activity
+- Reputation Score
+- Reputation Tags
+- Confidence Level
+- Cached Metrics
+
+Before performing a new analysis:
+
+- Compare the wallet's latest blockchain activity with the cached profile.
+- If unchanged, return the cached analysis immediately.
+- Only perform incremental updates when new activity is detected.
+
+This minimizes API usage and improves performance.
+
+---
+
+DESIGN GOAL
+
+The Wallet Intelligence Engine is an investigative tool, not a continuously running background service.
+
+Its purpose is to help the user quickly shortlist the most interesting wallets from the Wallet Library for deeper manual research.
+
+************************************************************************
+
+ON-DEMAND TOKEN WALLET INTELLIGENCE
+
+IMPORTANT
+
+This feature is an extension of the Wallet Library Intelligence Engine.
+
+It MUST NOT run automatically.
+
+It MUST NOT scan wallets in the background.
+
+It MUST ONLY execute when explicitly requested by the user.
+
+---
+
+USER ACTION
+
+After scanning a token and populating the Wallet Library with the token's Top Holder wallets, provide an optional action:
+
+Analyze Wallets From This Token
+
+The user decides whether to initiate wallet analysis.
+
+---
+
+ANALYSIS SCOPE
+
+Only analyze the wallets associated with the currently scanned token.
+
+Default scope:
+
+Top 20–30 holder wallets (or all available if fewer).
+
+Do NOT analyze the entire Wallet Library unless the user explicitly requests it.
+
+---
+
+ANALYSIS WORKFLOW
+
+For each selected wallet:
+
+1. Check whether a cached Wallet Intelligence profile already exists.
+
+2. If the wallet has not changed since the previous analysis:
+
+- Reuse the cached profile.
+
+3. If new blockchain activity is detected:
+
+- Update only the changed information.
+
+- Never perform unnecessary full historical rescans.
+
+4. If the wallet has never been analyzed:
+
+- Build a new Wallet Intelligence profile.
+
+5. Save all results back into the Wallet Library.
+
+---
+
+ANALYSIS OUTPUT
+
+For every analyzed wallet, determine:
+
+- Reputation Score
+- Confidence Level
+- Reputation Tags
+- Key Positive Signals
+- Key Risk Signals
+
+Possible Reputation Tags include:
+
+Positive
+
+- Smart Money
+- Early Mover
+- Profitable Trader
+- High Conviction Holder
+- Quality Accumulator
+- Consistent Winner
+
+Neutral
+
+- Neutral
+- Limited History
+- New Wallet
+- Inconclusive
+
+Risk
+
+- Probable Insider
+- Suspected Cabal
+- Rug Risk
+- Serial Dumper
+- Pump-and-Dump Participant
+- Coordinated Trading
+- Wash Trading Suspected
+
+Never classify a wallet as an Insider with certainty.
+
+Only classify based on repeated historical behavior and assign an appropriate confidence level.
+
+---
+
+PRIORITY RANKING
+
+After all selected wallets are analyzed, automatically rank them from highest priority to lowest priority.
+
+Highest priority should include wallets that appear most worthy of further investigation.
+
+Examples:
+
+- Elite Smart Money
+- Strong Smart Money
+- High-Confidence Early Movers
+- Probable Insiders
+- Suspected Cabals
+- High Rug Risk Wallets
+
+This ranking is intended to help the user decide which wallets to inspect further using external analytics platforms.
+
+---
+
+CACHE POLICY
+
+Store for every analyzed wallet:
+
+- Last Analysis Timestamp
+- Last Blockchain Activity
+- Reputation Score
+- Confidence Level
+- Reputation Tags
+- Cached Metrics
+
+Always reuse cached analyses whenever possible.
+
+Only refresh wallets with new blockchain activity.
+
+Optimize aggressively to minimize API usage and processing time.
+
+---
+
+DESIGN GOAL
+
+This feature is a wallet discovery and prioritization tool.
+
+Its purpose is NOT to replace professional analytics platforms.
+
+Its purpose is to rapidly identify the few wallets from a token's Top Holder list that deserve deeper manual investigation.
+
+The output should allow the user to immediately recognize:
+
+- Wallets worth following.
+- Wallets likely to be profitable.
+- Potential early movers.
+- Probable insiders.
+- Suspicious cabals.
+- Rug-risk wallets.
+
+The user can then perform comprehensive investigation on only those shortlisted wallets using external tools such as GMGN, Nansen, Arkham, Bubblemaps or Cielo.
+
+The engine should prioritize speed, intelligent filtering, and efficient API usage over exhaustive blockchain reconstruction.
+
+
+************************************************************************
+
+API BUDGET & ANALYSIS STRATEGY
+
+IMPORTANT
+
+The Wallet Intelligence Engine must be designed for maximum efficiency.
+
+The priority is to produce useful reputation analysis while minimizing API requests, processing time and resource usage.
+
+Never prioritize exhaustive blockchain reconstruction over performance.
+
+---
+
+PRIMARY DATA SOURCE
+
+The Wallet Library is the primary source of intelligence.
+
+External APIs should only be used to enrich or update existing Wallet Library data.
+
+Always prefer:
+
+1. Existing Wallet Library data.
+2. Cached Wallet Intelligence profiles.
+3. Previously collected token scan history.
+4. Existing application data.
+5. External API requests only when required.
+
+If sufficient confidence can be achieved using existing data, do NOT perform additional blockchain requests.
+
+---
+
+API BUDGET
+
+Every analysis request must operate within a defined resource budget.
+
+Implement safeguards including:
+
+- Maximum wallets analyzed per request.
+- Maximum blockchain requests per wallet.
+- Maximum transaction history inspected during Quick Scan.
+- Maximum processing time per wallet.
+
+Never allow unlimited API consumption.
+
+If the analysis budget is reached:
+
+- Stop requesting additional data.
+- Return the best available analysis.
+- Display reduced confidence where appropriate.
+
+---
+
+ANALYSIS MODES
+
+Implement two analysis modes.
+
+Quick Scan (Default)
+
+Optimized for speed and low API usage.
+
+Use:
+
+- Existing Wallet Library
+- Cached Wallet Intelligence
+- Existing token scan history
+- Existing app database
+- Recent blockchain activity only
+
+Do NOT perform full historical reconstruction.
+
+This should be the default mode for almost every analysis.
+
+---
+
+Deep Investigation
+
+Run only when explicitly requested by the user.
+
+Deep Investigation may perform additional blockchain requests for:
+
+- Extended transaction history
+- Funding source analysis
+- Wallet relationship analysis
+- Cluster detection
+- Historical trading behavior
+- Additional confidence validation
+
+Deep Investigation is intended for only a small number of shortlisted wallets.
+
+Never perform Deep Investigation automatically.
+
+---
+
+INCREMENTAL UPDATES
+
+Never rebuild a wallet profile from scratch unless absolutely necessary.
+
+Instead:
+
+- Detect new wallet activity.
+- Process only new observations.
+- Update Reputation Score.
+- Update Reputation Tags.
+- Update cached metrics.
+- Save the updated profile.
+
+Historical analysis should accumulate over time.
+
+---
+
+REPUTATION MEMORY
+
+Each wallet should maintain a persistent intelligence profile.
+
+Every new token scan should contribute only incremental observations.
+
+Examples:
+
+- New successful launch.
+- New rug participation.
+- New top holder appearance.
+- New developer association.
+- New wallet cluster association.
+
+The Wallet Library should become increasingly accurate over time.
+
+---
+
+REUSE PREVIOUS TOKEN ANALYSIS
+
+If a wallet previously appeared in another scanned token:
+
+Do NOT reprocess historical observations.
+
+Reuse previously stored intelligence.
+
+Only analyze information that is new since the last update.
+
+---
+
+CONFIDENCE-BASED STOPPING
+
+The engine should stop collecting additional evidence once sufficient confidence has been achieved.
+
+Avoid unnecessary API requests simply to increase confidence by a small amount.
+
+If additional blockchain requests are unlikely to materially change the classification, stop analysis and return the current result.
+
+---
+
+EFFICIENT METRICS
+
+Prioritize low-cost metrics such as:
+
+- Times Seen
+- Successful Launch Participation
+- Rug Participation
+- Top Holder Frequency
+- Wallet Age
+- Activity Level
+- Repeat Developer Associations
+- Repeat Wallet Associations
+- Holding Behavior Category
+- Entry Timing Category
+- Exit Timing Category
+
+Avoid expensive full historical calculations unless running Deep Investigation.
+
+---
+
+PERFORMANCE REQUIREMENTS
+
+The Wallet Intelligence Engine must:
+
+- Never perform background wallet scanning.
+- Never repeatedly analyze unchanged wallets.
+- Never repeatedly calculate historical metrics.
+- Aggressively reuse cached intelligence.
+- Perform asynchronous processing where appropriate.
+- Update only what has changed.
+
+The engine should remain responsive even as the Wallet Library grows to thousands of wallets.
+
+---
+
+DESIGN PRINCIPLE
+
+The purpose of the Wallet Intelligence Engine is intelligent filtering, not exhaustive blockchain analytics.
+
+Its job is to identify the small percentage of wallets most worthy of deeper investigation while consuming as few API requests as reasonably possible.
+
+Professional wallet analytics platforms can then be used for comprehensive investigation only after the Wallet Intelligence Engine has produced a high-confidence shortlist.
+
+
+
+API REQUEST POLICY
+
+Never make blockchain requests simply because a wallet is selected.
+
+Every external API request must have a clear purpose that cannot be satisfied using:
+
+- Wallet Library data
+- Cached analysis
+- Previous token scans
+- Existing application data
+
+If the required information already exists locally, the engine must reuse it instead of requesting it again.
+
+If the Wallet Library and existing application data contain insufficient information to produce a reasonable confidence score, request only the minimum additional blockchain data necessary to complete the analysis.
+
+
+
