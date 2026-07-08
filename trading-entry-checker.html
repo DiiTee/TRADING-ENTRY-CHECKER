@@ -15161,13 +15161,20 @@ async function wliHeliusEnrich(profile) {
     var data = await resp.json();
     var sigs = Array.isArray(data.result) ? data.result : [];
 
+    /* Helper: strip placeholder tags that enrichment replaces with real data */
+    function stripPlaceholders(tags) {
+      return tags.filter(function(t){
+        return t !== 'Neutral' && t !== 'Inconclusive' && t !== 'Limited History';
+      });
+    }
+
     if (sigs.length === 0) {
-      /* No transaction history found */
+      /* No transaction history — brand-new or unused wallet */
       profile.walletActivityLevel = 'None';
       profile.walletNewFlag       = true;
       profile.heliusEnriched      = true;
       profile.riskSignals.push('No blockchain transaction history found — possibly a brand-new or unused wallet');
-      profile.tags = profile.tags.filter(function(t){ return t !== 'Neutral' && t !== 'Inconclusive'; });
+      profile.tags = stripPlaceholders(profile.tags);
       profile.tags.push('New Wallet');
       profile.reputationScore = Math.max(0, profile.reputationScore - 10);
       return profile;
@@ -15187,16 +15194,21 @@ async function wliHeliusEnrich(profile) {
     profile.walletNewFlag       = isNew;
     profile.heliusEnriched      = true;
 
+    /* Replace "Limited History" (and other placeholders) with enriched context */
+    profile.tags = stripPlaceholders(profile.tags);
+
     if (isNew) {
-      profile.tags = profile.tags.filter(function(t){ return t !== 'Neutral' && t !== 'Inconclusive'; });
       if (profile.tags.indexOf('New Wallet') < 0) profile.tags.push('New Wallet');
       profile.riskSignals.push('Wallet shows limited blockchain history (est. < 30 days of activity) — exercise caution');
       profile.reputationScore = Math.max(0, profile.reputationScore - 10);
-    } else if (activityLevel === 'High') {
-      profile.positiveSignals.push('Active wallet with significant on-chain transaction history');
+    } else {
+      /* Confirmed active wallet — replace placeholder with Neutral */
+      if (profile.tags.length === 0) profile.tags.push('Neutral');
+      var actLabel = activityLevel === 'High' ? 'high' : activityLevel === 'Medium' ? 'moderate' : 'some';
+      profile.positiveSignals.push('On-chain confirmed: ' + actLabel + ' blockchain activity (single token observation, watch for more)');
     }
 
-    /* Confidence upgrade: Helius data confirms the wallet exists and has history */
+    /* Confidence upgrade: Helius confirms the wallet exists and has history */
     if (profile.confidence === 'Low' && !isNew) profile.confidence = 'Medium';
 
   } catch(err) {
