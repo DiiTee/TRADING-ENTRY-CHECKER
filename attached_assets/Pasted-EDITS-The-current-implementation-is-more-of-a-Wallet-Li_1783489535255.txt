@@ -1,0 +1,192 @@
+EDITS: 
+
+The current implementation is more of a Wallet Library statistics engine than a Wallet Intelligence engine.
+
+I do want the Wallet Library to be the primary cache and source of historical observations, but I do not want wallet intelligence to depend solely on repeated appearances in my own scans.
+
+The intended workflow is:
+
+1. Check the Wallet Library and any cached reputation profile first.
+2. If sufficient information already exists, reuse it without making external API calls.
+3. If there is insufficient information to produce a reasonable confidence score, perform a limited blockchain investigation using the existing RPC infrastructure.
+4. Collect only the minimum additional data needed to classify the wallet.
+5. Save the resulting intelligence back into the Wallet Library so future analyses can reuse it.
+
+The Wallet Library should therefore function as a growing cache of wallet intelligence, not the only source of wallet intelligence.
+
+The objective is to be able to identify promising or risky wallets even the first time I encounter them, while still minimizing API usage through caching and incremental updates.
+
+
+ CABAL BRIEFING CLARIFICATION & OBSERVATION MODEL
+
+IMPORTANT
+
+The current interpretation of the Cabal Briefing is incorrect.
+
+The Cabal Briefing is NOT a list of confirmed or suspected cabal wallets.
+
+It is simply a display of the token's Top Holder wallets.
+
+Therefore, appearing in the Cabal Briefing must NEVER be treated as a negative reputation signal by itself.
+
+---
+
+OBSERVATION MODEL
+
+Treat every appearance of a wallet in the Wallet Library as a neutral observation.
+
+An observation should record information such as:
+
+- Token Contract Address
+- Token Name
+- Scan Date
+- Holder Rank
+- Holding Percentage
+- Developer Wallet (if applicable)
+- Token Security Result
+- Token Structure Result
+- Token Attention Result
+- Token Outcome (when known)
+- First Seen
+- Last Seen
+
+These observations become the historical evidence used for future reputation analysis.
+
+---
+
+REPUTATION ENGINE
+
+The Reputation Engine must never classify a wallet based on a single appearance.
+
+Instead, build reputation from repeated observations across multiple tokens.
+
+Examples of useful historical patterns include:
+
+Positive:
+
+- Frequently appears in successful launches.
+- Frequently accumulates before broader attention.
+- Consistently participates in quality projects.
+- Demonstrates healthy long-term holding behavior.
+- Rarely associated with failed launches.
+
+Risk:
+
+- Frequently associated with rug-pulled projects.
+- Frequently exits immediately after launch.
+- Repeatedly appears alongside the same wallet cluster.
+- Repeatedly associated with suspicious developer wallets.
+- Demonstrates repeated high-risk trading behavior.
+
+No single observation should determine reputation.
+
+Confidence should increase only as supporting evidence accumulates.
+
+---
+
+CABAL DETECTION
+
+Do NOT classify a wallet as a Suspected Cabal simply because it appeared in the Top Holders list.
+
+Instead, require multiple independent signals before assigning Cabal-related tags.
+
+Examples include:
+
+- Repeated participation in rug-pulled projects.
+- Repeated coordinated wallet associations.
+- Repeated suspicious developer associations.
+- Consistent high-risk historical behavior.
+
+Top Holder status alone is never sufficient evidence.
+
+---
+
+WALLET LIBRARY PURPOSE
+
+The Wallet Library should function as a historical observation database.
+
+Every scan contributes another observation to a wallet's history.
+
+Over time, these observations should allow the Reputation Engine to distinguish between:
+
+- Smart Money
+- Early Movers
+- High Conviction Holders
+- Quality Accumulators
+- Neutral Wallets
+- Probable Insiders
+- Suspected Cabals
+- Rug Risk Wallets
+
+using accumulated evidence rather than assumptions.
+
+---
+
+DESIGN PRINCIPLE
+
+The Wallet Intelligence Engine should prioritize evidence-based classification.
+
+It must distinguish between:
+
+- Observations (facts collected about a wallet during token scans), and
+- Reputation (conclusions drawn only after sufficient historical evidence exists).
+
+Reputation must never be inferred solely because a wallet appeared among a token's largest holders.
+
+
+
+
+
+REMEMBER THE FOLLOWING: 
+
+WALLET DATABASE
+
+Every wallet should maintain a persistent reputation profile that is updated only during on-demand analysis or when new observations are explicitly processed.
+
+Example fields:
+
+- Wallet Address
+- First Seen
+- Last Seen
+- Wallet Age
+- Times Seen
+- Tokens Participated
+- Top Holder Frequency
+- Developer Associations
+- Successful Launches
+- Rug Launches
+- Average Holder Rank
+- Activity Level
+- Reputation Score
+- Confidence Level
+- Reputation Tags
+
+Incrementally improve this profile whenever new observations become available.
+
+---
+
+METRICS
+
+Estimate whenever sufficient data exists:
+
+- Number of observed projects
+- Number of successful launches
+- Number of rug launches
+- Estimated profitability (Deep Investigation only)
+- Estimated win rate (Deep Investigation only)
+- Average holding duration (Quick estimate in Quick Scan; refine only in Deep Investigation)
+- Average entry timing
+- Average exit timing
+- Trading frequency
+- Wallet age
+- Activity level
+- Recent activity
+- Repeat appearances
+- Developer associations
+
+Never fabricate unavailable metrics.
+
+Unknown values must remain Unknown.
+
+
+

@@ -9,11 +9,24 @@ description: Quick Scan reputation engine added to Wallet Library — scoring, t
 - All JS functions prefixed `wli*`; filter/sort helpers update `_wllib*` state vars and call `wlibRender()`
 - `wlibRender()` now calls `wlibGetFiltered()` instead of rendering `_walletLibrary` directly — do NOT bypass this
 
+## CRITICAL: Source labels are neutral — do NOT use as risk signals
+- `QEC` = top holders via RugCheck (neutral observation)
+- `Top Holders` = top holders via Helius (neutral observation — previously mislabeled "Cabal Briefing")
+- `Cabal Briefing` = legacy label for same thing — backward compat only, treated identically to Top Holders
+- `Dev` = developer wallet — distinct signal only when combined with holder appearances in OTHER projects
+
+## Observation model (wlibAdd extras parameter)
+Each entry now stores optional: `holderRank` (1-based position), `tokenSecTier`, `tokenSecScore`
+Collectors pass current `window._tecSecTier` / `window._tecSecScore` at scan time.
+
 ## Quick Scan logic (wliAnalyzeAddress)
-- Operates purely on existing `_walletLibrary` entries — **zero external API calls**
-- Aggregates: `timesSeen` (unique CAs), `devCount`, `cabCount`, `qecCount`, `avgHoldingPct`, date range
-- Base score 50; appearance bonus (+3/token up to +18); cabal penalty (-13/token); conviction bonus (+3–7 for avgPct>1.5/3%)
-- Confidence: Low (1 seen), Medium (2–4), High (5+); downgraded for mixed signals with <3 observations
+- Aggregates: `devCount`, `holderCount` (QEC + Top Holders + legacy Cabal — all neutral), `avgPct`, `avgRank`, `avgSecScore`
+- Base score 50; appearance bonus (+3/token up to +18); conviction bonus (+3–7 for avgPct); top-rank bonus (+5 if avgRank≤5 with 2+ sigs); dev+holder risk (-15); token security history adjustment
+- Confidence: Low (1 seen), Medium (2–4), High (5+)
+- Helius enrichment via `wliHeliusEnrich()` — only called when confidence=Low AND timesSeen≤1 AND key available
+  - Uses `getSignaturesForAddress` limit:10 — estimates activity level, detects brand-new wallets
+  - Adds "New Wallet" tag and -10 score if wallet shows <30 days of activity
+  - Upgrades confidence Low→Medium if wallet confirmed active
 
 ## Reputation Tags (controlled set — do not add ad-hoc)
 Positive: Smart Money, Early Mover, Profitable Trader, High Conviction Holder, Quality Accumulator, Consistent Winner

@@ -555,7 +555,8 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .wlib-pct { font-weight:700; color:var(--text-primary); text-align:right; white-space:nowrap; }
 .wlib-src { font-size:0.57rem; padding:1px 6px; border-radius:3px; font-weight:700; white-space:nowrap; }
 .wlib-src-qec   { background:rgba(0,212,255,0.12);   color:var(--accent-cyan); }
-.wlib-src-cabal { background:rgba(140,80,255,0.15);  color:#aa66ff; }
+.wlib-src-cabal { background:rgba(0,160,220,0.12);   color:#44aadd; } /* legacy label — treated as neutral Top Holders */
+.wlib-src-top   { background:rgba(0,160,220,0.12);   color:#44aadd; } /* Top Holders (Helius) */
 .wlib-src-dev   { background:rgba(255,165,0,0.15);   color:#ffaa33; }
 .wlib-del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.72rem; padding:2px 6px; border-radius:3px; line-height:1; }
 .wlib-del:hover { color:var(--skip); background:rgba(255,61,113,0.12); }
@@ -14629,15 +14630,16 @@ function wlibUpdateCount() {
 }
 
 /* ── Add a single wallet to memory only — caller must call wlibSave() ──
-   Returns true if new, false if duplicate (address + ca key). ── */
-function wlibAdd(address, coin, ca, holdingPct, source) {
+   Returns true if new, false if duplicate (address + ca key).
+   extras (optional): { holderRank, tokenSecTier, tokenSecScore } ── */
+function wlibAdd(address, coin, ca, holdingPct, source, extras) {
   if (!address || typeof address !== 'string' || address.length < 30) return false;
   var key = address.toLowerCase() + '|' + (ca || '').toLowerCase();
   var exists = _walletLibrary.some(function(w) {
     return (w.address.toLowerCase() + '|' + (w.ca || '').toLowerCase()) === key;
   });
   if (exists) return false;
-  _walletLibrary.unshift({
+  var entry = {
     id:         'wlib_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     address:    address,
     coin:       (coin || '').slice(0, 40) || 'Unknown',
@@ -14645,7 +14647,14 @@ function wlibAdd(address, coin, ca, holdingPct, source) {
     holdingPct: typeof holdingPct === 'number' ? Math.round(holdingPct * 100) / 100 : 0,
     source:     source || 'Unknown',
     dateAdded:  new Date().toISOString()
-  });
+  };
+  /* Optional observation metadata */
+  if (extras) {
+    if (typeof extras.holderRank   === 'number') entry.holderRank    = extras.holderRank;
+    if (typeof extras.tokenSecTier === 'string') entry.tokenSecTier  = extras.tokenSecTier;
+    if (typeof extras.tokenSecScore=== 'number') entry.tokenSecScore = extras.tokenSecScore;
+  }
+  _walletLibrary.unshift(entry);
   return true;
 }
 
@@ -14672,7 +14681,7 @@ function wlibRender() {
         var addrSafe  = escA(w.address);
         var coinSafe  = escH(w.coin || '—');
         var coinTitle = escA((w.coin || '') + ' · ' + (w.ca || ''));
-        var srcCls    = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : w.source === 'Dev' ? 'wlib-src wlib-src-dev' : 'wlib-src wlib-src-cabal';
+        var srcCls    = w.source === 'QEC' ? 'wlib-src wlib-src-qec' : w.source === 'Dev' ? 'wlib-src wlib-src-dev' : w.source === 'Top Holders' ? 'wlib-src wlib-src-top' : 'wlib-src wlib-src-cabal'; /* cabal = legacy label, same neutral style */
         var srcSafe   = escH(w.source);
         var short     = w.address.length >= 10 ? escH(w.address.slice(0,6)) + '\u2026' + escH(w.address.slice(-4)) : escH(w.address);
         var dateStr   = '';
@@ -14828,8 +14837,18 @@ function wlibCollectFromQEC(retail10, ca, coin) {
   if (!retail10 || retail10.length === 0) return;
   wlibLoad();
   var added = 0;
-  retail10.forEach(function(h) {
-    if (h.address && wlibAdd(h.address, coin || (ca ? ca.slice(0, 8) : 'Unknown'), ca || '', h.pct, 'QEC')) added++;
+  /* Capture current token security context for the observation */
+  var secTier  = (typeof window._tecSecTier  === 'string') ? window._tecSecTier  : null;
+  var secScore = (typeof window._tecSecScore  === 'number') ? window._tecSecScore : null;
+  retail10.forEach(function(h, idx) {
+    if (h.address && wlibAdd(
+      h.address,
+      coin || (ca ? ca.slice(0, 8) : 'Unknown'),
+      ca || '',
+      h.pct,
+      'QEC',
+      { holderRank: idx + 1, tokenSecTier: secTier, tokenSecScore: secScore }
+    )) added++;
   });
   if (added > 0) wlibSave();
   wlibRender();
@@ -14838,8 +14857,17 @@ function wlibCollectFromHelius(holders, ca, coin) {
   if (!holders || holders.length === 0) return;
   wlibLoad();
   var added = 0;
-  holders.forEach(function(h) {
-    if (h.address && wlibAdd(h.address, coin || (ca ? ca.slice(0, 8) : 'Unknown'), ca || '', h.pct, 'Cabal Briefing')) added++;
+  var secTier  = (typeof window._tecSecTier  === 'string') ? window._tecSecTier  : null;
+  var secScore = (typeof window._tecSecScore  === 'number') ? window._tecSecScore : null;
+  holders.forEach(function(h, idx) {
+    if (h.address && wlibAdd(
+      h.address,
+      coin || (ca ? ca.slice(0, 8) : 'Unknown'),
+      ca || '',
+      h.pct,
+      'Top Holders',
+      { holderRank: idx + 1, tokenSecTier: secTier, tokenSecScore: secScore }
+    )) added++;
   });
   if (added > 0) wlibSave();
   wlibRender();
@@ -14861,9 +14889,10 @@ function wlibCollectDev(devAddress, ca, coin) {
 
    Profile schema per address (keyed by address.toLowerCase()):
    { address, reputationScore, confidence, tags, positiveSignals,
-     riskSignals, timesSeen, uniqueTokens[], devCount, cabCount,
-     qecCount, avgHoldingPct, firstSeen, lastSeen, lastAnalyzed,
-     analysisMode }
+     riskSignals, timesSeen, uniqueTokens[], devCount, holderCount,
+     avgHoldingPct, avgHolderRank, avgSecScore, firstSeen, lastSeen,
+     lastAnalyzed, analysisMode, walletActivityLevel, walletNewFlag,
+     heliusEnriched }
    ═══════════════════════════════════════════════════════════════ */
 var WLIB_INTEL_KEY   = 'tec_wallet_intel';
 var _wlibIntel       = {};     /* address.toLowerCase() → profile */
@@ -14925,9 +14954,12 @@ function wliRankCls(tier) {
   return map[tier] || '';
 }
 
-/* ── Core analysis — Quick Scan (no external API calls) ──
-   Computes a reputation profile purely from Wallet Library observations.
-   Never fabricates data — unknown fields remain null.                    ── */
+/* ── Core analysis — builds a profile from Wallet Library observations.
+   Every source (QEC, Top Holders, legacy "Cabal Briefing") is treated as a
+   neutral holder observation. Source labels describe how the data was fetched,
+   NOT whether the wallet is suspicious. Risk signals come only from
+   behavioural patterns: dev-wallet-as-holder, token security history, etc.
+   Never fabricates data — unknown fields remain null.                         ── */
 function wliAnalyzeAddress(address) {
   var addrLow = address.toLowerCase();
   var entries = _walletLibrary.filter(function(w){ return w.address.toLowerCase() === addrLow; });
@@ -14935,18 +14967,25 @@ function wliAnalyzeAddress(address) {
 
   /* Aggregate observations */
   var caSet = {}, uniqueCAs = [];
-  var devCount = 0, cabCount = 0, qecCount = 0;
+  var devCount = 0, holderCount = 0;
   var totalPct = 0, pctCount = 0;
+  var totalRank = 0, rankCount = 0;
+  var secScores = [];
   var firstSeen = null, lastSeen = null;
 
   entries.forEach(function(e) {
     var ca = (e.ca || '').toLowerCase();
     if (ca && !caSet[ca]) { caSet[ca] = true; uniqueCAs.push(e.ca || ca); }
     var src = (e.source || '').toLowerCase();
-    if (src === 'dev') devCount++;
-    else if (src.indexOf('cabal') >= 0) cabCount++;
-    else qecCount++;
-    if (typeof e.holdingPct === 'number' && e.holdingPct > 0) { totalPct += e.holdingPct; pctCount++; }
+    if (src === 'dev') {
+      devCount++;
+    } else {
+      /* QEC, Top Holders, and legacy "Cabal Briefing" are all neutral holder observations */
+      holderCount++;
+    }
+    if (typeof e.holdingPct  === 'number' && e.holdingPct  > 0)  { totalPct  += e.holdingPct;  pctCount++;  }
+    if (typeof e.holderRank  === 'number' && e.holderRank  > 0)  { totalRank += e.holderRank;  rankCount++; }
+    if (typeof e.tokenSecScore === 'number')                       { secScores.push(e.tokenSecScore); }
     var d = e.dateAdded ? new Date(e.dateAdded) : null;
     if (d && !isNaN(d.getTime())) {
       if (!firstSeen || d < firstSeen) firstSeen = d;
@@ -14954,28 +14993,38 @@ function wliAnalyzeAddress(address) {
     }
   });
 
-  var timesSeen   = uniqueCAs.length;
-  var avgPct      = pctCount > 0 ? totalPct / pctCount : 0;
+  var timesSeen = uniqueCAs.length;
+  var avgPct    = pctCount  > 0 ? totalPct  / pctCount  : 0;
+  var avgRank   = rankCount > 0 ? totalRank / rankCount  : null;
+  var avgSecScore = secScores.length > 0
+    ? secScores.reduce(function(a, b){ return a + b; }, 0) / secScores.length
+    : null;
 
-  /* ── Scoring ── */
+  /* ── Scoring ──
+     Base 50 = Neutral unknown. Adjustments reflect evidence quality,
+     not assumptions about source labels.                              ── */
   var score = 50;
 
-  /* Appearance bonus: more cross-token data → higher confidence in any pattern */
+  /* Observation depth — more cross-token data raises confidence in any classification */
   score += Math.min(timesSeen * 3, 18);
 
-  /* Cabal appearances are a strong risk signal */
-  score -= cabCount * 13;
-  score  = Math.max(score, 3);
-
-  /* Conviction bonus for meaningful holding positions */
+  /* Holding conviction — consistently meaningful positions */
   if      (avgPct >= 3.0) score += 7;
   else if (avgPct >= 1.5) score += 3;
 
-  /* Pure dev wallet (no retail history) — slight risk due to limited signal */
-  if (devCount > 0 && qecCount === 0 && cabCount === 0) score -= 5;
+  /* Consistent top-rank appearances (avg top 5) = early accumulator signal */
+  if (avgRank !== null && avgRank <= 5 && holderCount >= 2) score += 5;
 
-  /* Developer active in cabal-flagged tokens — elevated risk */
-  if (devCount > 0 && cabCount > 0) score -= 12;
+  /* Dev-wallet-as-holder across multiple DIFFERENT projects: possible insider */
+  if (devCount >= 1 && holderCount >= 2) score -= 15;
+  /* Pure dev wallet (no holder history) — not necessarily bad; just limited signal */
+  else if (devCount >= 1 && holderCount === 0) score -= 5;
+
+  /* Token security history: if this wallet mostly appears in low-security tokens */
+  if (avgSecScore !== null && secScores.length >= 2) {
+    if (avgSecScore < 30) score -= 8;
+    else if (avgSecScore > 70) score += 5;
+  }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
 
@@ -14984,62 +15033,65 @@ function wliAnalyzeAddress(address) {
   if      (timesSeen >= 5) confidence = 'High';
   else if (timesSeen >= 2) confidence = 'Medium';
   else                     confidence = 'Low';
-  /* Downgrade when mixed signals with few observations */
-  if (timesSeen < 3 && (devCount > 0 || cabCount > 0)) confidence = 'Low';
+  /* Dev with very few holder observations — harder to classify */
+  if (devCount >= 1 && timesSeen < 3) confidence = 'Low';
 
   /* ── Tags & signals ── */
   var tags = [], posSignals = [], riskSignals = [];
 
   if (timesSeen === 1) {
-    /* Single observation — cannot establish a behavioral pattern */
     tags.push('Limited History');
   } else {
-    /* Cabal flags — strongest risk signal */
-    if (cabCount >= 3) {
-      tags.push('Suspected Cabal');
-      riskSignals.push('Flagged by Cabal Briefing across ' + cabCount + ' separate tokens');
-    } else if (cabCount >= 1) {
-      tags.push('Rug Risk');
-      riskSignals.push('Appeared in Cabal Briefing on ' + cabCount + ' token' + (cabCount > 1 ? 's' : ''));
-    }
-
-    /* Developer associations */
-    if (devCount >= 2 && qecCount >= 2) {
+    /* Developer pattern — same wallet is both developer and holder across different projects */
+    if (devCount >= 1 && holderCount >= 2) {
       tags.push('Probable Insider');
-      riskSignals.push('Developer on ' + devCount + ' projects AND appears as retail holder in others');
+      riskSignals.push('Developer on ' + devCount + ' project' + (devCount > 1 ? 's' : '') + ' AND appears as holder across ' + holderCount + ' others — possible insider activity');
+    } else if (devCount >= 1 && holderCount >= 1) {
+      tags.push('Developer Association');
+      riskSignals.push('Developer on ' + devCount + ' project' + (devCount > 1 ? 's' : '') + ', also appears as holder — watch for cross-project patterns');
     } else if (devCount >= 1) {
       tags.push('Developer Association');
-      riskSignals.push('Associated with development on ' + devCount + ' project' + (devCount > 1 ? 's' : ''));
     }
 
-    /* Positive retail holder patterns */
-    if (qecCount >= 4 && cabCount === 0 && devCount === 0) {
+    /* Positive holder patterns — only from holder (non-dev) observations */
+    if (holderCount >= 4 && devCount === 0) {
       if (avgPct >= 2.0) {
         tags.push('High Conviction Holder');
-        posSignals.push('Consistently holds significant positions (avg ' + avgPct.toFixed(1) + '%)');
+        posSignals.push('Consistently holds significant positions across ' + holderCount + ' tokens (avg ' + avgPct.toFixed(1) + '%)');
       }
-      tags.push('Early Mover');
-      posSignals.push('Active retail participant across ' + qecCount + ' scanned token launches');
-    } else if (qecCount >= 2 && cabCount === 0 && devCount === 0) {
+      if (avgRank !== null && avgRank <= 8) {
+        tags.push('Early Mover');
+        posSignals.push('Consistently ranks in top ' + Math.round(avgRank) + ' holders across ' + holderCount + ' token launches');
+      }
+      if (tags.length === 0) tags.push('Neutral');
+    } else if (holderCount >= 2 && devCount === 0) {
       if (avgPct >= 1.5) {
         tags.push('High Conviction Holder');
-        posSignals.push('Meaningful positions across multiple tokens (avg ' + avgPct.toFixed(1) + '%)');
+        posSignals.push('Meaningful positions across ' + holderCount + ' tokens (avg ' + avgPct.toFixed(1) + '%)');
       } else {
         tags.push('Neutral');
       }
-    } else if (qecCount >= 1 && cabCount === 0 && devCount === 0) {
+    } else if (holderCount >= 1 && devCount === 0) {
       tags.push('Neutral');
+    }
+
+    /* Low-security token association */
+    if (avgSecScore !== null && secScores.length >= 2 && avgSecScore < 30) {
+      riskSignals.push('Frequently observed in low-security tokens (avg security score ' + Math.round(avgSecScore) + '/100)');
     }
   }
 
   if (tags.length === 0) tags.push('Inconclusive');
 
-  /* Cross-token intelligence signals */
+  /* Cross-token observation summary */
   if (timesSeen >= 3) {
-    posSignals.push('Identified across ' + timesSeen + ' scanned tokens — cross-token pattern detectable');
+    posSignals.push('Observed across ' + timesSeen + ' scanned tokens — cross-token patterns available');
   }
   if (avgPct >= 1.5 && pctCount >= 2) {
-    posSignals.push('Average holding of ' + avgPct.toFixed(2) + '% across ' + pctCount + ' observation' + (pctCount > 1 ? 's' : ''));
+    posSignals.push('Average holding ' + avgPct.toFixed(2) + '% across ' + pctCount + ' observation' + (pctCount > 1 ? 's' : ''));
+  }
+  if (avgSecScore !== null && secScores.length >= 2 && avgSecScore > 70) {
+    posSignals.push('Observed predominantly in high-security tokens (avg score ' + Math.round(avgSecScore) + '/100)');
   }
 
   return {
@@ -15052,22 +15104,104 @@ function wliAnalyzeAddress(address) {
     timesSeen:       timesSeen,
     uniqueTokens:    uniqueCAs,
     devCount:        devCount,
-    cabCount:        cabCount,
-    qecCount:        qecCount,
-    avgHoldingPct:   Math.round(avgPct * 100) / 100,
+    holderCount:     holderCount,
+    avgHoldingPct:   Math.round(avgPct  * 100) / 100,
+    avgHolderRank:   avgRank !== null ? Math.round(avgRank * 10) / 10 : null,
+    avgSecScore:     avgSecScore !== null ? Math.round(avgSecScore) : null,
     firstSeen:       firstSeen ? firstSeen.toISOString() : null,
     lastSeen:        lastSeen  ? lastSeen.toISOString()  : null,
     lastAnalyzed:    new Date().toISOString(),
-    analysisMode:    'quick'
+    analysisMode:    'quick',
+    /* Helius enrichment fields — populated by wliHeliusEnrich() */
+    walletActivityLevel: null,
+    walletNewFlag:       null,
+    heliusEnriched:      false
   };
 }
 
-/* ── Internal scan loop (async so UI stays responsive) ── */
+/* ── Helius enrichment — fetches minimal blockchain data for low-confidence wallets.
+   Uses getSignaturesForAddress (limit 10) to estimate activity level and wallet age.
+   Only called when the Wallet Library alone is insufficient (timesSeen ≤ 1).
+   Never called automatically — only during on-demand analysis.                      ── */
+async function wliHeliusEnrich(profile) {
+  var heliusKey = (localStorage.getItem('tec_helius_key') || '').trim() ||
+                  (el('sHeliusKey') ? el('sHeliusKey').value.trim() : '');
+  if (!heliusKey) return profile; /* no key — skip enrichment gracefully */
+
+  try {
+    var endpoint = 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(heliusKey);
+    var resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 'wli-enrich', method: 'getSignaturesForAddress',
+        params: [ profile.address, { limit: 10 } ]
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!resp.ok) return profile;
+    var data = await resp.json();
+    var sigs = Array.isArray(data.result) ? data.result : [];
+
+    if (sigs.length === 0) {
+      /* No transaction history found */
+      profile.walletActivityLevel = 'None';
+      profile.walletNewFlag       = true;
+      profile.heliusEnriched      = true;
+      profile.riskSignals.push('No blockchain transaction history found — possibly a brand-new or unused wallet');
+      profile.tags = profile.tags.filter(function(t){ return t !== 'Neutral' && t !== 'Inconclusive'; });
+      profile.tags.push('New Wallet');
+      profile.reputationScore = Math.max(0, profile.reputationScore - 10);
+      return profile;
+    }
+
+    /* Estimate activity level from batch size */
+    var activityLevel = sigs.length >= 8 ? 'High' : sigs.length >= 4 ? 'Medium' : 'Low';
+
+    /* Check wallet age from oldest signature in the batch */
+    var oldest = sigs[sigs.length - 1];
+    var oldestTs  = (oldest && oldest.blockTime) ? new Date(oldest.blockTime * 1000) : null;
+    var nowMs     = Date.now();
+    var ageDays   = oldestTs ? Math.round((nowMs - oldestTs.getTime()) / 86400000) : null;
+    var isNew     = ageDays !== null && ageDays < 30 && sigs.length < 8;
+
+    profile.walletActivityLevel = activityLevel;
+    profile.walletNewFlag       = isNew;
+    profile.heliusEnriched      = true;
+
+    if (isNew) {
+      profile.tags = profile.tags.filter(function(t){ return t !== 'Neutral' && t !== 'Inconclusive'; });
+      if (profile.tags.indexOf('New Wallet') < 0) profile.tags.push('New Wallet');
+      profile.riskSignals.push('Wallet shows limited blockchain history (est. < 30 days of activity) — exercise caution');
+      profile.reputationScore = Math.max(0, profile.reputationScore - 10);
+    } else if (activityLevel === 'High') {
+      profile.positiveSignals.push('Active wallet with significant on-chain transaction history');
+    }
+
+    /* Confidence upgrade: Helius data confirms the wallet exists and has history */
+    if (profile.confidence === 'Low' && !isNew) profile.confidence = 'Medium';
+
+  } catch(err) {
+    /* Enrichment failed silently — return unchanged profile */
+  }
+  return profile;
+}
+
+/* ── Internal scan loop (async, yields to browser between wallets) ──
+   Applies Helius enrichment for wallets with Low confidence (≤1 library observation)
+   when a Helius key is available — minimum API usage, maximum reuse of cached data. ── */
 async function wliRunScan(addresses, onProgress) {
   var results = [];
+  var heliusKey = (localStorage.getItem('tec_helius_key') || '').trim() ||
+                  (el('sHeliusKey') ? el('sHeliusKey').value.trim() : '');
+
   for (var i = 0; i < addresses.length; i++) {
     var profile = wliAnalyzeAddress(addresses[i]);
     if (profile) {
+      /* Enrich with Helius only when Wallet Library alone is insufficient */
+      if (heliusKey && profile.confidence === 'Low' && profile.timesSeen <= 1) {
+        profile = await wliHeliusEnrich(profile);
+      }
       _wlibIntel[addresses[i].toLowerCase()] = profile;
       results.push(profile);
     }
@@ -15251,9 +15385,12 @@ function wliShowResults(profiles) {
     /* metaHtml: only numeric/controlled values — safe without escaping */
     var metaHtml = 'Seen in ' + Number(p.timesSeen) + ' token' + (p.timesSeen !== 1 ? 's' : '') +
       (p.avgHoldingPct > 0 ? ' · Avg ' + Number(p.avgHoldingPct).toFixed(2) + '% holding' : '') +
+      (p.avgHolderRank  ? ' · Avg rank #' + p.avgHolderRank : '') +
       ' · Confidence: ' + escH(p.confidence) +
-      (p.devCount > 0 ? ' · Dev×' + Number(p.devCount) : '') +
-      (p.cabCount > 0 ? ' · Cabal×' + Number(p.cabCount) : '');
+      (p.devCount    > 0 ? ' · Dev×'    + Number(p.devCount)    : '') +
+      (p.holderCount > 0 ? ' · Holder×' + Number(p.holderCount) : '') +
+      (p.heliusEnriched  ? ' · Helius enriched' : '') +
+      (p.walletActivityLevel ? ' · Activity: ' + escH(p.walletActivityLevel) : '');
 
     var solscan = 'https://solscan.io/account/' + encodeURIComponent(p.address);
     var gmgn    = 'https://gmgn.ai/sol/address/'       + encodeURIComponent(p.address);
