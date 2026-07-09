@@ -1,0 +1,205 @@
+WALLET SCREENING ENGINE — FIRST ENCOUNTER INTELLIGENCE
+
+IMPORTANT
+
+This feature extends the Wallet Library Intelligence Engine.
+
+The primary objective is NOT to build reputation over hundreds of token scans.
+
+The primary objective is to help the user immediately identify which wallets from a newly scanned token deserve further investigation.
+
+The Wallet Library should improve over time, but the engine must still provide useful screening results the first time a wallet is encountered.
+
+---
+
+TWO-LAYER ARCHITECTURE
+
+Layer 1 — Wallet Screening Engine
+
+Runs when the user selects:
+
+Analyze Wallets From This Token
+
+Purpose:
+
+Quickly prioritize wallets from the current token.
+
+The output should answer:
+
+- Which wallets should I investigate first?
+- Which wallets appear promising?
+- Which wallets appear risky?
+- Which wallets have insufficient evidence?
+
+This layer prioritizes speed, intelligent filtering and low API usage.
+
+---
+
+Layer 2 — Wallet Reputation Engine
+
+Maintains long-term historical intelligence.
+
+Every completed screening contributes new observations to the Wallet Library.
+
+Future screenings should reuse this accumulated knowledge whenever possible.
+
+The Reputation Engine should become increasingly accurate over time but must not be required for the Screening Engine to provide useful results.
+
+---
+
+SCREENING WORKFLOW
+
+For each selected wallet:
+
+STEP 1
+
+Check the Wallet Library.
+
+If a high-confidence cached profile already exists:
+
+- Reuse it immediately.
+- Do not perform external API requests.
+
+STEP 2
+
+If the Wallet Library contains only limited information:
+
+Check existing application data and previous token scans.
+
+If sufficient confidence can be achieved:
+
+- Generate the screening result.
+- Do not perform blockchain enrichment.
+
+STEP 3
+
+If confidence remains insufficient:
+
+Perform a limited enrichment using the existing blockchain infrastructure.
+
+Collect only the minimum information necessary to improve confidence.
+
+Never perform exhaustive wallet reconstruction during Quick Scan.
+
+STEP 4
+
+Generate:
+
+- Investigation Priority
+- Confidence Level
+- Reputation Score
+- Reputation Tags
+- Key Positive Signals
+- Key Risk Signals
+
+STEP 5
+
+Save all newly collected intelligence to the Wallet Library for reuse in future analyses.
+
+---
+
+ADAPTIVE ENRICHMENT
+
+Do NOT enrich every wallet equally.
+
+Instead, prioritize enrichment for wallets that are most likely to provide useful information.
+
+Examples include:
+
+- Wallets with no cached profile.
+- Wallets with Low confidence.
+- Large holders.
+- Wallets manually selected by the user.
+- Wallets whose classification cannot be determined using existing data.
+
+Avoid enriching wallets whose cached intelligence is already sufficient.
+
+---
+
+SCREENING OUTPUT
+
+Every analyzed wallet should receive an Investigation Priority.
+
+Examples:
+
+⭐⭐⭐ High Priority
+
+Strong candidate for manual investigation.
+
+Examples:
+
+- Strong Smart Money signals.
+- Possible Early Mover.
+- High-quality historical behavior.
+
+⭐⭐ Medium Priority
+
+Interesting wallet.
+
+Additional investigation may be useful.
+
+⭐ Low Priority
+
+Limited evidence.
+
+No immediate action recommended.
+
+This ranking is intended to reduce a list of 20–30 wallets to a small shortlist for manual review.
+
+---
+
+FIRST ENCOUNTER CLASSIFICATION
+
+A wallet should not automatically receive "Limited History" simply because it has never appeared in the Wallet Library.
+
+Instead:
+
+If sufficient behavioral evidence can be obtained through limited enrichment:
+
+Generate a preliminary classification with an appropriate confidence level.
+
+Examples:
+
+- Possible Smart Money
+- Possible Early Mover
+- Possible High Conviction Holder
+- Possible Rug Risk
+- Possible Serial Dumper
+
+Confidence should reflect the amount of available evidence.
+
+---
+
+API USAGE POLICY
+
+External API requests are a last resort.
+
+Always prefer:
+
+1. Wallet Library
+2. Cached Wallet Intelligence
+3. Previous token scans
+4. Existing application data
+5. Limited blockchain enrichment only when required
+
+Every external request must have a clear purpose.
+
+Never request blockchain data that is unlikely to materially improve the screening result.
+
+---
+
+DESIGN GOAL
+
+The Wallet Screening Engine is designed to save the user time.
+
+When scanning a token with approximately 20–30 Top Holder wallets, the engine should rapidly reduce that list to only a handful of wallets worthy of deeper manual investigation.
+
+The purpose is not to replace GMGN, Nansen or other professional wallet analytics platforms.
+
+The purpose is to identify, from the very first scan, the wallets most likely to deserve further investigation while continuously improving future accuracy through the Wallet Library.
+
+IMPORTANT: 
+
+Limit enrichment to a small recent transaction sample (e.g., 10–20 enhanced transactions).
+
+

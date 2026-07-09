@@ -626,6 +626,12 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .wlib-rank-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0; padding-top:2px; }
 .wlib-ext-link { font-size:0.55rem; padding:2px 7px; border-radius:4px; border:1px solid rgba(255,255,255,0.09); background:none; color:var(--text-muted); text-decoration:none; white-space:nowrap; transition:all 0.12s; }
 .wlib-ext-link:hover { color:var(--accent-cyan); border-color:rgba(0,212,255,0.35); }
+/* ── Investigation Priority stars ── */
+.wlib-priority { display:inline-flex; align-items:center; font-size:0.72rem; line-height:1; letter-spacing:-1px; }
+.wlib-priority-3 { color:#ffd600; }  /* ⭐⭐⭐ High */
+.wlib-priority-2 { color:#7aafff; }  /* ⭐⭐ Medium */
+.wlib-priority-1 { color:#3a4a60; }  /* ⭐ Low */
+.wlib-priority-lbl { font-size:0.47rem; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; margin-left:4px; opacity:0.75; }
 /* ── Quick-Add Modal ── */
 .qa-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:9998; display:flex; align-items:center; justify-content:center; padding:20px; }
 .qa-modal   { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px 22px; width:100%; max-width:420px; box-shadow:0 24px 64px rgba(0,0,0,0.7); }
@@ -14948,9 +14954,11 @@ function wliScoreTier(score) {
 
 /* ── Tag CSS class helper ── */
 function wliTagCls(tag) {
-  var pos = ['Smart Money','Early Mover','Profitable Trader','High Conviction Holder','Quality Accumulator','Consistent Winner'];
-  var risk = ['Probable Insider','Suspected Cabal','Rug Risk','Serial Dumper','Pump-and-Dump Participant','Coordinated Trading','Wash Trading Suspected'];
-  var caut = ['Developer Association'];
+  var pos  = ['Smart Money','Early Mover','Profitable Trader','High Conviction Holder','Quality Accumulator','Consistent Winner',
+              'Possible Smart Money','Possible Early Mover','Possible High Conviction Holder'];
+  var risk = ['Probable Insider','Suspected Cabal','Rug Risk','Serial Dumper','Pump-and-Dump Participant','Coordinated Trading','Wash Trading Suspected',
+              'Possible Rug Risk','Possible Serial Dumper'];
+  var caut = ['Developer Association','New Wallet'];
   if (pos.indexOf(tag)  >= 0) return 'tp';
   if (risk.indexOf(tag) >= 0) return 'tr';
   if (caut.indexOf(tag) >= 0) return 'tc';
@@ -15128,114 +15136,250 @@ function wliAnalyzeAddress(address) {
   };
 }
 
-/* ── Helius enrichment — fetches minimal blockchain data for low-confidence wallets.
-   Uses getSignaturesForAddress (limit 10) to estimate activity level and wallet age.
-   Only called when the Wallet Library alone is insufficient (timesSeen ≤ 1).
-   Never called automatically — only during on-demand analysis.                      ── */
-async function wliHeliusEnrich(profile) {
+/* ── Investigation Priority — reduces 20-30 wallets to a shortlist for manual review.
+   Returns 3 (⭐⭐⭐ High), 2 (⭐⭐ Medium), or 1 (⭐ Low).
+   Based on score, tags, behavioral enrichment data, and current holder rank.        ── */
+function wliComputeInvestigationPriority(profile) {
+  var score = profile.reputationScore || 50;
+  var tags  = profile.tags || [];
+  var bd    = profile.behavioralData || {};
+  var rank  = profile.currentHolderRank || null;
+
+  /* High-priority tags — confirmed or preliminary strong signals */
+  var highTags = ['Smart Money','Possible Smart Money','Early Mover','Possible Early Mover','Probable Insider'];
+  if (tags.some(function(t){ return highTags.indexOf(t) >= 0; })) return 3;
+  if (score >= 72) return 3;
+  /* Large holder (top 3) with meaningful on-chain activity */
+  if (profile.heliusEnriched && rank && rank <= 3 && (bd.swapCount || 0) >= 3) return 3;
+
+  /* Medium-priority signals */
+  var medTags = ['High Conviction Holder','Possible High Conviction Holder','Developer Association'];
+  if (tags.some(function(t){ return medTags.indexOf(t) >= 0; })) return 2;
+  if (score >= 54) return 2;
+  if (profile.heliusEnriched && (bd.swapCount || 0) >= 2) return 2;
+  /* Top-8 holder always worth a look regardless of enrichment */
+  if (rank && rank <= 8) return 2;
+
+  return 1;
+}
+
+/* ── Helius enrichment — fetches behavioral evidence from the Enhanced Transactions API.
+   Uses /v0/addresses/{address}/transactions (limit 20) for decoded tx types and DEX sources.
+   Called adaptively — not for every wallet. Large holders and uncached wallets are
+   prioritized. Never called automatically; only during on-demand analysis.              ── */
+async function wliHeliusEnrich(profile, holderRank) {
   var heliusKey = (localStorage.getItem('tec_helius_key') || '').trim() ||
                   (el('sHeliusKey') ? el('sHeliusKey').value.trim() : '');
-  if (!heliusKey) return profile; /* no key — skip enrichment gracefully */
+  if (!heliusKey) return profile;
 
   try {
-    var endpoint = 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(heliusKey);
-    /* AbortController timeout — compatible with all modern browsers */
-    var controller = new AbortController();
-    var _wliTimeout = setTimeout(function(){ controller.abort(); }, 8000);
+    var url = 'https://api.helius.xyz/v0/addresses/' +
+              encodeURIComponent(profile.address) +
+              '/transactions?api-key=' + encodeURIComponent(heliusKey) + '&limit=20';
+
+    var controller  = new AbortController();
+    var _wliTimeout = setTimeout(function(){ controller.abort(); }, 10000);
     var resp;
     try {
-      resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 'wli-enrich', method: 'getSignaturesForAddress',
-          params: [ profile.address, { limit: 10 } ]
-        }),
-        signal: controller.signal
-      });
+      resp = await fetch(url, { signal: controller.signal });
     } finally {
       clearTimeout(_wliTimeout);
     }
     if (!resp.ok) return profile;
-    var data = await resp.json();
-    var sigs = Array.isArray(data.result) ? data.result : [];
+    var txs = await resp.json();
+    if (!Array.isArray(txs)) return profile;
 
-    /* Helper: strip placeholder tags that enrichment replaces with real data */
-    function stripPlaceholders(tags) {
-      return tags.filter(function(t){
-        return t !== 'Neutral' && t !== 'Inconclusive' && t !== 'Limited History';
-      });
-    }
+    /* ── Extract behavioral signals ── */
+    var swapCount = 0, defiSources = {}, uniqueMints = {}, timestamps = [];
+    txs.forEach(function(tx) {
+      if (tx.transactionError) return;
+      if (tx.timestamp) timestamps.push(tx.timestamp);
+      if (tx.type === 'SWAP') {
+        swapCount++;
+        if (tx.source && tx.source !== 'UNKNOWN') defiSources[tx.source] = (defiSources[tx.source] || 0) + 1;
+        (tx.tokenTransfers || []).forEach(function(t){ if (t.mint) uniqueMints[t.mint] = true; });
+      }
+    });
 
-    if (sigs.length === 0) {
-      /* No transaction history — brand-new or unused wallet */
-      profile.walletActivityLevel = 'None';
-      profile.walletNewFlag       = true;
-      profile.heliusEnriched      = true;
-      profile.riskSignals.push('No blockchain transaction history found — possibly a brand-new or unused wallet');
-      profile.tags = stripPlaceholders(profile.tags);
-      profile.tags.push('New Wallet');
-      profile.reputationScore = Math.max(0, profile.reputationScore - 10);
-      return profile;
-    }
+    var txCount          = txs.length;
+    var sources          = Object.keys(defiSources);
+    var isAggregator     = sources.some(function(s){
+      return s === 'JUPITER' || s === 'JUPITER_DCA' || s === 'JUPITER_LIMIT_ORDER';
+    });
+    var uniqueTokenCount = Object.keys(uniqueMints).length;
+    var nowSec           = Math.floor(Date.now() / 1000);
+    var oldestTs         = timestamps.length > 0 ? Math.min.apply(null, timestamps) : null;
+    var oldestAgeDays    = oldestTs ? Math.round((nowSec - oldestTs) / 86400) : null;
+    var swapRatio        = txCount > 0 ? swapCount / txCount : 0;
+    var isActiveTrader   = swapCount >= 5 && swapRatio >= 0.4;
+    var isNew            = txCount === 0 || (oldestAgeDays !== null && oldestAgeDays < 14 && txCount < 6);
+    var isTopHolder      = holderRank !== null && holderRank !== undefined && holderRank <= 5;
 
-    /* Estimate activity level from batch size */
-    var activityLevel = sigs.length >= 8 ? 'High' : sigs.length >= 4 ? 'Medium' : 'Low';
-
-    /* Check wallet age from oldest signature in the batch */
-    var oldest = sigs[sigs.length - 1];
-    var oldestTs  = (oldest && oldest.blockTime) ? new Date(oldest.blockTime * 1000) : null;
-    var nowMs     = Date.now();
-    var ageDays   = oldestTs ? Math.round((nowMs - oldestTs.getTime()) / 86400000) : null;
-    var isNew     = ageDays !== null && ageDays < 30 && sigs.length < 8;
-
-    profile.walletActivityLevel = activityLevel;
-    profile.walletNewFlag       = isNew;
+    /* Store behavioral snapshot for priority computation and display */
+    profile.behavioralData = {
+      swapCount:          swapCount,
+      txCount:            txCount,
+      uniqueTokensTraded: uniqueTokenCount,
+      isAggregatorUser:   isAggregator,
+      topDefiSources:     sources.slice(0, 3),
+      isActiveTrader:     isActiveTrader,
+      oldestTxAgeDays:    oldestAgeDays,
+      swapRatio:          Math.round(swapRatio * 100)
+    };
     profile.heliusEnriched      = true;
+    profile.walletActivityLevel = txCount >= 15 ? 'High' : txCount >= 5 ? 'Medium' : txCount > 0 ? 'Low' : 'None';
+    profile.walletNewFlag       = isNew;
 
-    /* Replace "Limited History" (and other placeholders) with enriched context */
-    profile.tags = stripPlaceholders(profile.tags);
+    /* Strip placeholder tags — enrichment provides real first-encounter classification */
+    profile.tags = profile.tags.filter(function(t){
+      return t !== 'Neutral' && t !== 'Inconclusive' && t !== 'Limited History';
+    });
 
-    if (isNew) {
+    if (txCount === 0 || isNew) {
       if (profile.tags.indexOf('New Wallet') < 0) profile.tags.push('New Wallet');
-      profile.riskSignals.push('Wallet shows limited blockchain history (est. < 30 days of activity) — exercise caution');
+      profile.riskSignals.push(txCount === 0
+        ? 'No on-chain transaction history — brand-new or unused wallet'
+        : 'Minimal on-chain history (est. < 14 days) — exercise caution');
       profile.reputationScore = Math.max(0, profile.reputationScore - 10);
+
+    } else if (isActiveTrader && isAggregator) {
+      /* Established wallet using DEX aggregators — strong smart money signal */
+      profile.tags.push('Possible Smart Money');
+      var srcLabel = sources.filter(function(s){ return s !== 'JUPITER'; }).slice(0, 1)[0];
+      profile.positiveSignals.push(
+        swapCount + ' swaps in sample · Jupiter' + (srcLabel ? ' + ' + srcLabel : '') +
+        (uniqueTokenCount >= 4 ? ' · ' + uniqueTokenCount + ' unique tokens traded' : '') +
+        (isTopHolder ? ' · ranked #' + holderRank + ' holder in this token' : '')
+      );
+      profile.reputationScore = Math.min(100, profile.reputationScore + 8);
+
+    } else if (isActiveTrader && (isTopHolder || uniqueTokenCount >= 4)) {
+      /* Active trader, top holder or diversified — possible early mover */
+      profile.tags.push('Possible Early Mover');
+      profile.positiveSignals.push(
+        swapCount + ' swaps via ' + (sources.slice(0, 2).join(', ') || 'DEX') +
+        (isTopHolder ? ' · ranked #' + holderRank + ' holder in this token' : '') +
+        (uniqueTokenCount >= 4 ? ' · ' + uniqueTokenCount + ' unique tokens in sample' : '')
+      );
+      profile.reputationScore = Math.min(100, profile.reputationScore + 4);
+
+    } else if (swapCount >= 1) {
+      profile.tags.push('Neutral');
+      profile.positiveSignals.push(
+        'On-chain confirmed: ' + swapCount + ' swap' + (swapCount !== 1 ? 's' : '') +
+        ' in recent sample' + (sources.length ? ' via ' + sources.slice(0, 2).join(', ') : '')
+      );
     } else {
-      /* Confirmed active wallet — replace placeholder with Neutral */
-      if (profile.tags.length === 0) profile.tags.push('Neutral');
-      var actLabel = activityLevel === 'High' ? 'high' : activityLevel === 'Medium' ? 'moderate' : 'some';
-      profile.positiveSignals.push('On-chain confirmed: ' + actLabel + ' blockchain activity (single token observation, watch for more)');
+      profile.tags.push('Neutral');
+      profile.positiveSignals.push('On-chain activity confirmed — primarily non-swap transactions');
     }
 
-    /* Confidence upgrade: Helius confirms the wallet exists and has history */
-    if (profile.confidence === 'Low' && !isNew) profile.confidence = 'Medium';
+    /* Confidence upgrade when enrichment reveals meaningful activity */
+    if (profile.confidence === 'Low' && !isNew && txCount > 0) {
+      profile.confidence = isActiveTrader ? 'Medium' : 'Low';
+    }
 
   } catch(err) {
-    /* Enrichment failed silently — return unchanged profile */
+    /* Enrichment failed silently — profile returned unchanged */
   }
   return profile;
 }
 
-/* ── Internal scan loop (async, yields to browser between wallets) ──
-   Applies Helius enrichment for wallets with Low confidence (≤1 library observation)
-   when a Helius key is available — minimum API usage, maximum reuse of cached data. ── */
-async function wliRunScan(addresses, onProgress) {
+/* ── Screening scan loop — 4-step escalating approach per spec.
+   Input: wallets = [{address, holderRank, holdingPct}] or plain strings.
+   Step 1 — Reuse high-confidence cached profiles (< 24 h old, no API call).
+   Step 2 — Build from Wallet Library observations.
+   Step 3 — Adaptive Helius enrichment: top-5 holders, uncached, low confidence.
+   Step 4 — Compute Investigation Priority, save.                                 ── */
+async function wliRunScan(wallets, onProgress) {
   var results = [];
   var heliusKey = (localStorage.getItem('tec_helius_key') || '').trim() ||
                   (el('sHeliusKey') ? el('sHeliusKey').value.trim() : '');
 
-  for (var i = 0; i < addresses.length; i++) {
-    var profile = wliAnalyzeAddress(addresses[i]);
-    if (profile) {
-      /* Enrich with Helius only when Wallet Library alone is insufficient */
-      if (heliusKey && profile.confidence === 'Low' && profile.timesSeen <= 1) {
-        profile = await wliHeliusEnrich(profile);
+  /* Normalise: accept plain address strings or {address, holderRank, holdingPct} objects */
+  var list = (wallets || []).map(function(w) {
+    return (typeof w === 'string')
+      ? { address: w, holderRank: null, holdingPct: null }
+      : w;
+  });
+
+  for (var i = 0; i < list.length; i++) {
+    var wctx       = list[i];
+    var address    = wctx.address;
+    var holderRank = wctx.holderRank || null;
+
+    /* Step 1 — Cached high-confidence profile (≤ 7 days old) → reuse, no API call.
+       Spec: "Do not perform external API requests" when a good profile exists.
+       7-day window avoids excessive re-enrichment while allowing stale data to refresh. */
+    var cached = wliGet(address);
+    if (cached && cached.confidence === 'High' && cached.lastAnalyzed) {
+      if (Date.now() - new Date(cached.lastAnalyzed).getTime() < 604800000) {
+        cached.currentHolderRank     = holderRank;
+        cached.investigationPriority = wliComputeInvestigationPriority(cached);
+        _wlibIntel[address.toLowerCase()] = cached;
+        results.push(cached);
+        if (onProgress) onProgress(i + 1, list.length);
+        await new Promise(function(r){ setTimeout(r, 0); });
+        continue;
       }
-      _wlibIntel[addresses[i].toLowerCase()] = profile;
-      results.push(profile);
     }
-    if (onProgress) onProgress(i + 1, addresses.length);
-    await new Promise(function(r){ setTimeout(r, 0); }); /* yield to browser */
+
+    /* Step 2 — Build from Wallet Library observations */
+    var profile = wliAnalyzeAddress(address);
+    if (!profile) {
+      /* First encounter — not yet in library */
+      profile = {
+        address:             address,
+        reputationScore:     50,
+        confidence:          'Low',
+        tags:                [],
+        positiveSignals:     [],
+        riskSignals:         [],
+        timesSeen:           0,
+        uniqueTokens:        [],
+        devCount:            0,
+        holderCount:         0,
+        avgHoldingPct:       wctx.holdingPct || 0,
+        avgHolderRank:       holderRank,
+        avgSecScore:         null,
+        firstSeen:           null,
+        lastSeen:            null,
+        lastAnalyzed:        new Date().toISOString(),
+        analysisMode:        'screening',
+        walletActivityLevel: null,
+        walletNewFlag:       null,
+        heliusEnriched:      false
+      };
+    }
+    profile.currentHolderRank = holderRank;
+
+    /* Step 3 — Adaptive enrichment — API is a last resort per spec.
+       Only enrich when: (a) confidence is still insufficient (Low) from library data, OR
+       (b) this is a top-5 holder who has never been enriched (high-value target).
+       Skip when library data already provides Medium or High confidence — the spec
+       forbids enrichment when sufficient confidence can be achieved without API calls. */
+    var needsEnrichment = heliusKey && (
+       profile.confidence === 'Low'                                        ||
+      (holderRank !== null && holderRank <= 5 && !profile.heliusEnriched)
+    );
+    if (needsEnrichment) {
+      /* Reset enrichment fields before each run — ensures idempotent score/signal
+         computation whether this wallet is being rescanned or enriched for the first time. */
+      profile.heliusEnriched      = false;
+      profile.behavioralData      = null;
+      profile.walletActivityLevel = null;
+      profile.walletNewFlag       = null;
+      profile = await wliHeliusEnrich(profile, holderRank);
+    }
+
+    /* Step 4 — Investigation Priority + save */
+    profile.investigationPriority = wliComputeInvestigationPriority(profile);
+    profile.lastAnalyzed          = new Date().toISOString();
+    _wlibIntel[address.toLowerCase()] = profile;
+    results.push(profile);
+
+    if (onProgress) onProgress(i + 1, list.length);
+    await new Promise(function(r){ setTimeout(r, 0); });
   }
   wliSave();
   return results;
@@ -15307,24 +15451,60 @@ function wlibSelectAll(checked) {
 async function wliAnalyzeSelected() {
   var checks = document.querySelectorAll('.wlib-row-cb:checked');
   if (checks.length === 0) { showToast('Check at least one wallet row first', 'error'); return; }
-  var seen = {}, addresses = [];
+
+  /* Attach holder rank context from current token if available */
+  var rankMap = {};
+  var ca = el('fCA') ? (el('fCA').value || '').trim() : '';
+  if (ca && _heliusHolderData && (_heliusHolderData.ca || '').toLowerCase() === ca.toLowerCase()) {
+    (_heliusHolderData.traderHolders || []).forEach(function(h, idx) {
+      rankMap[(h.address || '').toLowerCase()] = { holderRank: idx + 1, holdingPct: h.pct || 0 };
+    });
+  }
+
+  var seen = {}, wallets = [];
   checks.forEach(function(cb) {
     var addr = cb.dataset.address;
-    if (addr && !seen[addr.toLowerCase()]) { seen[addr.toLowerCase()] = true; addresses.push(addr); }
+    if (addr && !seen[addr.toLowerCase()]) {
+      seen[addr.toLowerCase()] = true;
+      var ctx = rankMap[addr.toLowerCase()] || {};
+      wallets.push({ address: addr, holderRank: ctx.holderRank || null, holdingPct: ctx.holdingPct || null });
+    }
   });
-  await wliRunBatch(addresses, 'Analyzing ' + addresses.length + ' selected wallet' + (addresses.length > 1 ? 's' : ''));
+  await wliRunBatch(wallets, 'Analyzing ' + wallets.length + ' selected wallet' + (wallets.length > 1 ? 's' : ''));
 }
 
-/* ── Action: Analyze current token's wallets ── */
+/* ── Action: Screen wallets from the current token ── */
 async function wliAnalyzeTokenUI() {
   var caInput = el('fCA');
   var ca = caInput ? (caInput.value || '').trim() : '';
   if (!ca) { showToast('Load a token first (enter CA and click Fetch Data)', 'error'); return; }
   wlibLoad();
   var tokenWallets = _walletLibrary.filter(function(w){ return (w.ca || '').toLowerCase() === ca.toLowerCase(); });
-  var addresses = wlibUniqueAddresses(tokenWallets);
-  if (addresses.length === 0) { showToast('No wallets collected for this token yet', 'error'); return; }
-  await wliRunBatch(addresses, 'Analyzing ' + addresses.length + ' wallet' + (addresses.length > 1 ? 's' : '') + ' from token');
+  if (tokenWallets.length === 0) { showToast('No wallets collected for this token yet', 'error'); return; }
+
+  /* Build holder rank map from Helius top-holder data for the current token */
+  var rankMap = {};
+  if (_heliusHolderData && (_heliusHolderData.ca || '').toLowerCase() === ca.toLowerCase()) {
+    (_heliusHolderData.traderHolders || []).forEach(function(h, idx) {
+      rankMap[(h.address || '').toLowerCase()] = { holderRank: idx + 1, holdingPct: h.pct || 0 };
+    });
+  }
+
+  /* Deduplicate and attach rank context */
+  var seen = {}, wallets = [];
+  tokenWallets.forEach(function(w) {
+    var k = w.address.toLowerCase();
+    if (seen[k]) return;
+    seen[k] = true;
+    var ctx = rankMap[k] || {};
+    wallets.push({
+      address:    w.address,
+      holderRank: ctx.holderRank || w.holderRank || null,
+      holdingPct: ctx.holdingPct || w.holdingPct || 0
+    });
+  });
+
+  await wliRunBatch(wallets, 'Screening ' + wallets.length + ' wallet' + (wallets.length > 1 ? 's' : '') + ' from token');
 }
 
 /* ── Action: Analyze all wallets in library ── */
@@ -15336,7 +15516,7 @@ async function wliAnalyzeAll() {
 }
 
 /* ── Core batch runner with progress UI ── */
-async function wliRunBatch(addresses, label) {
+async function wliRunBatch(wallets, label) {
   if (_wlibAnalyzing) { showToast('Analysis already running — please wait', 'error'); return; }
   _wlibAnalyzing = true;
   wliLoad(); /* refresh intel cache */
@@ -15351,7 +15531,7 @@ async function wliRunBatch(addresses, label) {
   document.querySelectorAll('.wlib-analyze-btn').forEach(function(b){ b.disabled = true; });
 
   try {
-    var results = await wliRunScan(addresses, function(done, total) {
+    var results = await wliRunScan(wallets, function(done, total) {
       var pct = Math.round((done / total) * 100);
       if (progFill)  progFill.style.width    = pct + '%';
       if (progLabel) progLabel.textContent   = label + ' — ' + done + '/' + total;
@@ -15385,8 +15565,10 @@ function wliShowResults(profiles) {
   if (!panel) return;
   if (!profiles || profiles.length === 0) { panel.style.display = 'none'; return; }
 
-  /* Sort: score desc, then confidence desc */
+  /* Sort: Investigation Priority desc → score desc → confidence desc */
   var sorted = profiles.slice().sort(function(a, b){
+    var pa = a.investigationPriority || 1, pb = b.investigationPriority || 1;
+    if (pb !== pa) return pb - pa;
     if (b.reputationScore !== a.reputationScore) return b.reputationScore - a.reputationScore;
     var cMap = { High:2, Medium:1, Low:0 };
     return (cMap[b.confidence] || 0) - (cMap[a.confidence] || 0);
@@ -15403,6 +15585,13 @@ function wliShowResults(profiles) {
     var addrSafe = escA(p.address);
     var short    = escH(p.address.slice(0,6)) + '…' + escH(p.address.slice(-4));
 
+    /* Investigation Priority stars */
+    var prio      = p.investigationPriority || 1;
+    var stars     = prio === 3 ? '⭐⭐⭐' : prio === 2 ? '⭐⭐' : '⭐';
+    var prioLabel = prio === 3 ? 'High Priority' : prio === 2 ? 'Medium Priority' : 'Low Priority';
+    var prioHtml  = '<span class="wlib-priority wlib-priority-' + prio + '" title="' + prioLabel + '">' +
+                    stars + '<span class="wlib-priority-lbl">' + prioLabel + '</span></span>';
+
     var tagsHtml = (p.tags || []).map(function(tag){
       return '<span class="wlib-tag ' + wliTagCls(tag) + '">' + escH(tag) + '</span>';
     }).join('');
@@ -15412,17 +15601,17 @@ function wliShowResults(profiles) {
     (p.riskSignals     || []).forEach(function(s){ sigsHtml += '<div class="neg">⚠ ' + escH(s) + '</div>'; });
 
     /* metaHtml: only numeric/controlled values — safe without escaping */
+    var rankCtx  = p.currentHolderRank ? ' · #' + Number(p.currentHolderRank) + ' holder this token' : '';
+    var bdCtx    = (p.behavioralData && p.behavioralData.swapCount > 0)
+      ? ' · ' + Number(p.behavioralData.swapCount) + ' swaps sampled' : '';
     var metaHtml = 'Seen in ' + Number(p.timesSeen) + ' token' + (p.timesSeen !== 1 ? 's' : '') +
-      (p.avgHoldingPct > 0 ? ' · Avg ' + Number(p.avgHoldingPct).toFixed(2) + '% holding' : '') +
-      (p.avgHolderRank  ? ' · Avg rank #' + p.avgHolderRank : '') +
+      (p.avgHoldingPct > 0 ? ' · Avg ' + Number(p.avgHoldingPct).toFixed(2) + '%' : '') +
+      rankCtx + bdCtx +
       ' · Confidence: ' + escH(p.confidence) +
-      (p.devCount    > 0 ? ' · Dev×'    + Number(p.devCount)    : '') +
-      (p.holderCount > 0 ? ' · Holder×' + Number(p.holderCount) : '') +
-      (p.heliusEnriched  ? ' · Helius enriched' : '') +
-      (p.walletActivityLevel ? ' · Activity: ' + escH(p.walletActivityLevel) : '');
+      (p.heliusEnriched ? ' · enriched' : '');
 
     var solscan = 'https://solscan.io/account/' + encodeURIComponent(p.address);
-    var gmgn    = 'https://gmgn.ai/sol/address/'       + encodeURIComponent(p.address);
+    var gmgn    = 'https://gmgn.ai/sol/address/'         + encodeURIComponent(p.address);
     var bbl     = 'https://app.bubblemaps.io/sol/wallet/' + encodeURIComponent(p.address);
 
     html += '<div class="wlib-rank-card ' + wliRankCls(t.tier) + '">' +
@@ -15432,7 +15621,10 @@ function wliShowResults(profiles) {
         '<div class="wlib-rank-score-lbl">' + escH(t.label) + '</div>' +
       '</div>' +
       '<div class="wlib-rank-body">' +
-        '<a class="wlib-rank-addr" href="' + solscan + '" target="_blank" title="' + addrSafe + '">' + short + '</a>' +
+        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">' +
+          '<a class="wlib-rank-addr" style="margin-bottom:0" href="' + solscan + '" target="_blank" title="' + addrSafe + '">' + short + '</a>' +
+          prioHtml +
+        '</div>' +
         '<div class="wlib-rank-tags">' + tagsHtml + '</div>' +
         (sigsHtml ? '<div class="wlib-rank-sigs">' + sigsHtml + '</div>' : '') +
         '<div class="wlib-rank-meta">' + metaHtml + '</div>' +
