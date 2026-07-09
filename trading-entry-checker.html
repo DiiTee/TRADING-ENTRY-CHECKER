@@ -565,6 +565,12 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
 .wlib-src-dev   { background:rgba(255,165,0,0.15);   color:#ffaa33; }
 .wlib-del { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.72rem; padding:2px 6px; border-radius:3px; line-height:1; }
 .wlib-del:hover { color:var(--skip); background:rgba(255,61,113,0.12); }
+.wlib-track-btn { background:none; border:1px solid var(--border); color:var(--text-muted); cursor:pointer; font-size:0.66rem; padding:3px 6px; border-radius:4px; line-height:1; margin:0 2px; }
+.wlib-track-btn.wlib-track-flag:hover { color:var(--skip); border-color:var(--skip); background:rgba(255,61,113,0.12); }
+.wlib-track-btn.wlib-track-smart:hover { color:var(--safe); border-color:var(--safe); background:rgba(0,255,136,0.12); }
+.wlib-track-badge { display:inline-block; font-size:0.66rem; padding:3px 6px; border-radius:4px; margin:0 2px; opacity:0.85; }
+.wlib-track-badge.wlib-track-flagged { color:var(--skip); background:rgba(255,61,113,0.12); }
+.wlib-track-badge.wlib-track-smart { color:var(--safe); background:rgba(0,255,136,0.12); }
 @keyframes wlib-flash { 0%{background:rgba(0,212,255,0.18);} 100%{background:transparent;} }
 .wlib-new td { animation:wlib-flash 1.4s ease-out; }
 /* ── Wallet Intelligence Engine ── */
@@ -1891,6 +1897,7 @@ p, span, td, th {
               <th>Tags</th>
               <th style="text-align:center;" title="Times this wallet appeared across different tokens">Seen</th>
               <th>Added</th>
+              <th style="text-align:center;">Track</th>
               <th></th>
             </tr>
           </thead>
@@ -3875,10 +3882,11 @@ async function fetchFromCA(ca) {
         window._stHolderData = _stHolders;
         var _stCount = (_stHolders.total != null ? parseInt(_stHolders.total) : 0) || 0;
         if (_stCount > 0) {
-          if (!window._tecHolderCount) {
-            window._tecHolderCount = _stCount;
-            try { if (el('fHolders') && !parseInt(el('fHolders').value)) el('fHolders').value = _stCount; } catch(_) {}
-          }
+          /* Solana Tracker is the authoritative on-chain holder source — always
+             overwrite whatever an earlier (less reliable) source populated,
+             so the Holder Count field/history accurately reflects Solana Tracker. */
+          window._tecHolderCount = _stCount;
+          try { if (el('fHolders')) el('fHolders').value = _stCount; } catch(_) {}
           tecSaveHolderSnap(ca, _stCount);
         }
         /* Fetch holder chart to auto-populate timeframe fields */
@@ -3894,17 +3902,24 @@ async function fetchFromCA(ca) {
               var _stH1 = stHolderFromChart(_chartArr, _tf1Ms);
               var _stH2 = stHolderFromChart(_chartArr, _tf2Ms);
               var _stH3 = stHolderFromChart(_chartArr, _tf3Ms);
-              if (_stH1 > 0 && !window._tecHolderH1) {
+              /* Solana Tracker's own holder chart is the most accurate source of
+                 holder history — always overwrite prior (fetched.holders /
+                 local-snapshot) values so H1/H6/H24 match what Solana Tracker
+                 actually reports for those timeframes. */
+              if (_stH1 > 0) {
                 window._tecHolderH1 = _stH1;
-                try { if (el('fHoldersH1') && !parseInt(el('fHoldersH1').value)) el('fHoldersH1').value = _stH1; } catch(_) {}
+                window._tecDataAvailability.holderHistory = true;
+                try { if (el('fHoldersH1')) el('fHoldersH1').value = _stH1; } catch(_) {}
               }
-              if (_stH2 > 0 && !window._tecHolderH6) {
+              if (_stH2 > 0) {
                 window._tecHolderH6 = _stH2;
-                try { if (el('fHoldersH6') && !parseInt(el('fHoldersH6').value)) el('fHoldersH6').value = _stH2; } catch(_) {}
+                window._tecDataAvailability.holderHistory = true;
+                try { if (el('fHoldersH6')) el('fHoldersH6').value = _stH2; } catch(_) {}
               }
-              if (_stH3 > 0 && !window._tecHolderH24) {
+              if (_stH3 > 0) {
                 window._tecHolderH24 = _stH3;
-                try { if (el('fHoldersH24') && !parseInt(el('fHoldersH24').value)) el('fHoldersH24').value = _stH3; } catch(_) {}
+                window._tecDataAvailability.holderHistory = true;
+                try { if (el('fHoldersH24')) el('fHoldersH24').value = _stH3; } catch(_) {}
               }
               window._stHolderData._chartArr = _chartArr;
             }
@@ -3921,6 +3936,16 @@ async function fetchFromCA(ca) {
       console.log('[ST] Auto-fetch failed:', _stErr && _stErr.message);
       addBadge('Solana Tracker', 'fail');
       addDiag('fail', 'Solana Tracker', 'Holder fetch failed: ' + (_stErr && _stErr.message || 'unknown') + '. Existing sources used.');
+    }
+    /* Solana Tracker's holder count/chart resolve AFTER the structural
+       analysis was first computed (it depends on 15m OHLCV candles fetched
+       earlier). Re-run the holder-only portion of that analysis now so
+       Holder Momentum reflects the corrected figures shown above. */
+    if (window._tecCandles && window._tecCandles.structuralAnalysis) {
+      refreshHolderMetricsOnAnalysis(window._tecCandles.structuralAnalysis);
+      if (typeof gtStructuralAnalysis !== 'undefined' && gtStructuralAnalysis) {
+        refreshHolderMetricsOnAnalysis(gtStructuralAnalysis);
+      }
     }
   }
 
@@ -6706,6 +6731,121 @@ function computeHintStructure(fetched) {
   };
 }
 
+/* ── Holder Count Quality + Holder Momentum (time-based) + Holder Divergence ──
+   Extracted as a standalone function so it can be (a) computed once inside
+   computeStructuralAnalysis when candles first load, and (b) RE-computed and
+   patched onto an existing structuralAnalysis object once more accurate
+   Solana Tracker holder data arrives later in the fetch pipeline (Solana
+   Tracker's holder fetch/chart is async and resolves after the structural
+   analysis is first built). This keeps Holder Momentum in sync with the
+   figures actually shown in the Holder Count History inputs. */
+function computeHolderMetrics(hcMcap, trendState) {
+  var hcHld  = window._tecHolderCount || parseInt((el('fHolders')||{}).value||'0') || 0;
+  var hldH1  = window._tecHolderH1  || 0;
+  var hldH6  = window._tecHolderH6  || 0;
+  var hldH24 = window._tecHolderH24 || 0;
+
+  /* Holder Count Quality — market-cap-relative ratio scoring */
+  var hcExpLow, hcExpHigh;
+  if      (hcMcap <= 0)           { hcExpLow =   25; hcExpHigh =    50; }
+  else if (hcMcap <   25000)      { hcExpLow =   25; hcExpHigh =    50; }
+  else if (hcMcap <   50000)      { hcExpLow =   50; hcExpHigh =   100; }
+  else if (hcMcap <  100000)      { hcExpLow =  100; hcExpHigh =   150; }
+  else if (hcMcap <  250000)      { hcExpLow =  150; hcExpHigh =   300; }
+  else if (hcMcap <  500000)      { hcExpLow =  300; hcExpHigh =   500; }
+  else if (hcMcap < 1000000)      { hcExpLow =  500; hcExpHigh = 1000; }
+  else if (hcMcap < 2500000)      { hcExpLow = 1000; hcExpHigh = 2000; }
+  else if (hcMcap < 5000000)      { hcExpLow = 2000; hcExpHigh = 3500; }
+  else if (hcMcap < 10000000)     { hcExpLow = 3500; hcExpHigh = 5000; }
+  else                            { hcExpLow = 5000; hcExpHigh = 10000; }
+  var hcExpMid = (hcExpLow + hcExpHigh) / 2;
+  var holderExpectedRange = (hcMcap >= 10000000)
+    ? '5,000+'
+    : hcExpLow.toLocaleString() + '–' + hcExpHigh.toLocaleString();
+  var holderCountQualityScore, holderCountQualityClass;
+  if (hcHld <= 0) {
+    holderCountQualityScore = 0;  holderCountQualityClass = 'No Data';
+  } else {
+    var hcRatio = hcHld / hcExpMid;
+    if      (hcRatio >= 2.0)  { holderCountQualityScore = 100; holderCountQualityClass = 'Exceptional'; }
+    else if (hcRatio >= 1.5)  { holderCountQualityScore =  85; holderCountQualityClass = 'Strong'; }
+    else if (hcRatio >= 1.0)  { holderCountQualityScore =  70; holderCountQualityClass = 'Healthy'; }
+    else if (hcRatio >= 0.75) { holderCountQualityScore =  55; holderCountQualityClass = 'Fair'; }
+    else if (hcRatio >= 0.50) { holderCountQualityScore =  35; holderCountQualityClass = 'Weak'; }
+    else                      { holderCountQualityScore =  15; holderCountQualityClass = 'Poor'; }
+  }
+
+  /* Holder Momentum — measures growth/decline over time using historical counts */
+  var holderMomentumScore = 50, holderTrendClass = 'No History', holderMomentumSource = 'Historical data unavailable';
+  var holderHistoryAvailable = (hldH1 > 0 || hldH6 > 0 || hldH24 > 0) && hcHld > 0;
+  if (hcHld <= 0) {
+    holderMomentumScore  = 0;
+    holderTrendClass     = 'Unknown';
+    holderMomentumSource = 'No Data';
+  } else if (!holderHistoryAvailable) {
+    holderMomentumScore  = 50;
+    holderTrendClass     = 'No History';
+    holderMomentumSource = 'Historical data unavailable';
+  } else {
+    /* Per-period % change (positive = growth, negative = decline) */
+    var hldCh1  = hldH1  > 0 ? ((hcHld - hldH1)  / hldH1)  * 100 : null;
+    var hldCh6  = hldH6  > 0 ? ((hcHld - hldH6)  / hldH6)  * 100 : null;
+    var hldCh24 = hldH24 > 0 ? ((hcHld - hldH24) / hldH24) * 100 : null;
+    /* Weighted composite; re-normalise weights for available periods */
+    var hldWsum = (hldCh1 !== null ? 0.50 : 0) + (hldCh6 !== null ? 0.30 : 0) + (hldCh24 !== null ? 0.20 : 0);
+    var hldRaw  = hldWsum > 0
+      ? ((hldCh1  !== null ? hldCh1  * 0.50 : 0) +
+         (hldCh6  !== null ? hldCh6  * 0.30 : 0) +
+         (hldCh24 !== null ? hldCh24 * 0.20 : 0)) / hldWsum
+      : 0;
+    /* Normalise: raw -30% → 0, 0% → 50, +30% → 100 */
+    holderMomentumScore  = Math.round(Math.min(100, Math.max(0, ((hldRaw + 30) / 60) * 100)));
+    holderMomentumSource = 'Holder History';
+    if      (holderMomentumScore >= 90) holderTrendClass = 'Explosive Growth';
+    else if (holderMomentumScore >= 75) holderTrendClass = 'Strong Growth';
+    else if (holderMomentumScore >= 60) holderTrendClass = 'Steady Growth';
+    else if (holderMomentumScore >= 45) holderTrendClass = 'Stable';
+    else if (holderMomentumScore >= 30) holderTrendClass = 'Distribution';
+    else                                holderTrendClass = 'Holder Exodus';
+  }
+
+  /* Holder Divergence — detect hidden accumulation or distribution */
+  var holderDivergence = 'None', holderDivergenceType = null;
+  if (holderHistoryAvailable && hldH1 > 0) {
+    var hldRising  = hcHld > hldH1;
+    var hldFalling = hcHld < hldH1;
+    var hldPriceDown = trendState === 'Downtrend';
+    var hldPriceUp   = trendState === 'Uptrend';
+    if      (hldPriceDown && hldRising)  { holderDivergence = 'Accumulation Divergence'; holderDivergenceType = 'bullish'; }
+    else if (hldPriceUp   && hldFalling) { holderDivergence = 'Distribution Divergence'; holderDivergenceType = 'bearish'; }
+    else                                 { holderDivergence = 'No Divergence';            holderDivergenceType = null;     }
+  }
+
+  return {
+    holderCountQualityScore: holderCountQualityScore,
+    holderCountQualityClass: holderCountQualityClass,
+    holderExpectedRange:     holderExpectedRange,
+    holderHistoryAvailable:  holderHistoryAvailable,
+    holderMomentumScore:     holderMomentumScore,
+    holderTrendClass:        holderTrendClass,
+    holderMomentumSource:    holderMomentumSource,
+    holderDivergence:        holderDivergence,
+    holderDivergenceType:    holderDivergenceType
+  };
+}
+
+/* Re-computes holder metrics from the latest window._tecHolder* globals and
+   patches them onto an existing structuralAnalysis object in place. Called
+   after Solana Tracker's holder count/chart resolves (which happens after
+   the structural analysis is first built) so Holder Momentum in Structure
+   Analysis always reflects the most accurate holder history available. */
+function refreshHolderMetricsOnAnalysis(sa) {
+  if (!sa) return sa;
+  var hm = computeHolderMetrics(window._tecMarketCap || 0, sa.trendState);
+  for (var k in hm) sa[k] = hm[k];
+  return sa;
+}
+
 function computeStructuralAnalysis(candles15m, poolAttrs) {
   if (!candles15m || candles15m.length < 3) return null;
 
@@ -7202,90 +7342,22 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   var trapRiskLabel = trapRiskScore >= 75 ? 'Extreme Risk' : trapRiskScore >= 50 ? 'High Risk' : trapRiskScore >= 25 ? 'Moderate Risk' : 'Low Risk';
   var trapRiskColor = trapRiskScore >= 75 ? '#ff4757' : trapRiskScore >= 50 ? '#ff6b35' : trapRiskScore >= 25 ? '#ffeb3b' : '#00e676';
 
-  /* ── Holder Count Quality + Holder Momentum (time-based) + Holder Divergence ── */
-  var hcHld  = window._tecHolderCount || parseInt((el('fHolders')||{}).value||'0') || 0;
+  /* ── Holder Count Quality + Holder Momentum (time-based) + Holder Divergence ──
+     Computed via computeHolderMetrics() so it can be re-run later (once
+     Solana Tracker's holder data resolves) without duplicating this logic —
+     see refreshHolderMetricsOnAnalysis(). */
   var minH   = (window._tecSettings && window._tecSettings.minHolders) || 400;
-  var hldH1  = window._tecHolderH1  || 0;
-  var hldH6  = window._tecHolderH6  || 0;
-  var hldH24 = window._tecHolderH24 || 0;
-
-  /* Holder Count Quality — market-cap-relative ratio scoring */
   var hcMcap = window._tecMarketCap || 0;
-  /* Expected holder range lookup by market cap */
-  var hcExpLow, hcExpHigh;
-  if      (hcMcap <= 0)           { hcExpLow =   25; hcExpHigh =    50; }
-  else if (hcMcap <   25000)      { hcExpLow =   25; hcExpHigh =    50; }
-  else if (hcMcap <   50000)      { hcExpLow =   50; hcExpHigh =   100; }
-  else if (hcMcap <  100000)      { hcExpLow =  100; hcExpHigh =   150; }
-  else if (hcMcap <  250000)      { hcExpLow =  150; hcExpHigh =   300; }
-  else if (hcMcap <  500000)      { hcExpLow =  300; hcExpHigh =   500; }
-  else if (hcMcap < 1000000)      { hcExpLow =  500; hcExpHigh = 1000; }
-  else if (hcMcap < 2500000)      { hcExpLow = 1000; hcExpHigh = 2000; }
-  else if (hcMcap < 5000000)      { hcExpLow = 2000; hcExpHigh = 3500; }
-  else if (hcMcap < 10000000)     { hcExpLow = 3500; hcExpHigh = 5000; }
-  else                            { hcExpLow = 5000; hcExpHigh = 10000; }
-  var hcExpMid = (hcExpLow + hcExpHigh) / 2;
-  var holderExpectedRange = (hcMcap >= 10000000)
-    ? '5,000+'
-    : hcExpLow.toLocaleString() + '–' + hcExpHigh.toLocaleString();
-  var holderCountQualityScore, holderCountQualityClass;
-  if (hcHld <= 0) {
-    holderCountQualityScore = 0;  holderCountQualityClass = 'No Data';
-  } else {
-    var hcRatio = hcHld / hcExpMid;
-    if      (hcRatio >= 2.0)  { holderCountQualityScore = 100; holderCountQualityClass = 'Exceptional'; }
-    else if (hcRatio >= 1.5)  { holderCountQualityScore =  85; holderCountQualityClass = 'Strong'; }
-    else if (hcRatio >= 1.0)  { holderCountQualityScore =  70; holderCountQualityClass = 'Healthy'; }
-    else if (hcRatio >= 0.75) { holderCountQualityScore =  55; holderCountQualityClass = 'Fair'; }
-    else if (hcRatio >= 0.50) { holderCountQualityScore =  35; holderCountQualityClass = 'Weak'; }
-    else                      { holderCountQualityScore =  15; holderCountQualityClass = 'Poor'; }
-  }
-
-  /* Holder Momentum — measures growth/decline over time using historical counts */
-  var holderMomentumScore = 50, holderTrendClass = 'No History', holderMomentumSource = 'Historical data unavailable';
-  var holderHistoryAvailable = (hldH1 > 0 || hldH6 > 0 || hldH24 > 0) && hcHld > 0;
-  if (hcHld <= 0) {
-    holderMomentumScore  = 0;
-    holderTrendClass     = 'Unknown';
-    holderMomentumSource = 'No Data';
-  } else if (!holderHistoryAvailable) {
-    holderMomentumScore  = 50;
-    holderTrendClass     = 'No History';
-    holderMomentumSource = 'Historical data unavailable';
-  } else {
-    /* Per-period % change (positive = growth, negative = decline) */
-    var hldCh1  = hldH1  > 0 ? ((hcHld - hldH1)  / hldH1)  * 100 : null;
-    var hldCh6  = hldH6  > 0 ? ((hcHld - hldH6)  / hldH6)  * 100 : null;
-    var hldCh24 = hldH24 > 0 ? ((hcHld - hldH24) / hldH24) * 100 : null;
-    /* Weighted composite; re-normalise weights for available periods */
-    var hldWsum = (hldCh1 !== null ? 0.50 : 0) + (hldCh6 !== null ? 0.30 : 0) + (hldCh24 !== null ? 0.20 : 0);
-    var hldRaw  = hldWsum > 0
-      ? ((hldCh1  !== null ? hldCh1  * 0.50 : 0) +
-         (hldCh6  !== null ? hldCh6  * 0.30 : 0) +
-         (hldCh24 !== null ? hldCh24 * 0.20 : 0)) / hldWsum
-      : 0;
-    /* Normalise: raw -30% → 0, 0% → 50, +30% → 100 */
-    holderMomentumScore  = Math.round(Math.min(100, Math.max(0, ((hldRaw + 30) / 60) * 100)));
-    holderMomentumSource = 'Holder History';
-    if      (holderMomentumScore >= 90) holderTrendClass = 'Explosive Growth';
-    else if (holderMomentumScore >= 75) holderTrendClass = 'Strong Growth';
-    else if (holderMomentumScore >= 60) holderTrendClass = 'Steady Growth';
-    else if (holderMomentumScore >= 45) holderTrendClass = 'Stable';
-    else if (holderMomentumScore >= 30) holderTrendClass = 'Distribution';
-    else                                holderTrendClass = 'Holder Exodus';
-  }
-
-  /* Holder Divergence — detect hidden accumulation or distribution */
-  var holderDivergence = 'None', holderDivergenceType = null;
-  if (holderHistoryAvailable && hldH1 > 0) {
-    var hldRising  = hcHld > hldH1;
-    var hldFalling = hcHld < hldH1;
-    var hldPriceDown = trendState === 'Downtrend';
-    var hldPriceUp   = trendState === 'Uptrend';
-    if      (hldPriceDown && hldRising)  { holderDivergence = 'Accumulation Divergence'; holderDivergenceType = 'bullish'; }
-    else if (hldPriceUp   && hldFalling) { holderDivergence = 'Distribution Divergence'; holderDivergenceType = 'bearish'; }
-    else                                 { holderDivergence = 'No Divergence';            holderDivergenceType = null;     }
-  }
+  var _hm = computeHolderMetrics(hcMcap, trendState);
+  var holderCountQualityScore = _hm.holderCountQualityScore;
+  var holderCountQualityClass = _hm.holderCountQualityClass;
+  var holderExpectedRange     = _hm.holderExpectedRange;
+  var holderHistoryAvailable  = _hm.holderHistoryAvailable;
+  var holderMomentumScore     = _hm.holderMomentumScore;
+  var holderTrendClass        = _hm.holderTrendClass;
+  var holderMomentumSource    = _hm.holderMomentumSource;
+  var holderDivergence        = _hm.holderDivergence;
+  var holderDivergenceType    = _hm.holderDivergenceType;
 
   /* ── FIX #6/#7: Confidence Tier (8 components; Breakout weight 10%→15%) ── */
   var distScoreForTier = Math.max(0, 100 - distFromShelf * 3);
@@ -14269,6 +14341,7 @@ function confirmQuickAdd() {
     window._flaggedWallets.push({ address: address, label: label, type: type });
     saveFlaggedWallets();
     renderFlaggedWallets();
+    if (typeof wlibRender === 'function') wlibRender();
     showToast('\uD83D\uDEA9 Flagged: ' + label, 'success');
   } else {
     if (checkSmartWallet(address)) { showToast('Already in Smart Wallets', 'error'); closeQuickAdd(); return; }
@@ -14280,6 +14353,7 @@ function confirmQuickAdd() {
     window._smartWallets.push(entry);
     saveSmartWallets();
     renderSmartWallets();
+    if (typeof wlibRender === 'function') wlibRender();
     showToast('\uD83E\uDDE0 Smart wallet added: ' + label, 'success');
   }
   closeQuickAdd();
@@ -15199,6 +15273,16 @@ function wlibRender() {
           tagsHtml  = '<td></td>';
           seenHtml  = '<td class="wlib-seen" style="color:var(--text-muted);">—</td>';
         }
+        var isFlagged = !!checkFlaggedWallet(w.address);
+        var isSmart   = !!checkSmartWallet(w.address);
+        var trackHtml = '<td style="text-align:center;white-space:nowrap;">' +
+          (isFlagged
+            ? '<span class="wlib-track-badge wlib-track-flagged" title="Already in Flagged Wallets"><i class="fa-solid fa-flag"></i></span>'
+            : '<button class="wlib-track-btn wlib-track-flag" onclick="openQuickAdd(\'' + addrSafe + '\',\'flagged\')" title="Add to Flagged Wallets"><i class="fa-solid fa-flag"></i></button>') +
+          (isSmart
+            ? '<span class="wlib-track-badge wlib-track-smart" title="Already in Smart Wallet Tracker"><i class="fa-solid fa-brain"></i></span>'
+            : '<button class="wlib-track-btn wlib-track-smart" onclick="openQuickAdd(\'' + addrSafe + '\',\'smart\')" title="Add to Smart Wallet Tracker"><i class="fa-solid fa-brain"></i></button>') +
+          '</td>';
         return '<tr id="wlibRow_' + escA(w.id) + '">' +
           '<td class="wlib-cb-col"><input type="checkbox" class="wlib-cb wlib-row-cb" data-address="' + addrSafe + '"></td>' +
           '<td style="color:var(--text-muted);font-size:0.60rem;">' + (i + 1) + '</td>' +
@@ -15208,6 +15292,7 @@ function wlibRender() {
           '<td class="wlib-pct">' + (w.holdingPct > 0 ? w.holdingPct.toFixed(2) + '%' : '—') + '</td>' +
           scoreHtml + tagsHtml + seenHtml +
           '<td style="color:var(--text-muted);font-size:0.60rem;white-space:nowrap;">' + escH(dateStr) + '</td>' +
+          trackHtml +
           '<td><button class="wlib-del" onclick="wlibDelete(\'' + escA(w.id) + '\')" title="Remove from library"><i class="fa-solid fa-xmark"></i></button></td>' +
         '</tr>';
       }).join('');
