@@ -7558,7 +7558,7 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
     checklist.push({
       label: 'Holder Momentum', value: 'No History',
       status: 'caution',
-      reason: 'Historical holder data unavailable — enter 1h / 6h / 24h holder counts for momentum tracking'
+      reason: 'Historical holder data unavailable — enter holder counts in the form for momentum tracking'
     });
   } else {
     checklist.push({
@@ -9071,7 +9071,7 @@ function buildEntryBriefingHTML(d, analysis) {
           t += 'Holder Density: <strong style="color:' + hcqC + ';">' + sa.holderCountQualityClass + '</strong>';
           t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderCountQualityScore + '/100)</span><br>';
           if (!sa.holderHistoryAvailable) {
-            t += 'Holder Momentum: <span style="color:var(--text-muted);font-size:0.70rem;">Historical holder data unavailable. Enter 1h / 6h / 24h counts in the form.</span><br>';
+            t += 'Holder Momentum: <span style="color:var(--text-muted);font-size:0.70rem;">Historical holder data unavailable. Enter holder counts in the form.</span><br>';
           } else {
             var hmC = sa.holderMomentumScore >= 75 ? '#00e676' : sa.holderMomentumScore >= 60 ? 'var(--safe)' : sa.holderMomentumScore >= 45 ? 'var(--caution)' : '#ff4757';
             var hmGlow = sa.holderMomentumScore >= 75 ? '0 0 10px rgba(0,230,118,0.35)' : sa.holderMomentumScore <= 30 ? '0 0 10px rgba(255,71,87,0.35)' : 'none';
@@ -9086,11 +9086,14 @@ function buildEntryBriefingHTML(d, analysis) {
             t += '    <div><strong style="color:' + hmC + ';font-size:1.05rem;letter-spacing:0.5px;">' + sa.holderTrendClass + '</strong>';
             t += '     <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.holderMomentumScore + '/100)</span></div>';
             t += '  </div>';
+            var _tfL1 = (window._tecSettings && window._tecSettings.holderTf1) || 1;
+            var _tfL2 = (window._tecSettings && window._tecSettings.holderTf2) || 3;
+            var _tfL3 = (window._tecSettings && window._tecSettings.holderTf3) || 5;
             t += '  <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">';
             t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">CURRENT</div><div style="font-size:0.86rem;font-weight:700;color:var(--text-primary);">' + ((sa.holderCountNow != null ? sa.holderCountNow : (window._tecHolderCount || 0)).toLocaleString()) + '</div></div>';
-            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">1H (' + (sa.holderCountH1 ? sa.holderCountH1.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH1Pct) + '</div></div>';
-            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">6H (' + (sa.holderCountH6 ? sa.holderCountH6.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH6Pct) + '</div></div>';
-            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">24H (' + (sa.holderCountH24 ? sa.holderCountH24.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH24Pct) + '</div></div>';
+            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">' + _tfL1 + 'm AGO (' + (sa.holderCountH1 ? sa.holderCountH1.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH1Pct) + '</div></div>';
+            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">' + _tfL2 + 'm AGO (' + (sa.holderCountH6 ? sa.holderCountH6.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH6Pct) + '</div></div>';
+            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">' + _tfL3 + 'm AGO (' + (sa.holderCountH24 ? sa.holderCountH24.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH24Pct) + '</div></div>';
             t += '  </div>';
             t += '  <div style="font-size:0.66rem;color:var(--text-muted);margin-top:6px;">Source: ' + (sa.holderMomentumSource || 'Holder History') + '</div>';
             t += '</div>';
@@ -10457,7 +10460,7 @@ function buildAttentionBriefingHTML(d, analysis) {
   nt += '<div style="padding:8px 10px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:3px solid '+hmC+';margin-bottom:6px;">';
   nt += '<div style="font-size:0.59rem;color:var(--text-muted);font-weight:700;letter-spacing:0.8px;margin-bottom:3px;">HOLDER MOMENTUM</div>';
   if (!ab.hmAvail) {
-    nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.3);">Historical holder data unavailable. Enter 1h / 6h / 24h counts for momentum tracking.</div>';
+    nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.3);">Historical holder data unavailable. Enter holder counts in the form for momentum tracking.</div>';
   } else {
     nt += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">';
     nt += '<strong style="color:'+hmC+';">'+ab.hmClass+'</strong>';
@@ -10472,9 +10475,12 @@ function buildAttentionBriefingHTML(d, analysis) {
     nt += '<div style="font-size:0.60rem;color:rgba(255,255,255,0.45);">'+hmDesc+'</div>';
     if (ab.holderCount > 0) {
       nt += '<div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">';
-      if (ab.hldH1 > 0)  { var _c1=((ab.holderCount-ab.hldH1)/ab.hldH1*100).toFixed(1);   nt += '<span style="font-size:0.60rem;color:var(--text-muted);">1h: <strong style="color:'+(parseFloat(_c1)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c1)>0?'+':'')+_c1+'%</strong></span>'; }
-      if (ab.hldH6 > 0)  { var _c6=((ab.holderCount-ab.hldH6)/ab.hldH6*100).toFixed(1);   nt += '<span style="font-size:0.60rem;color:var(--text-muted);">6h: <strong style="color:'+(parseFloat(_c6)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c6)>0?'+':'')+_c6+'%</strong></span>'; }
-      if (ab.hldH24 > 0) { var _c24=((ab.holderCount-ab.hldH24)/ab.hldH24*100).toFixed(1); nt += '<span style="font-size:0.60rem;color:var(--text-muted);">24h: <strong style="color:'+(parseFloat(_c24)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c24)>0?'+':'')+_c24+'%</strong></span>'; }
+      var _abTf1 = (window._tecSettings && window._tecSettings.holderTf1) || 1;
+      var _abTf2 = (window._tecSettings && window._tecSettings.holderTf2) || 3;
+      var _abTf3 = (window._tecSettings && window._tecSettings.holderTf3) || 5;
+      if (ab.hldH1 > 0)  { var _c1=((ab.holderCount-ab.hldH1)/ab.hldH1*100).toFixed(1);   nt += '<span style="font-size:0.60rem;color:var(--text-muted);">'+_abTf1+'m: <strong style="color:'+(parseFloat(_c1)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c1)>0?'+':'')+_c1+'%</strong></span>'; }
+      if (ab.hldH6 > 0)  { var _c6=((ab.holderCount-ab.hldH6)/ab.hldH6*100).toFixed(1);   nt += '<span style="font-size:0.60rem;color:var(--text-muted);">'+_abTf2+'m: <strong style="color:'+(parseFloat(_c6)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c6)>0?'+':'')+_c6+'%</strong></span>'; }
+      if (ab.hldH24 > 0) { var _c24=((ab.holderCount-ab.hldH24)/ab.hldH24*100).toFixed(1); nt += '<span style="font-size:0.60rem;color:var(--text-muted);">'+_abTf3+'m: <strong style="color:'+(parseFloat(_c24)>=0?'#00e676':'#ff4757')+';">'+(parseFloat(_c24)>0?'+':'')+_c24+'%</strong></span>'; }
       nt += '</div>';
     }
   }
