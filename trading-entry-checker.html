@@ -1323,6 +1323,23 @@ p, span, td, th {
           <label class="settings-label">Min Holders</label>
           <input class="settings-input" type="number" id="sMinHolders" value="400" min="0" step="10">
         </div>
+        <div style="margin-top:4px;margin-bottom:4px;padding:6px 9px;background:rgba(153,69,255,0.05);border-radius:4px;border-left:2px solid rgba(153,69,255,0.3);">
+          <div style="font-size:0.57rem;color:#9945FF;font-weight:700;letter-spacing:0.7px;margin-bottom:6px;"><i class="fa-solid fa-clock-rotate-left" style="margin-right:4px;"></i>HOLDER HISTORY TIMEFRAMES <span style="color:var(--text-muted);font-weight:400;text-transform:none;">(minutes — auto-filled by Solana Tracker)</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
+            <div class="form-group" style="margin:0;">
+              <label class="settings-label" style="font-size:0.57rem;">Snapshot 1 (m)</label>
+              <input class="settings-input" type="number" id="sHolderTf1" value="1" min="1" max="60" step="1">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="settings-label" style="font-size:0.57rem;">Snapshot 2 (m)</label>
+              <input class="settings-input" type="number" id="sHolderTf2" value="3" min="1" max="60" step="1">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="settings-label" style="font-size:0.57rem;">Snapshot 3 (m)</label>
+              <input class="settings-input" type="number" id="sHolderTf3" value="5" min="1" max="60" step="1">
+            </div>
+          </div>
+        </div>
         <div class="form-group">
           <label class="settings-label">Max Fake Holders %</label>
           <input class="settings-input" type="number" id="sMaxFakeH" value="10" min="0" step="1">
@@ -1510,6 +1527,22 @@ p, span, td, th {
         <div class="form-group">
           <label class="settings-label"><i class="fa-brands fa-reddit" style="color:#ff4500;margin-right:4px;"></i>Reddit Client Secret <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(optional)</span></label>
           <input class="settings-input" type="password" id="sRedditSecret" placeholder="Reddit app client_secret" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="settings-label"><i class="fa-solid fa-database" style="color:#9945FF;margin-right:4px;"></i>Solana Tracker API Key <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(holder data · OHLCV fallback · wallet enrichment)</span> <a href="https://docs.solanatracker.io" target="_blank" style="color:var(--accent-cyan);font-size:10px;margin-left:4px;">get key</a></label>
+          <input class="settings-input" type="password" id="sSolanaTrackerKey" placeholder="Paste Solana Tracker API key" autocomplete="off">
+        </div>
+        <div style="margin-top:6px;padding:8px 10px;background:rgba(153,69,255,0.06);border-radius:5px;border-left:3px solid rgba(153,69,255,0.35);">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:5px;">
+            <div style="font-size:0.59rem;color:#9945FF;font-weight:700;letter-spacing:0.7px;"><i class="fa-solid fa-gauge-high" style="margin-right:4px;"></i>SOLANA TRACKER REQUEST BUDGET</div>
+            <a href="https://solanatracker.io/dashboard" target="_blank" style="font-size:0.52rem;color:var(--text-muted);text-decoration:none;padding:2px 6px;border:1px solid rgba(255,255,255,0.1);border-radius:3px;white-space:nowrap;">Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.42rem;"></i></a>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <label class="settings-label" style="margin:0;font-size:0.59rem;white-space:nowrap;">Max Requests / Month</label>
+            <input class="settings-input" type="number" id="sSTBudget" value="100" min="0" step="10" style="max-width:80px;padding:3px 6px;">
+            <span style="font-size:0.56rem;color:rgba(255,255,255,0.3);">0 = no limit</span>
+          </div>
+          <div id="stBudgetDisplay" style="margin-top:4px;"></div>
         </div>
       </div>
 
@@ -2068,16 +2101,16 @@ p, span, td, th {
           <input type="number" id="fHolders" placeholder="e.g. 500" min="0" step="1">
         </div>
         <div class="form-group">
-          <label>Holders 1h ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
-          <input type="number" id="fHoldersH1" placeholder="e.g. 420" min="0" step="1">
+          <label id="lblHoldersH1">Holders 1m ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
+          <input type="number" id="fHoldersH1" placeholder="auto" min="0" step="1">
         </div>
         <div class="form-group">
-          <label>Holders 6h ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
-          <input type="number" id="fHoldersH6" placeholder="e.g. 310" min="0" step="1">
+          <label id="lblHoldersH2">Holders 3m ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
+          <input type="number" id="fHoldersH6" placeholder="auto" min="0" step="1">
         </div>
         <div class="form-group">
-          <label>Holders 24h ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
-          <input type="number" id="fHoldersH24" placeholder="e.g. 150" min="0" step="1">
+          <label id="lblHoldersH3">Holders 5m ago <span style="font-size:0.6rem;color:var(--text-muted);">optional</span></label>
+          <input type="number" id="fHoldersH24" placeholder="auto" min="0" step="1">
         </div>
         <div class="form-group">
           <label>Fake Holders %</label>
@@ -2567,7 +2600,8 @@ var DEFAULT_SETTINGS = {
   wPartSec: 38,   wPartStr: 38,   wPartAtt: 24,
   wProxSec: 42.5, wProxStr: 42.5, wProxAtt: 15,
   quickScanX: 15, quickScanRd: 10,
-  deepScanX: 50,  deepScanRd: 25
+  deepScanX: 50,  deepScanRd: 25,
+  holderTf1: 1, holderTf2: 3, holderTf3: 5
 };
 
 var settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -2631,6 +2665,11 @@ function applySettingsToUI() {
   el('sDeepScanX').value   = settings.deepScanX   || 50;
   el('sDeepScanRd').value  = settings.deepScanRd  || 25;
   try {
+    el('sHolderTf1').value = settings.holderTf1 || 1;
+    el('sHolderTf2').value = settings.holderTf2 || 3;
+    el('sHolderTf3').value = settings.holderTf3 || 5;
+  } catch(_) {}
+  try {
     el('sProvTwitterapi').checked = localStorage.getItem('tec_prov_twitterapi_en') !== 'false';
     el('sProvGetxapi').checked    = localStorage.getItem('tec_prov_getxapi_en')    !== 'false';
     el('sProvApify').checked      = localStorage.getItem('tec_prov_apify_en')      !== 'false';
@@ -2652,7 +2691,11 @@ function applySettingsToUI() {
     el('sApifyKey').value       = localStorage.getItem('tec_apify_key')         || '';
     el('sRedditClientId').value = localStorage.getItem('tec_reddit_client_id')  || '';
     el('sRedditSecret').value   = localStorage.getItem('tec_reddit_secret')     || '';
+    el('sSolanaTrackerKey').value = localStorage.getItem('tec_st_key') || '';
+    el('sSTBudget').value = localStorage.getItem('tec_st_budget') || '100';
   } catch(e) {}
+  try { if (typeof stRenderBudgetDisplay === 'function') stRenderBudgetDisplay(); } catch(_) {}
+  try { if (typeof updateHolderTimeframeLabels === 'function') updateHolderTimeframeLabels(); } catch(_) {}
 }
 
 function readSettingsFromUI() {
@@ -2681,7 +2724,10 @@ function readSettingsFromUI() {
     quickScanX:  n('sQuickScanX')  || 15,
     quickScanRd: n('sQuickScanRd') || 10,
     deepScanX:   n('sDeepScanX')   || 50,
-    deepScanRd:  n('sDeepScanRd')  || 25
+    deepScanRd:  n('sDeepScanRd')  || 25,
+    holderTf1: parseInt(el('sHolderTf1').value) || 1,
+    holderTf2: parseInt(el('sHolderTf2').value) || 3,
+    holderTf3: parseInt(el('sHolderTf3').value) || 5
   };
 }
 
@@ -2706,6 +2752,15 @@ function saveSettings() {
       if (twk) localStorage.setItem('tec_twitter_api_key', twk); else localStorage.removeItem('tec_twitter_api_key');
       if (gxk) localStorage.setItem('tec_getx_key',        gxk); else localStorage.removeItem('tec_getx_key');
       if (apk) localStorage.setItem('tec_apify_key',       apk); else localStorage.removeItem('tec_apify_key');
+      try {
+        var _stk = (el('sSolanaTrackerKey') || {}).value || '';
+        _stk = _stk.trim();
+        if (_stk) localStorage.setItem('tec_st_key', _stk); else localStorage.removeItem('tec_st_key');
+        var _stb = parseInt((el('sSTBudget') || {}).value) || 0;
+        localStorage.setItem('tec_st_budget', _stb);
+        if (typeof stRenderBudgetDisplay === 'function') stRenderBudgetDisplay();
+        if (typeof updateHolderTimeframeLabels === 'function') updateHolderTimeframeLabels();
+      } catch(_) {}
     } catch(e) {}
   } catch(e) {}
   try {
@@ -3014,6 +3069,7 @@ async function fetchFromCA(ca) {
   missingFieldsRow.classList.add('hidden');
 
   window._tecCandles          = null;    /* reset candle cache for this fetch */
+  window._stHolderData        = null;    /* reset Solana Tracker holder data */
   window._tecDexTxns          = null;    /* reset tx fallback for structural analysis */
   window._tecOhlcvSource      = null;    /* 'GeckoTerminal' | 'DEX Screener' | null */
   window._tecEngineMode       = 'FLOW';  /* 'STRUCTURE' | 'HINT' | 'FLOW' */
@@ -3792,9 +3848,12 @@ async function fetchFromCA(ca) {
     if (window._tecHolderCount > 0) tecSaveHolderSnap(ca, window._tecHolderCount);
     /* Auto-load from localStorage where H1/H6/H24 are still missing */
     if (window._tecHolderCount > 0) {
-      var _s1  = !window._tecHolderH1  ? tecGetHolderSnap(ca, 3600000,   1800000)  : 0;
-      var _s6  = !window._tecHolderH6  ? tecGetHolderSnap(ca, 21600000,  3600000)  : 0;
-      var _s24 = !window._tecHolderH24 ? tecGetHolderSnap(ca, 86400000, 10800000) : 0;
+      var _tf1Ms  = ((settings && settings.holderTf1) || 1) * 60000;
+      var _tf2Ms  = ((settings && settings.holderTf2) || 3) * 60000;
+      var _tf3Ms  = ((settings && settings.holderTf3) || 5) * 60000;
+      var _s1  = !window._tecHolderH1  ? tecGetHolderSnap(ca, _tf1Ms,  Math.max(30000,  _tf1Ms / 2))  : 0;
+      var _s6  = !window._tecHolderH6  ? tecGetHolderSnap(ca, _tf2Ms,  Math.max(60000,  _tf2Ms / 2))  : 0;
+      var _s24 = !window._tecHolderH24 ? tecGetHolderSnap(ca, _tf3Ms,  Math.max(90000,  _tf3Ms / 2))  : 0;
       if (_s1)  { window._tecHolderH1  = _s1;  window._tecDataAvailability.holderHistory = true; }
       if (_s6)  { window._tecHolderH6  = _s6;  window._tecDataAvailability.holderHistory = true; }
       if (_s24) { window._tecHolderH24 = _s24; window._tecDataAvailability.holderHistory = true; }
@@ -3806,6 +3865,64 @@ async function fetchFromCA(ca) {
       if (window._tecHolderH24 > 0 && !(parseInt((el('fHoldersH24')||{}).value||'0'))) el('fHoldersH24').value = window._tecHolderH24;
     } catch(e) {}
   })();
+
+  /* ── Solana Tracker: Auto-fetch holders + chart for Security Briefing ── */
+  window._stHolderData = null;
+  if (ca && stGetKey() && !stIsOverBudget()) {
+    try {
+      var _stHolders = await stFetchHolders(ca);
+      if (_stHolders) {
+        window._stHolderData = _stHolders;
+        var _stCount = (_stHolders.total != null ? parseInt(_stHolders.total) : 0) || 0;
+        if (_stCount > 0) {
+          if (!window._tecHolderCount) {
+            window._tecHolderCount = _stCount;
+            try { if (el('fHolders') && !parseInt(el('fHolders').value)) el('fHolders').value = _stCount; } catch(_) {}
+          }
+          tecSaveHolderSnap(ca, _stCount);
+        }
+        /* Fetch holder chart to auto-populate timeframe fields */
+        if (!stIsOverBudget()) {
+          try {
+            var _stChart = await stFetchHolderChart(ca);
+            if (_stChart) {
+              var _chartArr = Array.isArray(_stChart) ? _stChart
+                : (_stChart.holders || _stChart.chart || _stChart.data || []);
+              var _tf1Ms = ((settings && settings.holderTf1) || 1) * 60000;
+              var _tf2Ms = ((settings && settings.holderTf2) || 3) * 60000;
+              var _tf3Ms = ((settings && settings.holderTf3) || 5) * 60000;
+              var _stH1 = stHolderFromChart(_chartArr, _tf1Ms);
+              var _stH2 = stHolderFromChart(_chartArr, _tf2Ms);
+              var _stH3 = stHolderFromChart(_chartArr, _tf3Ms);
+              if (_stH1 > 0 && !window._tecHolderH1) {
+                window._tecHolderH1 = _stH1;
+                try { if (el('fHoldersH1') && !parseInt(el('fHoldersH1').value)) el('fHoldersH1').value = _stH1; } catch(_) {}
+              }
+              if (_stH2 > 0 && !window._tecHolderH6) {
+                window._tecHolderH6 = _stH2;
+                try { if (el('fHoldersH6') && !parseInt(el('fHoldersH6').value)) el('fHoldersH6').value = _stH2; } catch(_) {}
+              }
+              if (_stH3 > 0 && !window._tecHolderH24) {
+                window._tecHolderH24 = _stH3;
+                try { if (el('fHoldersH24') && !parseInt(el('fHoldersH24').value)) el('fHoldersH24').value = _stH3; } catch(_) {}
+              }
+              window._stHolderData._chartArr = _chartArr;
+            }
+          } catch(_stChartErr) { console.log('[ST] chart failed:', _stChartErr && _stChartErr.message); }
+        }
+        addBadge('Solana Tracker', 'ok');
+        addDiag('ok', 'Solana Tracker', 'Holders: ' + (_stCount || '—').toLocaleString() +
+          ' | Top wallets retrieved.' + (_stHolders.total ? ' Total: ' + _stHolders.total.toLocaleString() : ''));
+      } else {
+        addBadge('Solana Tracker', 'partial');
+        addDiag('partial', 'Solana Tracker', 'No holder data returned — token may not be indexed yet or key is invalid.');
+      }
+    } catch(_stErr) {
+      console.log('[ST] Auto-fetch failed:', _stErr && _stErr.message);
+      addBadge('Solana Tracker', 'fail');
+      addDiag('fail', 'Solana Tracker', 'Holder fetch failed: ' + (_stErr && _stErr.message || 'unknown') + '. Existing sources used.');
+    }
+  }
 
   /* ── 5a: DEX Screener OHLCV note ─────────────────────────────────────────
      DexScreener's public API does not expose an OHLCV/candle endpoint.
@@ -3821,7 +3938,50 @@ async function fetchFromCA(ca) {
       'Candles source: GeckoTerminal only.');
   }
 
-  /* ── HINT MODE: attempt estimated structure when OHLCV unavailable ── */
+  /* ── Solana Tracker: Final OHLCV Fallback (only when all other sources fail) ── */
+  if (window._tecEngineMode !== 'STRUCTURE' && stGetKey() && !stIsOverBudget() && fetched.poolAddress) {
+    try {
+      var _stOhlcvData = await stFetchOHLCV(fetched.poolAddress, '15m');
+      if (_stOhlcvData) {
+        var _stRaw = Array.isArray(_stOhlcvData) ? _stOhlcvData
+          : (_stOhlcvData.oclhv || _stOhlcvData.ohlcv || _stOhlcvData.data || []);
+        if (Array.isArray(_stRaw) && _stRaw.length >= 5) {
+          var _stParsed = _stRaw.map(function(c) {
+            if (Array.isArray(c)) return c; /* already [ts, o, h, l, c, v] */
+            var ts = c.time || c.timestamp || c.t || 0;
+            if (ts && ts < 1e12) ts *= 1000; /* s → ms */
+            return [ts, c.open || 0, c.high || 0, c.low || 0, c.close || 0, c.volume || 0];
+          }).filter(function(c){ return c[4] > 0; });
+          if (_stParsed.length >= 5) {
+            var _stCur   = _stParsed[_stParsed.length - 1][4];
+            var _stHigh  = Math.max.apply(null, _stParsed.map(function(c){ return c[2]; }));
+            var _stMacro = Math.min.apply(null, _stParsed.map(function(c){ return c[3]; }));
+            var _stLocal = Math.min.apply(null, _stParsed.slice(-Math.min(4, _stParsed.length)).map(function(c){ return c[3]; }));
+            if (_stCur > 0 && _stHigh > 0) {
+              window._tecCandles = {
+                current: _stCur, high: _stHigh, low: _stLocal,
+                macroFloor: _stMacro, localFloor: _stLocal, floor15mLow: _stLocal,
+                ceiling1hHigh: _stHigh, source: 'Solana Tracker', structuralAnalysis: null
+              };
+              window._tecOhlcvSource = 'Solana Tracker';
+              window._tecGtCandleCount = _stParsed.length;
+              window._tecEngineReason = (window._tecEngineReason || '') +
+                ' Solana Tracker OHLCV fallback: ' + _stParsed.length + ' candles (15m). ' +
+                'Price range: $' + _stMacro.toFixed(6) + ' – $' + _stHigh.toFixed(6) + '.';
+              addBadge('Solana Tracker OHLCV', 'partial');
+              addDiag('partial', 'Solana Tracker OHLCV',
+                'OHLCV fallback active: ' + _stParsed.length + ' candles (15m). ' +
+                'Macro floor: $' + _stMacro.toFixed(6) + ' | Ceiling: $' + _stHigh.toFixed(6) + '. ' +
+                'Structure uses Hint Mode with ST price data.');
+            }
+          }
+        }
+      }
+    } catch(_stOhlcvErr) {
+      console.log('[ST] OHLCV fallback failed:', _stOhlcvErr && _stOhlcvErr.message);
+    }
+  }
+
   if (window._tecEngineMode !== 'STRUCTURE') {
     var _hint = computeHintStructure(fetched);
     if (_hint) {
@@ -5327,6 +5487,190 @@ function computeEarlyBuyerHealth(d) {
 
 /* ═══════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════
+   SOLANA TRACKER INTELLIGENCE ENGINE
+   Enrichment-only layer — complements DexScreener / Helius / RugCheck.
+   Does NOT replace existing providers. Fails gracefully if unavailable.
+   Base URL: https://data.solanatracker.io   Auth: x-api-key header
+   ═══════════════════════════════════════════════════════════════════════ */
+
+function stGetKey() { return localStorage.getItem('tec_st_key') || ''; }
+function stGetMaxRequests() { return parseInt(localStorage.getItem('tec_st_budget') || '100') || 0; }
+
+function stGetMonthlyUsage() {
+  var now = new Date();
+  var month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  try {
+    var raw = localStorage.getItem('tec_st_monthly');
+    if (raw) { var _u = JSON.parse(raw); if (_u.month === month) return _u; }
+  } catch(_) {}
+  return { month: month, count: 0 };
+}
+function stAddUsage() {
+  var u = stGetMonthlyUsage(); u.count = (u.count || 0) + 1;
+  try { localStorage.setItem('tec_st_monthly', JSON.stringify(u)); } catch(_) {}
+}
+function stIsOverBudget() {
+  var max = stGetMaxRequests();
+  return max > 0 && (stGetMonthlyUsage().count || 0) >= max;
+}
+function stRenderBudgetDisplay() {
+  var disp = el('stBudgetDisplay'); if (!disp) return;
+  var count = stGetMonthlyUsage().count || 0;
+  var max   = stGetMaxRequests();
+  if (max <= 0) {
+    disp.innerHTML = '<div style="font-size:0.51rem;color:var(--text-muted);">Solana Tracker: <span style="color:rgba(255,255,255,0.3);">no limit set</span></div>';
+    return;
+  }
+  var pct   = Math.min(100, (count / max) * 100);
+  var color = pct >= 100 ? '#ff4757' : pct >= 80 ? '#ff9800' : '#9945FF';
+  disp.innerHTML =
+    '<div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:0.51rem;color:var(--text-muted);margin-bottom:2px;">' +
+    '<span>Requests this month</span>' +
+    '<span style="color:' + color + ';">' + count + ' / ' + max + (pct >= 100 ? ' — LIMIT REACHED' : '') + '</span>' +
+    '</div>' +
+    '<div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;">' +
+    '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + color + ';border-radius:2px;"></div>' +
+    '</div></div>';
+}
+
+/* ── Cache ── */
+function stGetCache(ck) {
+  try { var r = localStorage.getItem('tec_stc_' + ck); return r ? JSON.parse(r) : null; } catch(_) { return null; }
+}
+function stSetCache(ck, data, ttlMs) {
+  try { localStorage.setItem('tec_stc_' + ck, JSON.stringify({ ts: Date.now(), ttl: ttlMs || 300000, data: data })); } catch(_) {}
+}
+function stIsCacheFresh(entry) { return !!(entry && (Date.now() - entry.ts) < entry.ttl); }
+
+/* ── Throttle: minimum 350 ms gap between outbound requests ── */
+var _stLastReqTs = 0;
+async function _stWait() {
+  var wait = Math.max(0, 350 - (Date.now() - _stLastReqTs));
+  if (wait > 0) await new Promise(function(r) { setTimeout(r, wait); });
+  _stLastReqTs = Date.now();
+}
+
+/* ── Core fetch: 8-second timeout + exponential-backoff retry ── */
+async function stFetch(path, maxRetries) {
+  var key = stGetKey();
+  if (!key) throw new Error('No Solana Tracker API key configured');
+  var retries = (maxRetries !== undefined) ? maxRetries : 2;
+  var attempt = 0;
+  while (attempt <= retries) {
+    try {
+      await _stWait();
+      var ctrl = new AbortController();
+      var tid  = setTimeout(function() { ctrl.abort(); }, 8000);
+      var resp = await fetch('https://data.solanatracker.io' + path, {
+        headers: { 'x-api-key': key },
+        signal: ctrl.signal
+      });
+      clearTimeout(tid);
+      if (resp.status === 429 || resp.status === 503) {
+        if (attempt < retries) { await new Promise(function(r) { setTimeout(r, Math.pow(2, attempt) * 1200); }); attempt++; continue; }
+        throw new Error('ST_RATE_LIMIT');
+      }
+      if (!resp.ok) throw new Error('ST_HTTP_' + resp.status);
+      stAddUsage();
+      return await resp.json();
+    } catch(e) {
+      if (e.name === 'AbortError') { if (attempt < retries) { attempt++; continue; } throw new Error('ST_TIMEOUT'); }
+      if (attempt < retries && e.message !== 'ST_RATE_LIMIT') {
+        await new Promise(function(r) { setTimeout(r, Math.pow(2, attempt) * 600); });
+        attempt++;
+      } else throw e;
+    }
+  }
+}
+
+/* ── Domain helpers (all cache-first, budget-gated) ── */
+async function stFetchHolders(ca) {
+  if (!ca || !stGetKey() || stIsOverBudget()) return null;
+  var ck = 'h_' + ca, cached = stGetCache(ck);
+  if (stIsCacheFresh(cached)) return cached.data;
+  try {
+    var d = await stFetch('/tokens/' + ca + '/holders');
+    if (d) stSetCache(ck, d, 120000); /* 2-min TTL */
+    return d;
+  } catch(e) { console.log('[ST] holders failed:', e.message); return stIsCacheFresh(cached) ? cached.data : null; }
+}
+async function stFetchHolderChart(ca) {
+  if (!ca || !stGetKey() || stIsOverBudget()) return null;
+  var ck = 'hc_' + ca, cached = stGetCache(ck);
+  if (stIsCacheFresh(cached)) return cached.data;
+  try {
+    var d = await stFetch('/tokens/' + ca + '/holders/chart');
+    if (d) stSetCache(ck, d, 300000); /* 5-min TTL */
+    return d;
+  } catch(e) { console.log('[ST] holder chart failed:', e.message); return stIsCacheFresh(cached) ? cached.data : null; }
+}
+async function stFetchOHLCV(poolAddress, timeframe) {
+  if (!poolAddress || !stGetKey() || stIsOverBudget()) return null;
+  var tf = timeframe || '15m', ck = 'ohlcv_' + poolAddress + '_' + tf, cached = stGetCache(ck);
+  if (stIsCacheFresh(cached)) return cached.data;
+  try {
+    var d = await stFetch('/ohlcv/' + poolAddress + '/' + tf);
+    if (d) stSetCache(ck, d, 120000);
+    return d;
+  } catch(e) { console.log('[ST] OHLCV failed:', e.message); return stIsCacheFresh(cached) ? cached.data : null; }
+}
+async function stFetchWallet(address) {
+  if (!address || !stGetKey() || stIsOverBudget()) return null;
+  var ck = 'w_' + address, cached = stGetCache(ck);
+  if (stIsCacheFresh(cached)) return cached.data;
+  try {
+    var d = await stFetch('/wallet/' + address);
+    if (d) stSetCache(ck, d, 600000); /* 10-min TTL */
+    return d;
+  } catch(e) { console.log('[ST] wallet failed:', e.message); return stIsCacheFresh(cached) ? cached.data : null; }
+}
+async function stFetchWalletTrades(address) {
+  if (!address || !stGetKey() || stIsOverBudget()) return null;
+  var ck = 'wt_' + address, cached = stGetCache(ck);
+  if (stIsCacheFresh(cached)) return cached.data;
+  try {
+    var d = await stFetch('/wallet/' + address + '/trades?limit=20');
+    if (d) stSetCache(ck, d, 600000);
+    return d;
+  } catch(e) { console.log('[ST] wallet trades failed:', e.message); return stIsCacheFresh(cached) ? cached.data : null; }
+}
+
+/* ── Chart interpolation: find holder count closest to msAgo from now ── */
+function stHolderFromChart(chartArr, msAgo) {
+  if (!Array.isArray(chartArr) || !chartArr.length) return 0;
+  var targetTs = Date.now() - msAgo, best = null, bestDiff = Infinity;
+  chartArr.forEach(function(pt) {
+    var ts = 0, count = 0;
+    if (Array.isArray(pt)) { ts = pt[0]; count = pt[1]; }
+    else if (pt && typeof pt === 'object') {
+      ts    = pt.time || pt.timestamp || pt.t || 0;
+      count = pt.holders || pt.count || pt.value || 0;
+      if (ts && ts < 1e12) ts *= 1000; /* s → ms */
+    }
+    if (!ts || !count) return;
+    var diff = Math.abs(ts - targetTs);
+    if (diff < bestDiff) { bestDiff = diff; best = count; }
+  });
+  return (best && bestDiff < msAgo * 3) ? best : 0;
+}
+
+/* ── Sync holder timeframe labels in the main form ── */
+function updateHolderTimeframeLabels() {
+  var tf1 = (settings && settings.holderTf1) || 1;
+  var tf2 = (settings && settings.holderTf2) || 3;
+  var tf3 = (settings && settings.holderTf3) || 5;
+  var sfx = ' <span style="font-size:0.6rem;color:var(--text-muted);">optional</span>';
+  try {
+    var l1 = el('lblHoldersH1'); if (l1) l1.innerHTML = 'Holders ' + tf1 + 'm ago' + sfx;
+    var l2 = el('lblHoldersH2'); if (l2) l2.innerHTML = 'Holders ' + tf2 + 'm ago' + sfx;
+    var l3 = el('lblHoldersH3'); if (l3) l3.innerHTML = 'Holders ' + tf3 + 'm ago' + sfx;
+  } catch(e) {}
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+
 function buildSecurityBriefingHTML(d) {
   var bundleClust = d.bundleClusterPct || 0;
   var top10 = d.top10 || 0;
@@ -6010,6 +6354,113 @@ function buildSecurityBriefingHTML(d) {
   nt += '</div></div>';
 
   nt += '</div>';
+
+  /* ── Solana Tracker Holder Intelligence Panel ── */
+  (function() {
+    var _stD = window._stHolderData;
+    nt += '<div style="margin-top:8px;padding:8px 10px;background:rgba(153,69,255,0.06);border-radius:5px;border:1px solid rgba(153,69,255,0.2);">';
+    nt += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:6px;">';
+    nt += '<div style="color:#9945FF;font-size:0.59rem;font-weight:700;letter-spacing:1px;"><i class="fa-solid fa-database" style="margin-right:5px;"></i>SOLANA TRACKER HOLDER INTELLIGENCE</div>';
+    if (!_stD) {
+      nt += '</div>';
+      if (!stGetKey()) {
+        nt += '<div style="font-size:0.63rem;color:rgba(255,255,255,0.3);">Add your Solana Tracker API key in ⚙ Settings to enable live holder intelligence.</div>';
+      } else if (stIsOverBudget()) {
+        nt += '<div style="font-size:0.63rem;color:#ff9800;">Monthly request budget reached — cached data only. Increase budget or wait for next month.</div>';
+      } else {
+        nt += '<div style="font-size:0.63rem;color:rgba(255,255,255,0.3);">Press Fetch Data to populate Solana Tracker holder intelligence.</div>';
+      }
+      nt += '</div>';
+      return;
+    }
+    var _stTotal   = parseInt(_stD.total) || 0;
+    var _stTopArr  = Array.isArray(_stD.top) ? _stD.top : (Array.isArray(_stD.accounts) ? _stD.accounts : []);
+    var _stTop10Pct = 0;
+    _stTopArr.slice(0, 10).forEach(function(h) { _stTop10Pct += (parseFloat(h.percentage || h.pct) || 0); });
+    var _stTop25Pct = 0;
+    _stTopArr.slice(0, 25).forEach(function(h) { _stTop25Pct += (parseFloat(h.percentage || h.pct) || 0); });
+
+    /* Holder growth trend vs local snapshot history */
+    var _stCa = window._currentAnalysisCA || (el('fCA') ? el('fCA').value.trim() : '');
+    var _stSnaps = [];
+    try { _stSnaps = JSON.parse(localStorage.getItem('tec_hs_' + _stCa) || '[]'); } catch(_) {}
+    var _stGrowthTxt = '', _stGrowthColor = 'var(--text-muted)';
+    if (_stTotal > 0 && _stSnaps.length >= 2) {
+      var _stPrev = null;
+      for (var _si = _stSnaps.length - 2; _si >= 0; _si--) {
+        if (_stSnaps[_si] && _stSnaps[_si][1] > 0) { _stPrev = _stSnaps[_si]; break; }
+      }
+      if (_stPrev) {
+        var _stDelta  = _stTotal - _stPrev[1];
+        var _stPct    = (_stDelta / _stPrev[1]) * 100;
+        var _stAgeMin = Math.round((Date.now() - _stPrev[0]) / 60000);
+        var _stAgeStr = _stAgeMin < 60 ? _stAgeMin + 'm' : (_stAgeMin / 60).toFixed(1) + 'h';
+        _stGrowthTxt  = (_stDelta >= 0 ? '+' : '') + _stDelta.toLocaleString() +
+                        ' (' + (_stPct >= 0 ? '+' : '') + _stPct.toFixed(1) + '%) vs ' + _stAgeStr + ' ago';
+        _stGrowthColor = _stDelta > 0 ? '#00e676' : _stDelta < 0 ? '#ff4757' : '#ffeb3b';
+      }
+    }
+
+    var _t10Color  = _stTop10Pct > 40 ? '#ff4757' : _stTop10Pct > 25 ? '#ff9800' : '#00e676';
+    var _t25Color  = _stTop25Pct > 60 ? '#ff4757' : _stTop25Pct > 45 ? '#ff9800' : '#ffeb3b';
+    var _stCached  = stGetCache('h_' + _stCa);
+    var _stAge     = _stCached ? Math.round((Date.now() - _stCached.ts) / 1000) + 's ago' : 'just now';
+
+    nt += '<div style="font-size:0.55rem;color:rgba(153,69,255,0.7);">Data: ' + _stAge +
+      (stIsOverBudget() ? ' · <span style="color:#ff9800;">Budget reached</span>' : '') + '</div>';
+    nt += '</div>'; /* close header row */
+
+    nt += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:5px;margin-bottom:6px;">';
+    nt += '<div style="padding:5px 7px;background:rgba(0,0,0,0.25);border-radius:4px;text-align:center;">';
+    nt += '<div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:2px;">TOTAL HOLDERS</div>';
+    nt += '<div style="font-size:1.1rem;font-weight:800;color:#9945FF;">' + (_stTotal > 0 ? _stTotal.toLocaleString() : '—') + '</div>';
+    nt += '</div>';
+    if (_stTop10Pct > 0) {
+      nt += '<div style="padding:5px 7px;background:rgba(0,0,0,0.25);border-radius:4px;text-align:center;">';
+      nt += '<div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:2px;">TOP 10 HOLD %</div>';
+      nt += '<div style="font-size:1.1rem;font-weight:800;color:' + _t10Color + ';">' + _stTop10Pct.toFixed(1) + '%</div>';
+      nt += '</div>';
+    }
+    if (_stTop25Pct > 0 && Math.abs(_stTop25Pct - _stTop10Pct) > 0.1) {
+      nt += '<div style="padding:5px 7px;background:rgba(0,0,0,0.25);border-radius:4px;text-align:center;">';
+      nt += '<div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:2px;">TOP 25 HOLD %</div>';
+      nt += '<div style="font-size:1.1rem;font-weight:800;color:' + _t25Color + ';">' + _stTop25Pct.toFixed(1) + '%</div>';
+      nt += '</div>';
+    }
+    if (_stGrowthTxt) {
+      nt += '<div style="padding:5px 7px;background:rgba(0,0,0,0.25);border-radius:4px;text-align:center;">';
+      nt += '<div style="font-size:0.55rem;color:var(--text-muted);margin-bottom:2px;">HOLDER CHANGE</div>';
+      nt += '<div style="font-size:0.70rem;font-weight:700;color:' + _stGrowthColor + ';line-height:1.3;">' + _stGrowthTxt + '</div>';
+      nt += '</div>';
+    }
+    nt += '</div>';
+
+    /* Top-wallet list (up to 5, from ST) */
+    if (_stTopArr.length > 0) {
+      nt += '<div style="font-size:0.59rem;color:var(--text-muted);font-weight:700;letter-spacing:0.6px;margin-bottom:3px;">TOP WALLETS (Solana Tracker)</div>';
+      nt += '<div style="display:flex;flex-direction:column;gap:1px;">';
+      _stTopArr.slice(0, 5).forEach(function(h, i) {
+        var pct   = parseFloat(h.percentage || h.pct || 0);
+        /* Validate: Solana addresses are base58 (32-44 alphanumeric, no HTML-special chars) */
+        var _rawAddr = String(h.wallet || h.address || '');
+        var addr  = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(_rawAddr) ? _rawAddr : '';
+        var short = addr.length > 10 ? addr.slice(0, 5) + '…' + addr.slice(-4) : addr;
+        var pctC  = pct > 10 ? '#ff4757' : pct > 5 ? '#ff9800' : pct > 2 ? '#ffeb3b' : '#00e676';
+        nt += '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:0.60rem;">';
+        nt += '<span style="color:var(--text-muted);">#' + (i + 1) + '</span>';
+        if (addr) {
+          /* addr validated base58-only — safe in href and text content */
+          nt += '<a href="https://solscan.io/account/' + addr + '" target="_blank" rel="noopener noreferrer" style="color:rgba(0,212,255,0.7);font-family:monospace;font-size:0.58rem;">' + short + '</a>';
+        } else {
+          nt += '<span style="color:rgba(255,255,255,0.3);">&#x2014;</span>';
+        }
+        nt += '<span style="color:' + pctC + ';font-weight:700;">' + pct.toFixed(2) + '%</span>';
+        nt += '</div>';
+      });
+      nt += '</div>';
+    }
+    nt += '</div>';
+  })();
 
   /* Expose tier for summary panel */
   window._tecSecTier     = secTier;
@@ -15571,6 +16022,45 @@ async function wliRunBatch(wallets, label) {
     wlibRender();                     /* refresh table with new scores    */
     wliShowResults(results);          /* render ranked intelligence panel */
     showToast('Analysis complete — ' + results.length + ' wallet' + (results.length !== 1 ? 's' : '') + ' scored', 'success');
+
+     /* ── Solana Tracker: fire-and-forget wallet enrichment (budget-gated) ── */
+     if (typeof stGetKey === 'function' && stGetKey() && !stIsOverBudget() && results.length > 0) {
+       (async function() {
+         var _stCandidates = results.slice(0, 5).map(function(r) {
+           return (r && typeof r === 'object') ? (r.address || '') : String(r || '');
+         }).filter(function(a) {
+           return a && !stIsCacheFresh(stGetCache('w_' + a));
+         });
+         for (var _wi = 0; _wi < _stCandidates.length; _wi++) {
+           if (stIsOverBudget()) break;
+           var _wa = _stCandidates[_wi];
+           var _wD = await stFetchWallet(_wa);
+           var _wT = !stIsOverBudget() ? await stFetchWalletTrades(_wa) : null;
+           if (_wD || _wT) {
+             var _wEntry = _walletLibrary.find(function(w) {
+               return w.address && w.address.toLowerCase() === _wa.toLowerCase();
+             });
+             if (_wEntry) {
+               var _tradeCt = 0;
+               if (_wT) {
+                 _tradeCt = Array.isArray(_wT) ? _wT.length
+                   : (Array.isArray(_wT.trades) ? _wT.trades.length : 0);
+               }
+               _wEntry.stData = {
+                 ts: Date.now(),
+                 sol: (_wD && (_wD.sol || _wD.balance || _wD.nativeBalance)) || 0,
+                 tokenCount: (_wD && Array.isArray(_wD.tokens)) ? _wD.tokens.length : null,
+                 recentTradeCount: _tradeCt || null,
+                 portfolio: _wD,
+                 trades: _wT
+               };
+             }
+           }
+         }
+         try { localStorage.setItem(WLIB_KEY, JSON.stringify(_walletLibrary)); } catch(_) {}
+         if (typeof wlibRender === 'function') wlibRender();
+       })();
+     }
 
     /* Auto-open the Wallet Library panel if it's closed */
     var body = el('walletLibBody');

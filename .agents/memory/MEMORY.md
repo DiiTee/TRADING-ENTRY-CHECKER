@@ -5,3 +5,4 @@
 - [Social Provider Control System](social-provider-control.md) — Three scan modes, 5 Apify actors, per-provider toggles, monthly budget tracking, cost estimation, all persisted in localStorage.
 - [Entry Classification Layer](entry-classification-layer.md) — computeStructureReliability() sits above the Structure Engine; scores 0-100; OHLCV status uses candleCount>0 not engineMode; retraces use sa.higherLows.
 - [Wallet Intelligence Engine](wallet-intelligence-engine.md) — Quick Scan reputation engine on Wallet Library; scoring/tags/filter/sort; escH()/escA() for XSS safety; Deep Investigation not yet built.
+- [Solana Tracker Integration](solana-tracker-integration.md) — Full ST engine in TEC; data flow, settings, cache keys, pitfalls (file duplication, syntax break, XSS addr validation).
