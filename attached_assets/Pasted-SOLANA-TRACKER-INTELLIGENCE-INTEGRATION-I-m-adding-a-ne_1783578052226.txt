@@ -1,0 +1,277 @@
+SOLANA TRACKER INTELLIGENCE INTEGRATION
+
+I'm adding a new API to the data sourcing system: Solana Tracker 
+I'm using the Data API Free plan
+
+I'll add my API key in settings just like the others. 
+
+Get Endpoints and other information here: 
+https://docs.solanatracker.io/quickstart
+
+
+IMPORTANT
+
+Integrate Solana Tracker as a lightweight, on-demand enrichment provider.
+
+Do NOT replace:
+
+- DexScreener
+- RugCheck
+- Helius
+- Existing Fetch Data system
+- Existing Parse & Fill system
+
+Solana Tracker should complement the existing data pipeline, not replace it.
+
+---
+
+OBJECTIVE
+
+Use Solana Tracker only where it provides information that the current APIs cannot reliably provide.
+
+Prioritize maximum value while minimizing API usage.
+
+---
+
+SECURITY BRIEFING
+
+When a token is scanned:
+
+Retrieve, when available:
+
+- Holder Count
+- Holder Distribution
+- Holder History / Holder Chart
+
+Display these alongside the existing Security metrics.
+
+If previous Holder Count data exists locally:
+
+Calculate:
+
+- Holder Count Change
+- Holder Growth %
+- Holder Growth Trend
+
+Store every retrieved Holder Count with a timestamp to build a local historical database.
+
+Do NOT request historical holder data repeatedly if it has already been stored locally.
+
+---
+
+STRUCTURE BRIEFING
+
+Do NOT replace the existing OHLCV providers.
+
+Only use Solana Tracker OHLCV when:
+
+- Existing provider fails
+- Existing provider returns insufficient candle data
+- Existing provider is unavailable
+
+This is a final fallback only.
+
+---
+
+WALLET LIBRARY ENRICHMENT
+
+Only execute when explicitly requested by the user.
+
+Never run automatically.
+
+When the user selects:
+
+- Analyze Selected Wallet
+- Analyze Selected Wallets
+- Analyze Wallets From This Token
+
+The enrichment workflow should be:
+
+1. Check cached Wallet Library intelligence.
+
+2. If sufficient information already exists:
+
+Reuse cached results.
+
+Do NOT call Solana Tracker.
+
+3. If additional information is required:
+
+Retrieve only:
+
+- Current Portfolio
+- Current Token Holdings
+- Recent Trade History
+
+Do NOT request unnecessary data.
+
+Store newly collected observations in the Wallet Library for future reuse.
+
+---
+
+REQUEST BUDGET
+
+Treat Solana Tracker as a limited resource.
+
+Implement a request budget.
+
+Never perform unlimited requests.
+
+Always prefer:
+
+1. Wallet Library
+2. Cached intelligence
+3. Existing application data
+4. Solana Tracker only when additional confidence is required
+
+---
+
+CACHING
+
+Cache every successful Solana Tracker response.
+
+Store:
+
+- Retrieval Timestamp
+- Holder Count
+- Holder Distribution
+- Portfolio Snapshot
+- Trade History Summary
+
+Before making another request:
+
+Check whether cached information is still considered fresh.
+
+Reuse cached data whenever possible.
+
+---
+
+HOLDER HISTORY
+
+Maintain a local Holder History database.
+
+Each successful token scan should append:
+
+- Timestamp
+- Holder Count
+
+Use this local history to calculate:
+
+- Holder Count Change
+- Holder Growth %
+- Holder Growth Trend
+
+Never repeatedly request historical Holder Chart data if equivalent local history already exists.
+
+---
+
+PERFORMANCE
+
+Optimize aggressively.
+
+Never enrich every wallet.
+
+Only enrich wallets that:
+
+- Have insufficient cached information
+- Require additional confidence
+- Are explicitly selected by the user
+
+Never perform background enrichment.
+
+Never perform continuous synchronization.
+
+Never repeatedly request unchanged data.
+
+---
+
+DESIGN GOAL
+
+Solana Tracker should serve as an intelligent enrichment layer.
+
+Use it only where it adds unique value that the existing APIs cannot provide.
+
+Prioritize efficient API usage, intelligent caching, incremental updates and responsive performance.
+
+---
+
+ERROR HANDLING & FALLBACK
+
+The application must continue to function normally if Solana Tracker is unavailable.
+
+If any Solana Tracker request fails due to:
+
+- Network errors
+- Timeout
+- Rate limiting
+- Monthly request limit reached
+- Invalid response
+- Missing data
+- API downtime
+
+The application must:
+
+1. Continue the scan using existing data sources.
+
+2. Display any Solana Tracker-derived fields as:
+
+- Unknown
+- Unavailable
+- Not Retrieved
+
+Do NOT fabricate values.
+
+Do NOT block or cancel the scan.
+
+Do NOT affect:
+
+- Security Briefing
+- Structure Briefing
+- Attention Briefing
+- Wallet Library
+- Existing scoring engine
+
+If cached Solana Tracker data exists:
+
+Use the cached data instead of failing.
+
+Log the reason for the failed request for debugging purposes.
+
+The integration should fail gracefully without interrupting the user workflow.
+
+---
+
+RATE LIMIT PROTECTION
+
+Prevent unnecessary API usage.
+
+Implement:
+
+- Request throttling
+- Automatic retry with exponential backoff for temporary failures
+- Maximum retry limit
+- Request queue if multiple enrichments are triggered simultaneously
+
+Never retry indefinitely.
+
+If the request budget or rate limit is reached:
+
+Stop making additional Solana Tracker requests.
+
+Continue using cached data and existing application data.
+
+Always prioritize application responsiveness over completing every enrichment request.
+
+
+ALSO: 
+On Holder Count history input boxes; make their time frames customizable in General Settings, with the new defaults being: 
+Holders (current)
+Holders 1m ago optional
+Holders 3m ago optional
+Holders 5m ago optional
+
+(the "m" stands for minutes) 
+
+
+Remember, the above data are to be automatically acquired via Solana Tracker API.
+
