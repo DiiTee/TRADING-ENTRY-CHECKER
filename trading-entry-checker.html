@@ -357,6 +357,11 @@ textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
   box-shadow: 0 4px 20px rgba(0,136,204,0.25); font-weight: 700;
 }
 .btn-trojan-bot:hover { box-shadow: 0 6px 30px rgba(0,136,204,0.4); transform: translateY(-1px); }
+.btn-gmgn {
+  background: linear-gradient(135deg, #00e676, #1de9b6); color: #0a0e27;
+  box-shadow: 0 4px 20px rgba(0,230,118,0.25); font-weight: 700;
+}
+.btn-gmgn:hover { box-shadow: 0 6px 30px rgba(0,230,118,0.45); transform: translateY(-1px); }
 .btn-dexscreener {
   background: linear-gradient(135deg, #00c853, #69f0ae); color: #0a0e27;
   box-shadow: 0 4px 20px rgba(0,200,83,0.25); font-weight: 700;
@@ -2297,6 +2302,7 @@ p, span, td, th {
         <button class="btn btn-primary" id="addTableBtn"><i class="fa-solid fa-plus"></i> Add to Table</button>
         <button class="btn btn-secondary" id="exportTxtBtn"><i class="fa-solid fa-file-lines"></i> Export TXT</button>
         <button class="btn btn-accent" id="copyCABtn" style="background:var(--accent-cyan);color:#0a0e1a;font-weight:700;" title="Copy Contract Address"><i class="fa-solid fa-copy"></i> Copy CA</button>
+        <button class="btn btn-gmgn" id="buyGMGNBtn" title="Open token page on GMGN in a new window"><i class="fa-solid fa-bolt"></i> GMGN</button>
         <button class="btn btn-trojan" id="buyTrojanTerminalBtn" title="Open token page on Trojan Terminal in a new window"><i class="fa-solid fa-terminal"></i> Trojan Terminal</button>
         <button class="btn btn-trojan-bot" id="buyTrojanBotBtn" title="Open Trojan Bot with this token in a new window"><i class="fa-brands fa-telegram"></i> Trojan Bot</button>
         <button class="btn btn-dexscreener" id="buyDexscreenerBtn" title="Open token on Dexscreener in a new window"><i class="fa-solid fa-chart-line"></i> Dexscreener</button>
@@ -9134,7 +9140,7 @@ function buildEntryBriefingHTML(d, analysis) {
     /* At this point wlSyncEntry hasn't run yet, so _wlEntry.structureSnapshot
        still holds the PREVIOUS scan's data — exactly what we want to diff against. */
     var _prevSnap = _wlEntry.structureSnapshot || null;
-    var _currSnap = sceExtractSnapshot(sa);
+    var _currSnap = sceExtractEnrichedSnapshot(sa, d);
     if (!_prevSnap || !_currSnap) return '';
     return sceBuildBriefingHTML({
       prevStructureSnapshot: _prevSnap,
@@ -13235,6 +13241,13 @@ el('copyCABtn').addEventListener('click', function() {
   }
 });
 
+el('buyGMGNBtn').addEventListener('click', function() {
+  var ca = el('fCA').value.trim();
+  if (!ca) { showToast('No contract address — enter a CA first', 'error'); return; }
+  var url = 'https://gmgn.ai/sol/token/' + encodeURIComponent(ca);
+  window.open(url, '_blank');
+});
+
 el('buyTrojanTerminalBtn').addEventListener('click', function() {
   var ca = el('fCA').value.trim();
   if (!ca) { showToast('No contract address — enter a CA first', 'error'); return; }
@@ -14361,7 +14374,8 @@ var _SCE_UP_GOOD = {
   bounceVelocityScore:1, breakoutEfficiency:1, rawBreakoutEfficiency:1,
   supplyAbsorptionScore:1, volumeExpansionScore:1, overheadScore:1,
   holderCountQualityScore:1, holderMomentumScore:1, runnerScore:1,
-  bounceMagnitude:1, defenseCount:1, successfulBreakouts:1, acceptanceScore:1
+  bounceMagnitude:1, defenseCount:1, successfulBreakouts:1, acceptanceScore:1,
+  perf5m:1, perf1h:1, perf24h:1
 };
 /* Numeric fields where LOWER = better */
 var _SCE_UP_BAD = {
@@ -14435,19 +14449,23 @@ var _SCE_LABELS = {
   activeShelfValid:      'Active Shelf Validity',
   defenseCount:          'Shelf Defenses',
   defenseClassification: 'Defense Quality',
+  perf5m:                '5m Price Change (%)',
+  perf1h:                '1h Price Change (%)',
+  perf24h:               '24h Price Change (%)',
 };
 /* Priority order for displaying changes (lower = shown first) */
 var _SCE_PRIORITY = {
-  confidenceTier:1, runnerPotential:2, tierScore:3,
-  trapRiskLabel:4, fakeBreakoutRisk:5, parabolicRisk:6, exitSpikeRisk:7, perfectClimbRisk:8,
-  volumeExpansionSignal:9, supplyAbsorptionLabel:10, preBreakoutSqueeze:11,
-  shelfQualityScore:12, acceptanceScore:13, demandReturnScore:14,
-  demandExpansionScore:15, breakoutEfficiency:16, bounceVelocityScore:17,
-  activeShelfValid:18, doubleAccumulation:19, compressionDetected:20,
-  holderTrendClass:21, overheadRisk:22,
+  perf5m:1, perf1h:1, perf24h:2,
+  confidenceTier:3, runnerPotential:4, tierScore:5,
+  trapRiskLabel:6, fakeBreakoutRisk:7, parabolicRisk:8, exitSpikeRisk:9, perfectClimbRisk:10,
+  volumeExpansionSignal:11, supplyAbsorptionLabel:12, preBreakoutSqueeze:13,
+  shelfQualityScore:14, acceptanceScore:15, demandReturnScore:16,
+  demandExpansionScore:17, breakoutEfficiency:18, bounceVelocityScore:19,
+  activeShelfValid:20, doubleAccumulation:21, compressionDetected:22,
+  holderTrendClass:23, overheadRisk:24,
 };
 /* Minimum numeric delta to qualify as a meaningful change */
-var _SCE_MIN_DELTA = { default: 4, shelfQualityPenalty: 1, defenseCount: 1, overheadDensityPct: 3 };
+var _SCE_MIN_DELTA = { default: 4, shelfQualityPenalty: 1, defenseCount: 1, overheadDensityPct: 3, perf5m: 8, perf1h: 15, perf24h: 25 };
 
 /* Extract a flat snapshot of all primitive fields from an sa object */
 function sceExtractSnapshot(sa) {
@@ -14459,6 +14477,18 @@ function sceExtractSnapshot(sa) {
       snap[k] = v;
     }
   });
+  return Object.keys(snap).length ? snap : null;
+}
+
+/* Extract snapshot enriched with price-action fields from the data object (d).
+   perf5m/1h/24h directly capture pump/dump moves that SA scores may not reflect. */
+function sceExtractEnrichedSnapshot(sa, d) {
+  var snap = sceExtractSnapshot(sa) || {};
+  if (d) {
+    if (Number.isFinite(d.perf5m))  snap.perf5m  = Math.round(d.perf5m  * 10) / 10;
+    if (Number.isFinite(d.perf1h))  snap.perf1h  = Math.round(d.perf1h  * 10) / 10;
+    if (Number.isFinite(d.perf24h)) snap.perf24h = Math.round(d.perf24h * 10) / 10;
+  }
   return Object.keys(snap).length ? snap : null;
 }
 
@@ -15734,7 +15764,7 @@ function wlBuildEntry(existingId, existingDateAdded, existingEntry) {
   if (!currentAnalysis) return null;
   var d  = currentAnalysis.data;
   var sa = d.structuralAnalysis || null;
-  var newSnap = sceExtractSnapshot(sa);
+  var newSnap = sceExtractEnrichedSnapshot(sa, d);
   return {
     id:               existingId || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
     name:             d.coin || 'Unknown',
@@ -15797,7 +15827,7 @@ function wlSyncEntry(id) {
     })(),
     prevStructureSnapshot: orig.structureSnapshot   || null,
     prevStructureTime:     orig.lastAnalysisTime    || null,
-    structureSnapshot:     sceExtractSnapshot(sa)
+    structureSnapshot:     sceExtractEnrichedSnapshot(sa, d)
   };
 }
 
