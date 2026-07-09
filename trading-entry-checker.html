@@ -6830,7 +6830,14 @@ function computeHolderMetrics(hcMcap, trendState) {
     holderTrendClass:        holderTrendClass,
     holderMomentumSource:    holderMomentumSource,
     holderDivergence:        holderDivergence,
-    holderDivergenceType:    holderDivergenceType
+    holderDivergenceType:    holderDivergenceType,
+    holderCountNow:          hcHld,
+    holderCountH1:           hldH1,
+    holderCountH6:           hldH6,
+    holderCountH24:          hldH24,
+    holderChangeH1Pct:       (holderHistoryAvailable && hldH1  > 0) ? ((hcHld - hldH1)  / hldH1)  * 100 : null,
+    holderChangeH6Pct:       (holderHistoryAvailable && hldH6  > 0) ? ((hcHld - hldH6)  / hldH6)  * 100 : null,
+    holderChangeH24Pct:      (holderHistoryAvailable && hldH24 > 0) ? ((hcHld - hldH24) / hldH24) * 100 : null
   };
 }
 
@@ -7358,6 +7365,13 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
   var holderMomentumSource    = _hm.holderMomentumSource;
   var holderDivergence        = _hm.holderDivergence;
   var holderDivergenceType    = _hm.holderDivergenceType;
+  var holderCountNow          = _hm.holderCountNow;
+  var holderCountH1           = _hm.holderCountH1;
+  var holderCountH6           = _hm.holderCountH6;
+  var holderCountH24          = _hm.holderCountH24;
+  var holderChangeH1Pct       = _hm.holderChangeH1Pct;
+  var holderChangeH6Pct       = _hm.holderChangeH6Pct;
+  var holderChangeH24Pct      = _hm.holderChangeH24Pct;
 
   /* ── FIX #6/#7: Confidence Tier (8 components; Breakout weight 10%→15%) ── */
   var distScoreForTier = Math.max(0, 100 - distFromShelf * 3);
@@ -7705,6 +7719,13 @@ function computeStructuralAnalysis(candles15m, poolAttrs) {
     holderMomentumSource:    holderMomentumSource,
     holderDivergence:        holderDivergence,
     holderDivergenceType:    holderDivergenceType,
+    holderCountNow:          holderCountNow,
+    holderCountH1:           holderCountH1,
+    holderCountH6:           holderCountH6,
+    holderCountH24:          holderCountH24,
+    holderChangeH1Pct:       holderChangeH1Pct,
+    holderChangeH6Pct:       holderChangeH6Pct,
+    holderChangeH24Pct:      holderChangeH24Pct,
     /* Entry Checklist */
     entryChecklist:          checklist,
     checklistResult:         checklistResult,
@@ -9052,9 +9073,27 @@ function buildEntryBriefingHTML(d, analysis) {
           if (!sa.holderHistoryAvailable) {
             t += 'Holder Momentum: <span style="color:var(--text-muted);font-size:0.70rem;">Historical holder data unavailable. Enter 1h / 6h / 24h counts in the form.</span><br>';
           } else {
-            var hmC = sa.holderMomentumScore >= 60 ? 'var(--safe)' : sa.holderMomentumScore >= 45 ? 'var(--caution)' : '#ff4757';
-            t += 'Holder Momentum: <strong style="color:' + hmC + ';">' + sa.holderTrendClass + '</strong>';
-            t += ' <span style="color:var(--text-muted);font-size:0.70rem;">(' + sa.holderMomentumScore + '/100 via Holder History)</span><br>';
+            var hmC = sa.holderMomentumScore >= 75 ? '#00e676' : sa.holderMomentumScore >= 60 ? 'var(--safe)' : sa.holderMomentumScore >= 45 ? 'var(--caution)' : '#ff4757';
+            var hmGlow = sa.holderMomentumScore >= 75 ? '0 0 10px rgba(0,230,118,0.35)' : sa.holderMomentumScore <= 30 ? '0 0 10px rgba(255,71,87,0.35)' : 'none';
+            var _fmtPct = function(p) {
+              if (p === null || p === undefined) return '<span style="color:var(--text-muted);">—</span>';
+              var c = p >= 0 ? '#00e676' : '#ff4757';
+              return '<strong style="color:' + c + ';">' + (p >= 0 ? '+' : '') + p.toFixed(1) + '%</strong>';
+            };
+            t += '<div style="margin:6px 0 8px;padding:10px 12px;background:rgba(0,0,0,0.25);border:1px solid ' + hmC + ';border-radius:6px;box-shadow:' + hmGlow + ';">';
+            t += '  <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px;">';
+            t += '    <div><span style="font-size:0.62rem;color:var(--text-muted);font-weight:700;letter-spacing:0.6px;">HOLDER MOMENTUM</span></div>';
+            t += '    <div><strong style="color:' + hmC + ';font-size:1.05rem;letter-spacing:0.5px;">' + sa.holderTrendClass + '</strong>';
+            t += '     <span style="color:var(--text-muted);font-size:0.72rem;">(' + sa.holderMomentumScore + '/100)</span></div>';
+            t += '  </div>';
+            t += '  <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">';
+            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">CURRENT</div><div style="font-size:0.86rem;font-weight:700;color:var(--text-primary);">' + ((sa.holderCountNow != null ? sa.holderCountNow : (window._tecHolderCount || 0)).toLocaleString()) + '</div></div>';
+            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">1H (' + (sa.holderCountH1 ? sa.holderCountH1.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH1Pct) + '</div></div>';
+            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">6H (' + (sa.holderCountH6 ? sa.holderCountH6.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH6Pct) + '</div></div>';
+            t += '    <div style="text-align:center;"><div style="font-size:0.58rem;color:var(--text-muted);">24H (' + (sa.holderCountH24 ? sa.holderCountH24.toLocaleString() : '—') + ')</div><div style="font-size:0.86rem;">' + _fmtPct(sa.holderChangeH24Pct) + '</div></div>';
+            t += '  </div>';
+            t += '  <div style="font-size:0.66rem;color:var(--text-muted);margin-top:6px;">Source: ' + (sa.holderMomentumSource || 'Holder History') + '</div>';
+            t += '</div>';
           }
           if (sa.holderDivergence && sa.holderDivergence !== 'None' && sa.holderDivergence !== 'No Divergence') {
             var hdC    = sa.holderDivergenceType === 'bullish' ? 'var(--safe)' : '#ff4757';
