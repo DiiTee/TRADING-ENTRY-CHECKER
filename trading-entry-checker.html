@@ -8674,6 +8674,20 @@ function buildEntryBriefingHTML(d, analysis) {
         /* ── Sizing Recommendation ── */
         t += '<br>Sizing: <strong style="color:' + sizingColor + ';font-size:1.0em;letter-spacing:1px;">' + sizingLabel + '</strong>';
         t += ' <span style="color:var(--text-muted);font-size:0.72rem;">' + sizingNote + '</span>';
+        /* ── Active Shelf preview (mirrors item 04 exactly) + Structure Mode & Confidence note ── */
+        t += '<div style="margin-top:8px;padding:6px 9px;background:rgba(0,255,204,0.06);border:1px solid rgba(0,255,204,0.25);border-radius:5px;">';
+        t += '  <span style="font-size:0.58rem;color:var(--text-muted);font-weight:700;letter-spacing:0.6px;">ACTIVE SHELF</span> ';
+        if (activeShelfMC !== null) {
+          t += '<strong style="color:var(--safe);font-size:0.92rem;">' + formatUSD(activeShelfMC) + '</strong> MC';
+        } else {
+          t += '<span style="color:var(--text-muted);font-size:0.78rem;">Not available</span>';
+        }
+        var _asEM   = window._tecEngineMode || 'FLOW';
+        var _asConf = sa ? (sa.confidenceTier || '—') : (window._tecHintStructure ? window._tecHintStructure.hintTier : '—');
+        var _asConfColor = ({S:'#00ffcc',A:'#00e676',B:'#ffeb3b',C:'#ff9800',D:'#ff4757'})[_asConf] || 'var(--text-muted)';
+        t += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:2px;">Structure Mode: <strong style="color:var(--accent-cyan);">' + _asEM + '</strong>';
+        t += ' &nbsp;|&nbsp; Confidence: <strong style="color:' + _asConfColor + ';">' + _asConf + '</strong></div>';
+        t += '</div>';
         return t;
       })() },
     { num: '◆', label: 'Fibonacci Context', text: (function() {
