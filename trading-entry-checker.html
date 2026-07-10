@@ -15112,15 +15112,27 @@ function sceExtractEnrichedSnapshot(sa, d) {
   return Object.keys(snap).length ? snap : null;
 }
 
-/* Compare two snapshots; returns array of change objects */
-function sceCompare(prev, curr) {
+/* Keys that represent raw price action rather than structural evolution.
+   These are evaluated separately (Price Action Status) and must NEVER be mixed
+   into the Structural Evolution verdict — price moving and structure changing
+   are different questions and must never be allowed to mask one another. */
+var _SCE_PRICE_KEYS = { perf5m: 1, perf1h: 1, perf24h: 1 };
+
+/* Compare two snapshots; returns array of change objects.
+   `mode` = 'structural' (default) excludes price-action keys; 'price' includes only them. */
+function sceCompare(prev, curr, mode) {
   if (!prev || !curr) return [];
+  mode = (mode === 'price') ? 'price' : 'structural';
   var changes = [];
   var allKeys = {};
   Object.keys(prev).forEach(function(k) { allKeys[k] = 1; });
   Object.keys(curr).forEach(function(k) { allKeys[k] = 1; });
 
   Object.keys(allKeys).forEach(function(k) {
+    var isPriceKey = !!_SCE_PRICE_KEYS[k];
+    if (mode === 'structural' && isPriceKey) return;
+    if (mode === 'price' && !isPriceKey) return;
+
     var pv = prev[k], cv = curr[k];
     if (pv === undefined || cv === undefined || pv === cv) return;
     var label = _SCE_LABELS[k];
@@ -15165,34 +15177,119 @@ function sceSortChanges(changes) {
   });
 }
 
-/* Weight a change by how decisive its signal is — raw price action (perf5m/1h/24h)
-   is direct evidence of a pump/dump and should dominate minor score wobbles. */
+/* Weight a purely-structural change by how decisive its signal is. */
 function sceChangeWeight(c) {
-  if (c.key === 'perf5m' || c.key === 'perf1h' || c.key === 'perf24h') {
-    var mag = Math.abs(c.curr - c.prev);
-    /* Bigger moves count for more: every extra threshold-multiple adds weight. */
-    var mn = _SCE_MIN_DELTA[c.key];
-    if (!Number.isFinite(mn) || mn <= 0) mn = _SCE_MIN_DELTA.default;
-    if (!Number.isFinite(mag) || !Number.isFinite(mn) || mn <= 0) return 3;
-    return 3 + Math.min(6, Math.floor(mag / mn));
-  }
   var pr = _SCE_PRIORITY[c.key] || 99;
   return pr <= 2 ? 3 : 1;
 }
 
-/* Summarise a change list into a verdict, weighting decisive signals (price action)
-   more heavily than minor structural score wobbles. */
-function sceSummary(changes) {
+/* ── STRUCTURAL EVOLUTION ──────────────────────────────────────────────
+   Evaluated ONLY from structural factors (shelf quality, floor/defense,
+   trend integrity, volume acceptance, breakout confirmation, reliability
+   tier, etc). Price percentage changes are explicitly excluded — see
+   _SCE_PRICE_KEYS / sceCompare(mode:'structural'). */
+var _SCE_PHRASE = {
+  activeShelfValid:      { up: 'Support Shelf Confirmed',      down: 'Support Shelf Invalidated' },
+  defenseCount:          { up: 'Shelf Defense Strengthened',   down: 'Shelf Defense Lost' },
+  shelfQualityScore:     { up: 'Shelf Quality Improved',       down: 'Shelf Quality Deteriorated' },
+  shelfQualityClass:     { up: 'Shelf Quality Improved',       down: 'Shelf Quality Deteriorated' },
+  trendState:            { up: 'Trend Turned Bullish',         down: 'Trend Turned Bearish' },
+  holderTrendClass:      { up: 'Holder Trend Improving',       down: 'Holder Trend Declining' },
+  breakoutEfficiency:    { up: 'Breakout Confirmed',           down: 'Breakout Failing' },
+  breakoutLabel:         { up: 'Breakout Confirmed',           down: 'Breakout Failing' },
+  compressionDetected:   { up: 'Pre-Breakout Compression Forming', down: 'Compression Released' },
+  doubleAccumulation:    { up: 'Double Accumulation Detected', down: 'Accumulation Pattern Lost' },
+  acceptanceScore:       { up: 'Volume Acceptance Improved',   down: 'Volume Acceptance Weakened' },
+  acceptanceClass:       { up: 'Volume Acceptance Improved',   down: 'Volume Acceptance Weakened' },
+  demandReturnScore:     { up: 'Demand Return Strengthened',   down: 'Demand Return Weakened' },
+  demandExpansionScore:  { up: 'Demand Expansion Strengthened',down: 'Demand Expansion Weakened' },
+  supplyAbsorptionScore: { up: 'Supply Absorption Improved',   down: 'Supply Absorption Weakened' },
+  supplyAbsorptionLabel: { up: 'Supply Absorption Improved',   down: 'Supply Absorption Weakened' },
+  overheadRisk:          { up: 'Overhead Supply Cleared',      down: 'Overhead Supply Increased' },
+  overheadDensityPct:    { up: 'Overhead Supply Cleared',      down: 'Overhead Supply Increased' },
+  confidenceTier:        { up: 'Structure Reliability Improved', down: 'Structure Reliability Deteriorated' },
+  tierScore:             { up: 'Structure Reliability Improved', down: 'Structure Reliability Deteriorated' },
+  trapRiskLabel:         { up: 'Trap Risk Reduced',            down: 'Trap Risk Increased' },
+  trapRiskScore:         { up: 'Trap Risk Reduced',            down: 'Trap Risk Increased' },
+  fakeBreakoutRisk:      { up: 'Fake Breakout Risk Reduced',   down: 'Fake Breakout Risk Emerging' },
+  parabolicRisk:         { up: 'Parabolic Risk Reduced',       down: 'Parabolic Risk Emerging' },
+  runnerPotential:       { up: 'Runner Potential Improved',    down: 'Runner Potential Reduced' },
+  vwapPosition:          { up: 'Reclaimed VWAP',               down: 'Lost VWAP' },
+};
+function scePhrase(c) {
+  var p = _SCE_PHRASE[c.key];
+  if (p) return c.direction > 0 ? p.up : p.down;
+  return c.label + (c.direction > 0 ? ' Improved' : ' Weakened');
+}
+
+/* Classify structural evolution from a structural-only change list. */
+function sceStructuralVerdict(changes) {
   var pos = 0, neg = 0;
   changes.forEach(function(c) {
     var w = sceChangeWeight(c);
-    if (!Number.isFinite(w) || w <= 0) w = 1;
     if (c.direction > 0) pos += w; else if (c.direction < 0) neg += w;
   });
-  if (pos === 0 && neg === 0) return { verdict: 'Structure Stable',   color: 'var(--text-muted)', icon: '●' };
-  if (pos > neg * 1.2)        return { verdict: 'Structure Improved',  color: 'var(--safe)',        icon: '▲' };
-  if (neg > pos * 1.2)        return { verdict: 'Structure Weakened',  color: 'var(--skip)',        icon: '▼' };
-  return                             { verdict: 'Structure Mixed',     color: 'var(--caution)',     icon: '◆' };
+  if (pos > neg && pos > 0)  return { state: 'Improving',  color: 'var(--safe)',        icon: '▲' };
+  if (neg > pos && neg > 0)  return { state: 'Weakening',  color: 'var(--skip)',        icon: '▼' };
+  return                            { state: 'Stable',     color: 'var(--text-muted)',  icon: '●' };
+}
+
+/* ── PRICE ACTION ──────────────────────────────────────────────────────
+   Evaluated ONLY from 5m/1h/24h % price change. Structural fields never
+   factor into this. Longer windows are weighted more heavily since they
+   are less noisy, but any single window can still confirm strength. */
+function scePriceActionVerdict(currSnap) {
+  if (!currSnap) return null;
+  var m5  = Number.isFinite(currSnap.perf5m)  ? currSnap.perf5m  : null;
+  var h1  = Number.isFinite(currSnap.perf1h)  ? currSnap.perf1h  : null;
+  var h24 = Number.isFinite(currSnap.perf24h) ? currSnap.perf24h : null;
+  if (m5 === null && h1 === null && h24 === null) return null;
+
+  var wsum = 0, wtot = 0;
+  if (m5  !== null) { wsum += m5  * 0.2; wtot += 0.2; }
+  if (h1  !== null) { wsum += h1  * 0.3; wtot += 0.3; }
+  if (h24 !== null) { wsum += h24 * 0.5; wtot += 0.5; }
+  var blended = wtot > 0 ? wsum / wtot : 0;
+
+  var label, color, icon;
+  if      (blended >= 10)  { label = 'Strong Bullish Momentum'; color = '#00ffcc'; icon = '▲▲'; }
+  else if (blended >= 3)   { label = 'Bullish Momentum';        color = 'var(--safe)'; icon = '▲'; }
+  else if (blended > -3)   { label = 'Neutral / Sideways';      color = 'var(--text-muted)'; icon = '●'; }
+  else if (blended > -10)  { label = 'Bearish Momentum';        color = 'var(--skip)'; icon = '▼'; }
+  else                     { label = 'Strong Bearish Momentum'; color = '#ff4757'; icon = '▼▼'; }
+
+  var bucket = blended >= 3 ? 'bullish' : blended <= -3 ? 'bearish' : 'neutral';
+
+  return {
+    label: label, color: color, icon: icon, bucket: bucket,
+    blended: blended, m5: m5, h1: h1, h24: h24
+  };
+}
+
+/* ── OVERALL MARKET STATE ── combine price action bucket + structural state ── */
+var _SCE_MARKET_STATE = {
+  'bullish|Improving':  'Bullish Breakout',
+  'bullish|Stable':     'Momentum Expansion',
+  'bullish|Weakening':  'Unconfirmed Rally',
+  'neutral|Improving':  'Accumulation',
+  'neutral|Stable':     'Consolidation',
+  'neutral|Weakening':  'Distribution',
+  'bearish|Improving':  'Bullish Divergence',
+  'bearish|Stable':     'Pullback Into Support',
+  'bearish|Weakening':  'Structural Breakdown',
+};
+function sceOverallMarketState(priceVerdict, structVerdict) {
+  if (!priceVerdict) return null;
+  var key = priceVerdict.bucket + '|' + structVerdict.state;
+  var base = _SCE_MARKET_STATE[key] || 'Mixed Signal';
+  var strong = priceVerdict.label.indexOf('Strong') === 0;
+  var label = strong ? 'Strong ' + base : base;
+  var color = structVerdict.state === 'Improving' && priceVerdict.bucket !== 'bearish' ? 'var(--safe)'
+            : structVerdict.state === 'Weakening' && priceVerdict.bucket !== 'bullish' ? 'var(--skip)'
+            : priceVerdict.bucket === 'bullish' ? 'var(--safe)'
+            : priceVerdict.bucket === 'bearish' ? 'var(--skip)'
+            : 'var(--caution)';
+  return { label: label, color: color };
 }
 
 /* Format a single value for display */
@@ -15202,18 +15299,23 @@ function sceFmtVal(v) {
   return String(v);
 }
 
-/* Build the full HTML block for the Structure Briefing */
+/* Build the full HTML block for the Structure Briefing — now three
+   independent sections: Price Action, Structural Evolution, Overall Market State.
+   Price movement and structural evolution are computed from disjoint field
+   sets and must never be collapsed into one verdict. */
 function sceBuildBriefingHTML(entry) {
   if (!entry) return '';
   var prev = entry.prevStructureSnapshot;
   var curr = entry.structureSnapshot;
   if (!prev || !curr) return '';
 
-  var changes = sceCompare(prev, curr);
-  var sorted  = sceSortChanges(changes);
+  var structChanges = sceCompare(prev, curr, 'structural');
+  var sorted  = sceSortChanges(structChanges);
   var pos     = sorted.filter(function(c) { return c.direction > 0; });
   var neg     = sorted.filter(function(c) { return c.direction < 0; });
-  var summary = sceSummary(changes);
+  var structVerdict = sceStructuralVerdict(structChanges);
+  var priceVerdict  = scePriceActionVerdict(curr);
+  var overall       = sceOverallMarketState(priceVerdict, structVerdict);
 
   var scanAge = '';
   if (entry.prevStructureTime) {
@@ -15221,50 +15323,74 @@ function sceBuildBriefingHTML(entry) {
     scanAge = ageMins < 60 ? ageMins + 'm ago' : (ageMins / 60).toFixed(1) + 'h ago';
   }
 
-  var h = '<div style="margin:10px 0 12px;padding:10px 14px;border-radius:6px;border-left:3px solid ' + summary.color + ';background:' + summary.color + '11;">';
-  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:' + (changes.length ? '8' : '0') + 'px;">';
-  h += '<span style="font-size:0.72rem;font-weight:700;color:' + summary.color + ';letter-spacing:0.6px;">' + summary.icon + ' ' + summary.verdict + '</span>';
-  if (scanAge) h += '<span style="font-size:0.60rem;color:var(--text-muted);">vs scan ' + scanAge + '</span>';
+  var h = '<div style="margin:10px 0 12px;padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);">';
+  if (scanAge) h += '<div style="font-size:0.58rem;color:var(--text-muted);text-align:right;margin-bottom:6px;">vs scan ' + scanAge + '</div>';
+
+  /* 1. PRICE ACTION STATUS */
+  h += '<div style="padding:8px 10px;border-radius:5px;border-left:3px solid ' + (priceVerdict ? priceVerdict.color : 'var(--text-muted)') + ';background:' + (priceVerdict ? priceVerdict.color : 'var(--text-muted)') + '11;margin-bottom:8px;">';
+  h += '<div style="font-size:0.58rem;color:var(--text-muted);letter-spacing:0.6px;margin-bottom:2px;">PRICE ACTION STATUS</div>';
+  if (priceVerdict) {
+    h += '<div style="font-size:0.72rem;font-weight:700;color:' + priceVerdict.color + ';">' + priceVerdict.icon + ' ' + priceVerdict.label + '</div>';
+    var pParts = [];
+    if (priceVerdict.m5  !== null) pParts.push('5m ' + (priceVerdict.m5  >= 0 ? '+' : '') + sceFmtVal(priceVerdict.m5)  + '%');
+    if (priceVerdict.h1  !== null) pParts.push('1h ' + (priceVerdict.h1  >= 0 ? '+' : '') + sceFmtVal(priceVerdict.h1)  + '%');
+    if (priceVerdict.h24 !== null) pParts.push('24h ' + (priceVerdict.h24 >= 0 ? '+' : '') + sceFmtVal(priceVerdict.h24) + '%');
+    if (pParts.length) h += '<div style="font-size:0.62rem;color:var(--text-muted);margin-top:2px;">' + pParts.join(' · ') + '</div>';
+  } else {
+    h += '<div style="font-size:0.64rem;color:var(--text-muted);">No price change data available.</div>';
+  }
   h += '</div>';
 
-  if (!changes.length) {
-    h += '<div style="font-size:0.67rem;color:var(--text-muted);">No meaningful structural changes detected since the previous scan.</div>';
+  /* 2. STRUCTURAL EVOLUTION STATUS */
+  h += '<div style="padding:8px 10px;border-radius:5px;border-left:3px solid ' + structVerdict.color + ';background:' + structVerdict.color + '11;margin-bottom:8px;">';
+  h += '<div style="font-size:0.58rem;color:var(--text-muted);letter-spacing:0.6px;margin-bottom:2px;">STRUCTURAL EVOLUTION</div>';
+  h += '<div style="font-size:0.72rem;font-weight:700;color:' + structVerdict.color + ';">' + structVerdict.icon + ' ' + structVerdict.state + '</div>';
+  if (!structChanges.length) {
+    h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:2px;">No meaningful structural change detected since the previous scan — existing supports remain intact.</div>';
   } else {
     var topPos = pos.slice(0, 4), topNeg = neg.slice(0, 4);
     topPos.forEach(function(c) {
-      h += '<div style="font-size:0.67rem;color:var(--safe);padding:1px 0;">▲ <strong>' + c.label + '</strong>';
-      h += ' <span style="color:var(--text-muted);">' + sceFmtVal(c.prev) + ' → ' + sceFmtVal(c.curr) + '</span></div>';
+      h += '<div style="font-size:0.64rem;color:var(--safe);padding:1px 0;">▲ ' + scePhrase(c);
+      h += ' <span style="color:var(--text-muted);">(' + sceFmtVal(c.prev) + ' → ' + sceFmtVal(c.curr) + ')</span></div>';
     });
     topNeg.forEach(function(c) {
-      h += '<div style="font-size:0.67rem;color:#ff4757;padding:1px 0;">▼ <strong>' + c.label + '</strong>';
-      h += ' <span style="color:var(--text-muted);">' + sceFmtVal(c.prev) + ' → ' + sceFmtVal(c.curr) + '</span></div>';
+      h += '<div style="font-size:0.64rem;color:#ff4757;padding:1px 0;">▼ ' + scePhrase(c);
+      h += ' <span style="color:var(--text-muted);">(' + sceFmtVal(c.prev) + ' → ' + sceFmtVal(c.curr) + ')</span></div>';
     });
     var shown     = topPos.length + topNeg.length;
-    var remaining = changes.length - shown;
+    var remaining = structChanges.length - shown;
     if (remaining > 0) {
-      h += '<div style="font-size:0.60rem;color:var(--text-muted);margin-top:3px;">+ ' + remaining + ' more change' + (remaining === 1 ? '' : 's') + ' detected</div>';
+      h += '<div style="font-size:0.58rem;color:var(--text-muted);margin-top:3px;">+ ' + remaining + ' more change' + (remaining === 1 ? '' : 's') + ' detected</div>';
     }
   }
+  h += '</div>';
+
+  /* 3. OVERALL MARKET STATE */
+  h += '<div style="padding:8px 10px;border-radius:5px;border-left:3px solid ' + (overall ? overall.color : 'var(--text-muted)') + ';background:' + (overall ? overall.color : 'var(--text-muted)') + '11;">';
+  h += '<div style="font-size:0.58rem;color:var(--text-muted);letter-spacing:0.6px;margin-bottom:2px;">OVERALL MARKET STATE</div>';
+  h += '<div style="font-size:0.74rem;font-weight:800;color:' + (overall ? overall.color : 'var(--text-muted)') + ';">' + (overall ? overall.label : '—') + '</div>';
+  h += '</div>';
+
   h += '</div>';
   return h;
 }
 
-/* Build the compact HTML block for the Watchlist Preview */
+/* Build the compact HTML block for the Watchlist Preview — same three
+   signals condensed into a single row. */
 function sceBuildCompactHTML(entry) {
   if (!entry) return '';
   var prev = entry.prevStructureSnapshot;
   var curr = entry.structureSnapshot;
   if (!prev || !curr) return '';
-  var changes = sceCompare(prev, curr);
-  var summary = sceSummary(changes);
-  var pos = changes.filter(function(c) { return c.direction > 0; }).length;
-  var neg = changes.filter(function(c) { return c.direction < 0; }).length;
+  var structChanges = sceCompare(prev, curr, 'structural');
+  var structVerdict = sceStructuralVerdict(structChanges);
+  var priceVerdict  = scePriceActionVerdict(curr);
+  var overall       = sceOverallMarketState(priceVerdict, structVerdict);
 
-  var h = '<div style="margin:4px 0 0;padding:4px 10px;border-radius:4px;border-left:2px solid ' + summary.color + ';background:' + summary.color + '11;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">';
-  h += '<span style="font-size:0.64rem;font-weight:700;color:' + summary.color + ';">' + summary.icon + ' ' + summary.verdict + '</span>';
-  if (pos > 0) h += '<span style="font-size:0.60rem;color:var(--safe);">▲ ' + pos + ' improved</span>';
-  if (neg > 0) h += '<span style="font-size:0.60rem;color:#ff4757;">▼ ' + neg + ' weakened</span>';
-  if (!changes.length) h += '<span style="font-size:0.60rem;color:var(--text-muted);">No meaningful changes</span>';
+  var h = '<div style="margin:4px 0 0;padding:4px 10px;border-radius:4px;border-left:2px solid ' + (overall ? overall.color : structVerdict.color) + ';background:' + (overall ? overall.color : structVerdict.color) + '11;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">';
+  if (priceVerdict) h += '<span style="font-size:0.60rem;font-weight:700;color:' + priceVerdict.color + ';">' + priceVerdict.icon + ' ' + priceVerdict.label + '</span>';
+  h += '<span style="font-size:0.60rem;color:' + structVerdict.color + ';">Structure: ' + structVerdict.state + '</span>';
+  if (overall) h += '<span style="font-size:0.60rem;font-weight:700;color:' + overall.color + ';">→ ' + overall.label + '</span>';
   h += '</div>';
   return h;
 }
