@@ -9347,8 +9347,10 @@ function buildEntryBriefingHTML(d, analysis) {
       })() },
   ];
 
-  var rowsHTML = entryRows.map(function(r) {
-    return '<div class="entry-row"><div class="entry-num">' + r.num + '</div><div class="entry-content"><span class="entry-label">' + r.label + '</span><div class="entry-text">' + r.text + '</div></div></div>';
+  var rowsHTML = entryRows.map(function(r, _rIdx) {
+    var _rSlug = r.num.replace(/[^a-zA-Z0-9]/g, '');
+    if (!_rSlug) _rSlug = 'sym' + _rIdx;
+    return '<div class="entry-row" id="entry-row-' + _rSlug + '"><div class="entry-num">' + r.num + '</div><div class="entry-content"><span class="entry-label">' + r.label + '</span><div class="entry-text">' + r.text + '</div></div></div>';
   }).join('');
 
   var _em = window._tecEngineMode || 'FLOW';
@@ -9418,10 +9420,23 @@ function buildEntryBriefingHTML(d, analysis) {
     t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">CURRENT MC</div>';
     t += '<div style="font-size:0.98rem;font-weight:700;color:var(--accent-cyan);">'+formatUSD(currentMC)+'</div>';
     t += '</div>';
-    t += '<div style="flex:2;min-width:0;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid '+sizingColor+';">';
-    t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">SAFE ENTRY RANGE</div>';
+    t += '<div onclick="window._tecGoToItem05(this);" style="cursor:pointer;flex:2;min-width:0;padding:5px 10px;background:rgba(0,0,0,0.25);border-radius:4px;border-left:3px solid '+sizingColor+';" title="Click to jump to Item 05 — Safe Entry Range, Action Signal &amp; Sizing">';
+    t += '<div style="color:var(--text-muted);font-size:0.60rem;font-weight:700;margin-bottom:1px;">SAFE ENTRY RANGE <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.55rem;opacity:0.6;margin-left:3px;"></i></div>';
     t += '<div style="font-size:0.98rem;font-weight:700;color:'+sizingColor+';">'+safeEntryStr+'</div>';
     t += '<div style="font-size:0.60rem;color:var(--text-muted);">'+safeEntryModel+' Model · '+actionSignal+' · full detail in item 05</div>';
+    t += (function() {
+      /* ── Active Shelf preview (mirrors item 04 exactly) + Structure Mode & Confidence note ── */
+      var _asEM   = window._tecEngineMode || 'FLOW';
+      var _asConf = sa ? (sa.confidenceTier || '—') : (window._tecHintStructure ? window._tecHintStructure.hintTier : '—');
+      var _asConfColor = ({S:'#00ffcc',A:'#00e676',B:'#ffeb3b',C:'#ff9800',D:'#ff4757'})[_asConf] || 'var(--text-muted)';
+      var _asStr = activeShelfMC !== null ? formatUSD(activeShelfMC) : 'Not available';
+      return '<div style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.06);font-size:0.60rem;color:var(--text-muted);">' +
+             '<span style="font-weight:700;letter-spacing:0.5px;">ACTIVE SHELF</span> ' +
+             '<strong style="color:var(--safe);font-size:0.70rem;">' + _asStr + '</strong>' +
+             ' &nbsp;·&nbsp; Structure Mode: <strong style="color:var(--accent-cyan);">' + _asEM + '</strong>' +
+             ' &nbsp;·&nbsp; Confidence: <strong style="color:' + _asConfColor + ';">' + _asConf + '</strong>' +
+             '</div>';
+    })();
     t += (function() {
       /* ── Compact Fibonacci note — informational only ── */
       var _fem = window._tecEngineMode || 'FLOW';
@@ -12812,6 +12827,19 @@ function removeCoin(idx) {
 }
 
 /* ── Collapsible toggle for Personal Filter sections ── */
+window._tecGoToItem05 = function(el) {
+  var target = document.getElementById('entry-row-05');
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.style.transition = 'background-color 0.3s ease, box-shadow 0.3s ease';
+  target.style.backgroundColor = 'rgba(0,255,204,0.14)';
+  target.style.boxShadow = '0 0 0 2px rgba(0,255,204,0.45)';
+  setTimeout(function() {
+    target.style.backgroundColor = '';
+    target.style.boxShadow = '';
+  }, 1500);
+};
+
 window._pfToggle = function(el) {
   var body = el.nextElementSibling;
   if (!body) return;
