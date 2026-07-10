@@ -8316,6 +8316,7 @@ function buildEntryBriefingHTML(d, analysis) {
     safeEntryNote  = 'Active Shelf +3% → +10%';
   }
   safeEntryStr = formatUSD(safeEntryLow) + ' \u2013 ' + formatUSD(safeEntryHigh);
+  window._tecSafeEntryStr = safeEntryStr;
 
   /* ── Action Signal — driven by Entry Classification ── */
   var actionSignal, actionColor;
@@ -16434,6 +16435,7 @@ function wlBuildEntry(existingId, existingDateAdded, existingEntry) {
     ca:               d.ca || '',
     dateAdded:        existingDateAdded || Date.now(),
     mcAtAdd:          (!isNaN(d.marketCap) && d.marketCap > 0) ? d.marketCap : null,
+    serMcAtAdd:       window._tecSafeEntryStr || null,
     lastAnalysisTime: Date.now(),
     overallTier:      window._tecOverallTier  || '—',
     overallColor:     window._tecOverallColor || 'var(--text-muted)',
@@ -16466,8 +16468,10 @@ function wlSyncEntry(id) {
     ca:               d.ca || orig.ca,
     dateAdded:        orig.dateAdded,
     mcAtAdd:          orig.mcAtAdd !== undefined ? orig.mcAtAdd : null,
+    serMcAtAdd:       orig.serMcAtAdd !== undefined ? orig.serMcAtAdd : null,
     lastAnalysisTime: Date.now(),
     mcAtRefresh:      (!isNaN(d.marketCap) && d.marketCap > 0) ? d.marketCap : null,
+    serMcAtRefresh:   window._tecSafeEntryStr || null,
     overallTier:      window._tecOverallTier  || orig.overallTier  || '—',
     overallColor:     window._tecOverallColor || orig.overallColor || 'var(--text-muted)',
     overallRec:       window._tecOverallRec   || orig.overallRec   || '—',
@@ -16564,8 +16568,8 @@ function wlRender() {
         '</div>' +
         '<div class="wl-item-meta">' +
           '<div class="wl-meta-item"><span class="wl-meta-label">CA</span><span class="wl-meta-val" title="' + (entry.ca||'') + '">' + caShort + '</span></div>' +
-          '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + (entry.mcAtAdd ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtAdd) + ']</span>' : '') + '</span></div>' +
-          '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + (entry.mcAtRefresh ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtRefresh) + ']</span>' : '') + '</span></div>' +
+          '<div class="wl-meta-item"><span class="wl-meta-label">Date Added</span><span class="wl-meta-val">' + wlFmtDate(entry.dateAdded) + (entry.mcAtAdd ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtAdd) + (entry.serMcAtAdd ? '; SER MC ' + entry.serMcAtAdd : '') + ']</span>' : '') + '</span></div>' +
+          '<div class="wl-meta-item"><span class="wl-meta-label">Last Refreshed</span><span class="wl-meta-val">' + wlFmtDate(entry.lastAnalysisTime) + (entry.mcAtRefresh ? ' <span style="color:var(--text-muted);">[MCap ' + formatUSD(entry.mcAtRefresh) + (entry.serMcAtRefresh ? '; SER MC ' + entry.serMcAtRefresh : '') + ']</span>' : '') + '</span></div>' +
           '<div class="wl-meta-item"><span class="wl-meta-label">Analysis Freshness</span><span class="wl-freshness wl-fresh-' + entry.id + '" style="color:' + fresh.color + ';">' + fresh.label + '</span></div>' +
         '</div>' +
         sceBuildCompactHTML(entry) +
