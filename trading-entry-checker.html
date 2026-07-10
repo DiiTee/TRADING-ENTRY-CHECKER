@@ -15085,7 +15085,7 @@ var _SCE_PRIORITY = {
   holderTrendClass:23, overheadRisk:24,
 };
 /* Minimum numeric delta to qualify as a meaningful change */
-var _SCE_MIN_DELTA = { default: 4, shelfQualityPenalty: 1, defenseCount: 1, overheadDensityPct: 3, perf5m: 8, perf1h: 15, perf24h: 25 };
+var _SCE_MIN_DELTA = { default: 4, shelfQualityPenalty: 1, defenseCount: 1, overheadDensityPct: 3, perf5m: 3, perf1h: 6, perf24h: 10 };
 
 /* Extract a flat snapshot of all primitive fields from an sa object */
 function sceExtractSnapshot(sa) {
@@ -15165,13 +15165,33 @@ function sceSortChanges(changes) {
   });
 }
 
-/* Summarise a change list into a verdict */
+/* Weight a change by how decisive its signal is — raw price action (perf5m/1h/24h)
+   is direct evidence of a pump/dump and should dominate minor score wobbles. */
+function sceChangeWeight(c) {
+  if (c.key === 'perf5m' || c.key === 'perf1h' || c.key === 'perf24h') {
+    var mag = Math.abs(c.curr - c.prev);
+    /* Bigger moves count for more: every extra threshold-multiple adds weight. */
+    var mn = _SCE_MIN_DELTA[c.key];
+    if (!Number.isFinite(mn) || mn <= 0) mn = _SCE_MIN_DELTA.default;
+    if (!Number.isFinite(mag) || !Number.isFinite(mn) || mn <= 0) return 3;
+    return 3 + Math.min(6, Math.floor(mag / mn));
+  }
+  var pr = _SCE_PRIORITY[c.key] || 99;
+  return pr <= 2 ? 3 : 1;
+}
+
+/* Summarise a change list into a verdict, weighting decisive signals (price action)
+   more heavily than minor structural score wobbles. */
 function sceSummary(changes) {
-  var pos = changes.filter(function(c) { return c.direction > 0; }).length;
-  var neg = changes.filter(function(c) { return c.direction < 0; }).length;
+  var pos = 0, neg = 0;
+  changes.forEach(function(c) {
+    var w = sceChangeWeight(c);
+    if (!Number.isFinite(w) || w <= 0) w = 1;
+    if (c.direction > 0) pos += w; else if (c.direction < 0) neg += w;
+  });
   if (pos === 0 && neg === 0) return { verdict: 'Structure Stable',   color: 'var(--text-muted)', icon: '●' };
-  if (pos > neg)              return { verdict: 'Structure Improved',  color: 'var(--safe)',        icon: '▲' };
-  if (neg > pos)              return { verdict: 'Structure Weakened',  color: 'var(--skip)',        icon: '▼' };
+  if (pos > neg * 1.2)        return { verdict: 'Structure Improved',  color: 'var(--safe)',        icon: '▲' };
+  if (neg > pos * 1.2)        return { verdict: 'Structure Weakened',  color: 'var(--skip)',        icon: '▼' };
   return                             { verdict: 'Structure Mixed',     color: 'var(--caution)',     icon: '◆' };
 }
 
