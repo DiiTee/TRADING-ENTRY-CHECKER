@@ -2327,7 +2327,10 @@ p, span, td, th {
   </div>
 
   <div class="card hidden" id="checklistCard">
-    <div class="card-title" style="cursor:default;"><i class="fa-solid fa-chart-bar"></i> Analysis Results</div>
+    <div class="card-title" style="cursor:default;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <span><i class="fa-solid fa-chart-bar"></i> Analysis Results</span>
+      <button class="btn btn-secondary" id="backToTopBtnTop" style="padding:4px 10px;font-size:0.72rem;"><i class="fa-solid fa-arrow-up"></i> Back to Top</button>
+    </div>
     <div class="card-body">
       <div class="verdict-section" id="verdictSection"></div>
       <div id="pfcSection" style="margin:0 0 6px 0;">
@@ -13835,6 +13838,10 @@ el('analyzeAnotherBtn').addEventListener('click', function() {
 });
 
 el('backToTopBtn').addEventListener('click', function() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+el('backToTopBtnTop').addEventListener('click', function() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
