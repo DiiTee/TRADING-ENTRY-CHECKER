@@ -14102,6 +14102,10 @@ async function qecFetchTopHolders() {
       el('qec_top10').value = retail10Pct.toFixed(2);
       /* Also update main app Top10 field */
       if (el('fT10') && !el('fT10').value) el('fT10').value = retail10Pct.toFixed(2);
+      /* Top retail holder → fill qec_top1 only when main form fTH is blank */
+      if (retail10.length > 0 && el('fTH') && !el('fTH').value) {
+        el('qec_top1').value = retail10[0].pct.toFixed(2);
+      }
       /* Capture dev address from RugCheck response — funnels through rlDevInput */
       if (data.creator) {
         qecSetDevAddress(data.creator);
