@@ -14102,12 +14102,6 @@ async function qecFetchTopHolders() {
       el('qec_top10').value = retail10Pct.toFixed(2);
       /* Also update main app Top10 field */
       if (el('fT10') && !el('fT10').value) el('fT10').value = retail10Pct.toFixed(2);
-      /* Top retail holder → fill qec_top1 and main fTH if not already set */
-      if (retail10.length > 0) {
-        var top1Pct = retail10[0].pct.toFixed(2);
-        el('qec_top1').value = top1Pct;
-        if (el('fTH') && !el('fTH').value) el('fTH').value = top1Pct;
-      }
       /* Capture dev address from RugCheck response — funnels through rlDevInput */
       if (data.creator) {
         qecSetDevAddress(data.creator);
@@ -14243,8 +14237,12 @@ function qecRunAudit() {
   var liq = qecReadNum('qec_liq',     'fLiquidity', 0);
   var vol = qecReadNum('qec_vol',     'fVol24h', 0);
   var h   = qecReadNum('qec_h',       'fHolders', 0);
-  var top1= qecReadNum('qec_top1',    'fTH', 0);
-  var top10=qecReadNum('qec_top10',   'fT10', 0);
+  /* Starred (*) fields: main form is always authoritative — read fTH/fT10 first,
+     fall back to manually-entered QEC value only when main form is blank */
+  var _fTH  = el('fTH')  ? parseFloat(el('fTH').value)  : NaN;
+  var _fT10 = el('fT10') ? parseFloat(el('fT10').value) : NaN;
+  var top1  = !isNaN(_fTH)  ? _fTH  : (parseFloat(el('qec_top1').value)  || 0);
+  var top10 = !isNaN(_fT10) ? _fT10 : (parseFloat(el('qec_top10').value) || 0);
   var bunP= qecReadNum('qec_bun_perc','fBundleClusterPct', 0);
   /* QEC-specific fields */
   var f_qty  = parseFloat(el('qec_f_qty').value)  || 0;
@@ -14274,8 +14272,8 @@ function qecRunAudit() {
   if (!el('qec_liq').value      && liq)   el('qec_liq').value      = Math.round(liq);
   if (!el('qec_vol').value      && vol)   el('qec_vol').value      = Math.round(vol);
   if (!el('qec_h').value        && h)     el('qec_h').value        = Math.round(h);
-  if (!el('qec_top1').value     && top1)  el('qec_top1').value     = top1.toFixed(2);
-  if (!el('qec_top10').value    && top10) el('qec_top10').value    = top10.toFixed(2);
+  if (top1)  el('qec_top1').value  = top1.toFixed(2);
+  if (top10) el('qec_top10').value = top10.toFixed(2);
   if (!el('qec_bun_perc').value && bunP)  el('qec_bun_perc').value = bunP.toFixed(2);
   if (!el('qec_fees').value     && fees)  el('qec_fees').value     = Math.round(fees);
   /* Sync Stage/Mode from main form bonding curve dropdown */
