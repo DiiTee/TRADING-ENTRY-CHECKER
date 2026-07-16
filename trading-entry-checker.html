@@ -4304,6 +4304,7 @@ async function fetchFromCA(ca) {
 
   /* ── Populate form + auto-detect pattern ─────────────────────────────── */
   fillFormFromData(fetched);
+  syncQecFromMainForm();
   var _saForPattern = (window._tecCandles && window._tecCandles.structuralAnalysis) || null;
   detectAndFillPattern(fetched, _saForPattern, true); /* force=true — Fetch Data always wins over stale parse */
 
@@ -5089,6 +5090,7 @@ async function fetchHeliusTopHolders(ca) {
     }
     var fT10El = el('fT10');
     if (fT10El) fT10El.value = top10Pct.toFixed(2);
+    syncQecFromMainForm();
 
     /* Push filtered values into the live analysis snapshot and re-render
        the briefing section so Security/Cabal Briefing reflects AMM-excluded data */
@@ -17387,9 +17389,17 @@ socialScanHistRender();
   }
   interceptSync('fVol24h',     'qec_vol');
   interceptSync('fTotalFeeUSD','qec_fees');
-  interceptSync('fTH',         'qec_top1');
-  interceptSync('fT10',        'qec_top10');
 })();
+
+/* ── Sync qec_top1 / qec_top10 from main form fields ───────────────────────
+   Called explicitly after every code path that writes fTH or fT10 so that
+   QEC always shows the latest values without requiring a Run Audit click.   */
+function syncQecFromMainForm() {
+  var thVal  = el('fTH')  ? el('fTH').value.trim()  : '';
+  var t10Val = el('fT10') ? el('fT10').value.trim() : '';
+  if (thVal  && el('qec_top1'))  el('qec_top1').value  = thVal;
+  if (t10Val && el('qec_top10')) el('qec_top10').value = t10Val;
+}
 </script>
 <!-- ── Quick-Add Wallet Modal ── -->
 <div id="qaOverlay" class="qa-overlay" style="display:none;" onclick="if(event.target===this)closeQuickAdd()">
